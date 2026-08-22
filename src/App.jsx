@@ -763,8 +763,27 @@ export default function App() {
             <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
           ))}
 
-          <button
-            onClick={openNew}
+            {myRole !== "viewer" && (
+  <button
+    onClick={openNew}
+    className="btn-press flex items-center justify-center gap-2 font-bold"
+    style={{
+      position: "fixed",
+      bottom: 20,
+      left: 20,
+      right: 20,
+      maxWidth: 380,
+      margin: "0 auto",
+      background: PRIMARY,
+      color: "#fff",
+      borderRadius: 12,
+      padding: "14px 0",
+      boxShadow: "0 4px 14px rgba(15,81,50,0.35)",
+    }}
+  >
+    <Plus size={20} /> {t.newVisit}
+  </button>
+)}
             className="btn-press flex items-center justify-center gap-2 font-bold"
             style={{
               position: "fixed",
@@ -968,18 +987,24 @@ export default function App() {
           <div className="flex gap-3 mt-4">
             <button
               onClick={() => openEdit(active)}
-              className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
-              style={{ background: "#fff", border: `1px solid ${PRIMARY}`, color: PRIMARY, borderRadius: 10, padding: "12px 0" }}
-            >
-              <Pencil size={16} /> {t.edit}
-            </button>
-            <button
-              onClick={() => deleteVisit(active.id)}
-              className="btn-press flex items-center justify-center gap-2 font-bold"
-              style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 10, padding: "12px 20px" }}
-            >
-              <Trash2 size={16} /> {t.delete}
-            </button></div>
+              {myRole !== "viewer" && (
+  <div className="flex gap-3 mt-4">
+    <button
+      onClick={() => openEdit(active)}
+      className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
+      style={{ background: "#fff", border: `1px solid ${PRIMARY}`, color: PRIMARY, borderRadius: 10, padding: "12px 0" }}
+    >
+      <Pencil size={16} /> {t.edit}
+    </button>
+    <button
+      onClick={() => deleteVisit(active.id)}
+      className="btn-press flex items-center justify-center gap-2 font-bold"
+      style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 10, padding: "12px 20px" }}
+    >
+      <Trash2 size={16} /> {t.delete}
+    </button>
+  </div>
+)}
         </div>
       )}
 
