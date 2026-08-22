@@ -6,8 +6,9 @@ import {
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc,
+  getDoc, setDoc, writeBatch,
 } from "firebase/firestore";
+import * as XLSX from "xlsx";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
 import {
@@ -95,6 +96,11 @@ const STRINGS = {
     addMemberBtn: "إضافة",
     noMembers: "لا يوجد أشخاص مضافين بعد",
     removeConfirm: "هل تريد إلغاء صلاحية هذا الشخص؟",
+    exportExcel: "تصدير إلى Excel",
+    importExcel: "استيراد من Excel",
+    importEmptyFile: "الملف فاضي",
+    importSuccess: (n) => `تم استيراد ${n} عميل بنجاح`,
+    importError: "خطأ في الاستيراد: ",
   },
   en: {
     dir: "ltr",
@@ -164,6 +170,11 @@ const STRINGS = {
     addMemberBtn: "Add",
     noMembers: "No one added yet",
     removeConfirm: "Remove this person's access?",
+    exportExcel: "Export to Excel",
+    importExcel: "Import from Excel",
+    importEmptyFile: "File is empty",
+    importSuccess: (n) => `Successfully imported ${n} clients`,
+    importError: "Import error: ",
   },
 };
 
@@ -551,9 +562,91 @@ export default function App() {
         const existingOwners = { ...(lookupSnap.data().owners || {}) };
         delete existingOwners[user.uid];
         await setDoc(lookupRef, { owners: existingOwners }, { merge: false });
-        }
+      }
     } catch (e) {
       /* تجاهل خطأ مؤقت */
+    }
+  };
+
+  const exportToExcel = () => {
+    const rows = visits.map((v) => ({
+      [t.companyLabel]: v.companyName || "",
+      [t.contactLabel]: v.contactName || "",
+      [t.sectorLabel]: t.sectors[v.sector] || "",
+      [t.roleLabel]: t.roles[v.role] || "",
+      [t.phoneLabel]: v.phone || "",
+      [t.emailLabel]: v.email || "",
+      [t.visitDateLabel]: v.visitDate || "",
+      [t.callDateLabel]: v.callDateTime || "",
+      [t.notesLabel]: v.notes || "",
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Visits");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `visits_${dateStr}.xlsx`);
+  };
+
+  const importFromExcel = async (file) => {
+    if (!file || !user || !ownerUid) return;
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet);
+
+      if (rows.length === 0) {
+        alert(t.importEmptyFile);
+        return;
+      }
+
+      const sectorRev = Object.fromEntries(SECTOR_IDS.map((id) => [t.sectors[id], id]));
+      const roleRev = Object.fromEntries(ROLE_IDS.map((id) => [t.roles[id], id]));
+      const visitsRef = collection(db, "users", ownerUid, "visits");
+
+      let batch = writeBatch(db);
+      let batchCount = 0;
+      let successCount = 0;
+
+      for (const row of rows) {
+        const companyName = row[t.companyLabel] || "";
+        const contactName = row[t.contactLabel] || "";
+        if (!String(companyName).trim() && !String(contactName).trim()) continue;
+
+        const newVisit = {
+          companyName: String(companyName),
+          contactName: String(contactName),
+          sector: sectorRev[row[t.sectorLabel]] || "construction",
+          role: roleRev[row[t.roleLabel]] || "purchasing",
+          phone: String(row[t.phoneLabel] || ""),
+          email: String(row[t.emailLabel] || ""),
+          visitDate: String(row[t.visitDateLabel] || new Date().toISOString().slice(0, 10)),
+          callDateTime: String(row[t.callDateLabel] || ""),
+          notes: String(row[t.notesLabel] || ""),
+          notified: false,
+          createdAt: serverTimestamp(),
+        };
+
+        const newDocRef = doc(visitsRef);
+        batch.set(newDocRef, newVisit);
+        batchCount++;
+        successCount++;
+
+        if (batchCount === 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          batchCount = 0;
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      alert(t.importSuccess(successCount));
+    } catch (e) {
+      alert(t.importError + e.message);
     }
   };
 
@@ -763,44 +856,27 @@ export default function App() {
             <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
           ))}
 
-            {myRole !== "viewer" && (
-  <button
-    onClick={openNew}
-    className="btn-press flex items-center justify-center gap-2 font-bold"
-    style={{
-      position: "fixed",
-      bottom: 20,
-      left: 20,
-      right: 20,
-      maxWidth: 380,
-      margin: "0 auto",
-      background: PRIMARY,
-      color: "#fff",
-      borderRadius: 12,
-      padding: "14px 0",
-      boxShadow: "0 4px 14px rgba(15,81,50,0.35)",
-    }}
-  >
-    <Plus size={20} /> {t.newVisit}
-  </button>
-)}
-            className="btn-press flex items-center justify-center gap-2 font-bold"
-            style={{
-              position: "fixed",
-              bottom: 20,
-              left: 20,
-              right: 20,
-              maxWidth: 380,
-              margin: "0 auto",
-              background: PRIMARY,
-              color: "#fff",
-              borderRadius: 12,
-              padding: "14px 0",
-              boxShadow: "0 4px 14px rgba(15,81,50,0.35)",
-            }}
-          >
-            <Plus size={20} /> {t.newVisit}
-          </button>
+          {myRole !== "viewer" && (
+            <button
+              onClick={openNew}
+              className="btn-press flex items-center justify-center gap-2 font-bold"
+              style={{
+                position: "fixed",
+                bottom: 20,
+                left: 20,
+                right: 20,
+                maxWidth: 380,
+                margin: "0 auto",
+                background: PRIMARY,
+                color: "#fff",
+                borderRadius: 12,
+                padding: "14px 0",
+                boxShadow: "0 4px 14px rgba(15,81,50,0.35)",
+              }}
+            >
+              <Plus size={20} /> {t.newVisit}
+            </button>
+          )}
         </div>
       )}
 
@@ -984,33 +1060,73 @@ export default function App() {
             )}
           </div>
 
-          <div className="flex gap-3 mt-4">
-            <button
-              onClick={() => openEdit(active)}
-              {myRole !== "viewer" && (
-  <div className="flex gap-3 mt-4">
-    <button
-      onClick={() => openEdit(active)}
-      className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
-      style={{ background: "#fff", border: `1px solid ${PRIMARY}`, color: PRIMARY, borderRadius: 10, padding: "12px 0" }}
-    >
-      <Pencil size={16} /> {t.edit}
-    </button>
-    <button
-      onClick={() => deleteVisit(active.id)}
-      className="btn-press flex items-center justify-center gap-2 font-bold"
-      style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 10, padding: "12px 20px" }}
-    >
-      <Trash2 size={16} /> {t.delete}
-    </button>
-  </div>
-)}
+          {myRole !== "viewer" && (
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => openEdit(active)}
+                className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
+                style={{ background: "#fff", border: `1px solid ${PRIMARY}`, color: PRIMARY, borderRadius: 10, padding: "12px 0" }}
+              >
+                <Pencil size={16} /> {t.edit}
+              </button>
+              <button
+                onClick={() => deleteVisit(active.id)}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 10, padding: "12px 20px" }}
+              >
+                <Trash2 size={16} /> {t.delete}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {/* شاشة الإعدادات / Settings screen */}
       {screen === "settings" && (
         <div className="px-4 pt-4 pb-10">
+          <button
+            onClick={exportToExcel}
+            className="btn-press flex items-center justify-center gap-2 font-bold"
+            style={{
+              background: PRIMARY,
+              color: "#fff",
+              borderRadius: 10,
+              padding: "12px 0",
+              width: "100%",
+              marginBottom: 10,
+            }}
+          >
+            <FileText size={16} /> {t.exportExcel}
+          </button>
+
+          <input
+            type="file"
+            id="excelImportInput"
+            accept=".xlsx,.xls"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              if (e.target.files[0]) {
+                importFromExcel(e.target.files[0]);
+                e.target.value = "";
+              }
+            }}
+          />
+          <button
+            onClick={() => document.getElementById("excelImportInput").click()}
+            className="btn-press flex items-center justify-center gap-2 font-bold"
+            style={{
+              background: "#fff",
+              border: `1px solid ${PRIMARY}`,
+              color: PRIMARY,
+              borderRadius: 10,
+              padding: "12px 0",
+              width: "100%",
+              marginBottom: 16,
+            }}
+          >
+            <FileText size={16} /> {t.importExcel}
+          </button>
+
           <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E1DFD5", padding: 16, marginBottom: 16 }}>
             <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
             <p className="text-xs mb-3" style={{ color: MUTED }}>{t.membersTitle}</p>
@@ -1074,4 +1190,4 @@ export default function App() {
       )}
     </div>
   );
-              }
+      }
