@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // مستند صلاحيات الوصول لكل مستخدم / Access permissions per owner
+    // مستند صلاحيات الوصول لكل صاحب حساب / Access permissions per owner
     match /access/{ownerId} {
       allow read: if request.auth != null &&
         (request.auth.uid == ownerId ||
@@ -10,7 +10,14 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == ownerId;
     }
 
-    // كل مستخدم يقدر يقرأ ويكتب بياناته هو بس / صاحب الإذن يقدر يشوف أو يعدل حسب دوره
+    // فهرس عكسي: لكل بريد إلكتروني، مين صاحب الحساب اللي سمحله / Reverse lookup: for each email, which owners granted access
+    match /access_by_email/{email} {
+      allow read: if request.auth != null &&
+        request.auth.token.email.lower() == email;
+      allow write: if request.auth != null;
+    }
+
+    // زيارات العميل: صاحب الحساب أو صاحب الإذن حسب دوره / Client visits: owner or granted member based on role
     match /users/{userId}/visits/{visitId} {
       allow read: if request.auth != null && (
         request.auth.uid == userId ||
