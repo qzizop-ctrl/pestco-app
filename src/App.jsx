@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
-  FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut,
+  FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings,
 } from "lucide-react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
+  getDoc, setDoc,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -84,6 +85,16 @@ const STRINGS = {
     signOut: "تسجيل الخروج",
     reminderTitle: "تذكير اتصال:",
     reminderBody: (contact) => `موعد الاتصال بـ ${contact} حان الآن`,
+    settingsTitle: "الإعدادات",
+    manageAccess: "إدارة المشاركة",
+    membersTitle: "الأشخاص الذين لديهم صلاحية الوصول",
+    addMemberEmail: "البريد الإلكتروني",
+    addMemberRole: "الصلاحية",
+    roleEditor: "يشوف ويعدل",
+    roleViewer: "يشوف فقط",
+    addMemberBtn: "إضافة",
+    noMembers: "لا يوجد أشخاص مضافين بعد",
+    removeConfirm: "هل تريد إلغاء صلاحية هذا الشخص؟",
   },
   en: {
     dir: "ltr",
@@ -143,6 +154,16 @@ const STRINGS = {
     signOut: "Sign Out",
     reminderTitle: "Call reminder:",
     reminderBody: (contact) => `It's time to call ${contact}`,
+    settingsTitle: "Settings",
+    manageAccess: "Manage Access",
+    membersTitle: "People with access",
+    addMemberEmail: "Email",
+    addMemberRole: "Role",
+    roleEditor: "Can view & edit",
+    roleViewer: "View only",
+    addMemberBtn: "Add",
+    noMembers: "No one added yet",
+    removeConfirm: "Remove this person's access?",
   },
 };
 
@@ -295,6 +316,10 @@ export default function App() {
   const [form, setForm] = useState(emptyForm);
   const [activeId, setActiveId] = useState(null);
   const [errors, setErrors] = useState({});
+  const [members, setMembers] = useState({});
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState("viewer");
+  
   const [lang, setLang] = useState(() => {
     try {
       const saved = localStorage.getItem("pestco_lang");
@@ -315,6 +340,16 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+// تحميل قائمة الأشخاص المسموح لهم بالوصول / Load access members
+  useEffect(() => {
+    if (!user) return;
+    const ref = doc(db, "access", user.uid);
+    const unsub = onSnapshot(ref, (snap) => {
+      setMembers(snap.exists() ? snap.data().members || {} : {});
+    });
+    return () => unsub();
+  }, [user]);
 
   // حفظ اللغة محليًا (تفضيل جهاز، مش جزء من بيانات العميل) / Persist language locally
   useEffect(() => {
@@ -450,6 +485,34 @@ export default function App() {
     setScreen("list");
   };
 
+  const grantAccess = async (email, role) => {
+    if (!user) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
+    const ref = doc(db, "access", user.uid);
+    try {
+      const snap = await getDoc(ref);
+      const existing = snap.exists() ? snap.data().members || {} : {};
+      await setDoc(ref, { members: { ...existing, [cleanEmail]: role } }, { merge: true });
+    } catch (e) {
+      /* تجاهل خطأ مؤقت */
+    }
+  };
+
+  const revokeAccess = async (email) => {
+    if (!user) return;
+    const ref = doc(db, "access", user.uid);
+    try {
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const existing = { ...(snap.data().members || {}) };
+      delete existing[email];
+      await setDoc(ref, { members: existing }, { merge: false });
+    } catch (e) {
+      /* تجاهل خطأ مؤقت */
+    }
+  };
+
   const now = Date.now();
   const dueReminders = visits
     .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
@@ -546,7 +609,18 @@ export default function App() {
           {screen === "list" && t.appTitle}
           {screen === "form" && (form.id ? t.titleEdit : t.titleNew)}
           {screen === "detail" && t.titleDetail}
+          {screen === "settings" && t.settingsTitle}
         </span>
+        {screen === "list" && (
+          <button
+            onClick={() => setScreen("settings")}
+            className="btn-press flex items-center"
+            style={{ color: "#fff", background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "6px 8px" }}
+            aria-label={t.settingsTitle}
+          >
+            <Settings size={14} />
+          </button>
+        )}
         <button
           onClick={() => setLang(lang === "ar" ? "en" : "ar")}
           className="btn-press flex items-center gap-1 font-bold text-xs"
@@ -861,6 +935,70 @@ export default function App() {
               style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 10, padding: "12px 20px" }}
             >
               <Trash2 size={16} /> {t.delete}
+            </button></div>
+        </div>
+      )}
+
+      {/* شاشة الإعدادات / Settings screen */}
+      {screen === "settings" && (
+        <div className="px-4 pt-4 pb-10">
+          <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E1DFD5", padding: 16, marginBottom: 16 }}>
+            <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
+            <p className="text-xs mb-3" style={{ color: MUTED }}>{t.membersTitle}</p>
+
+            {Object.keys(members).length === 0 && (
+              <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noMembers}</p>
+            )}
+
+            {Object.entries(members).map(([email, role]) => (
+              <div
+                key={email}
+                className="flex items-center justify-between"
+                style={{ padding: "8px 0", borderBottom: "0.5px solid #EEE" }}
+              >
+                <div>
+                  <p className="text-sm font-bold" style={{ color: TEXT }}>{email}</p>
+                  <p className="text-xs" style={{ color: MUTED }}>{role === "editor" ? t.roleEditor : t.roleViewer}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    if (window.confirm(t.removeConfirm)) revokeAccess(email);
+                  }}
+                  className="btn-press"
+                  style={{ color: DANGER }}
+                  aria-label={t.delete}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E1DFD5", padding: 16 }}>
+            <label>{t.addMemberEmail}</label>
+            <input
+              type="email"
+              value={newMemberEmail}
+              onChange={(e) => setNewMemberEmail(e.target.value)}
+              placeholder={t.emailPlaceholder}
+            />
+            <div style={{ marginTop: 10 }}>
+              <label>{t.addMemberRole}</label>
+              <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)}>
+                <option value="viewer">{t.roleViewer}</option>
+                <option value="editor">{t.roleEditor}</option>
+              </select>
+            </div>
+            <button
+              onClick={async () => {
+                if (!newMemberEmail.trim()) return;
+                await grantAccess(newMemberEmail, newMemberRole);
+                setNewMemberEmail("");
+              }}
+              className="btn-press font-bold"
+              style={{ background: PRIMARY, color: "#fff", borderRadius: 10, padding: "12px 0", marginTop: 12, width: "100%" }}
+            >
+              {t.addMemberBtn}
             </button>
           </div>
         </div>
