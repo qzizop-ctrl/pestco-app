@@ -341,7 +341,34 @@ export default function App() {
     return () => unsub();
   }, []);
 
-// تحميل قائمة الأشخاص المسموح لهم بالوصول / Load access members
+// تحديد صاحب البيانات التي أشاهدها / Resolve which owner's data to view
+  useEffect(() => {
+    if (!user) {
+      setOwnerUid(null);
+      setMyRole("owner");
+      return;
+    }
+    const emailKey = (user.email || "").toLowerCase();
+    const lookupRef = doc(db, "access_by_email", emailKey);
+    getDoc(lookupRef)
+      .then((snap) => {
+        const owners = snap.exists() ? snap.data().owners || {} : {};
+        const ownerIds = Object.keys(owners);
+        if (ownerIds.length > 0) {
+          setOwnerUid(ownerIds[0]);
+          setMyRole(owners[ownerIds[0]]);
+        } else {
+          setOwnerUid(user.uid);
+          setMyRole("owner");
+        }
+      })
+      .catch(() => {
+        setOwnerUid(user.uid);
+        setMyRole("owner");
+      });
+  }, [user]);
+
+  // تحميل قائمة الأشخاص المسموح لهم بالوصول / Load access members
   useEffect(() => {
     if (!user) return;
     const ref = doc(db, "access", user.uid);
@@ -362,13 +389,13 @@ export default function App() {
 
   // مزامنة زيارات المستخدم الحالي من Firestore لحظيًا / Live-sync current user's visits from Firestore
   useEffect(() => {
-    if (!user) {
+    if (!user || !ownerUid) {
       setVisits([]);
       setLoaded(false);
       return;
     }
     setLoaded(false);
-    const ref = collection(db, "users", user.uid, "visits");
+    const ref = collection(db, "users", ownerUid, "visits");
     const unsub = onSnapshot(
       ref,
       (snap) => {
@@ -379,7 +406,7 @@ export default function App() {
       () => setLoaded(true)
     );
     return () => unsub();
-  }, [user]);
+  }, [user, ownerUid]);
 
   useEffect(() => {
     try {
@@ -395,7 +422,7 @@ export default function App() {
   // فحص دوري لمواعيد الاتصال المستحقة (يعمل فقط طالما التطبيق مفتوح في هذه المعاينة)
   // Periodic check for due calls (only works while the app is open in this preview)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !ownerUid) return;
     const id = setInterval(() => {
       const now = Date.now();
       visits.forEach((v) => {
@@ -408,12 +435,12 @@ export default function App() {
               });
             }
           } catch (e) {}
-          updateDoc(doc(db, "users", user.uid, "visits", v.id), { notified: true }).catch(() => {});
+          updateDoc(doc(db, "users", ownerUid, "visits", v.id), { notified: true }).catch(() => {});
         }
       });
     }, 15000);
     return () => clearInterval(id);
-  }, [visits, t, user]);
+  }, [visits, t, user, ownerUid]);
 
   const openNew = () => {
     setForm(emptyForm);
@@ -441,14 +468,14 @@ export default function App() {
   };
 
   const saveForm = async () => {
-    if (!validate() || !user) return;
+    if (!validate() || !user || !ownerUid) return;
     const { id, ...data } = form;
     try {
       let savedId = id;
       if (id) {
-        await updateDoc(doc(db, "users", user.uid, "visits", id), data);
+        await updateDoc(doc(db, "users", ownerUid, "visits", id), data);
       } else {
-        const ref = await addDoc(collection(db, "users", user.uid, "visits"), {
+        const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
           ...data,
           createdAt: serverTimestamp(),
         });
@@ -470,14 +497,14 @@ export default function App() {
     }
   };
 
-  const deleteVisit = async (id) => {
-    if (!user) return;
+const deleteVisit = async (id) => {
+    if (!user || !ownerUid) return;
     const confirmMsg = lang === "ar" 
       ? "هل أنت متأكد من حذف هذا العميل؟" 
       : "Are you sure you want to delete this customer?";
     if (!window.confirm(confirmMsg)) return;
     try {
-      await deleteDoc(doc(db, "users", user.uid, "visits", id));
+      await deleteDoc(doc(db, "users", ownerUid, "visits", id));
       await cancelCallReminder(id);
     } catch (e) {
       /* تجاهل خطأ الحذف المؤقت / ignore transient delete error */
@@ -494,6 +521,35 @@ export default function App() {
       const snap = await getDoc(ref);
       const existing = snap.exists() ? snap.data().members || {} : {};
       await setDoc(ref, { members: { ...existing, [cleanEmail]: role } }, { merge: true });
+
+      const lookupRef = doc(db, "access_by_email", cleanEmail);
+      const lookupSnap = await getDoc(lookupRef);
+      const existingOwners = lookupSnap.exists() ? lookupSnap.data().owners || {} : {};
+      await setDoc(lookupRef, { owners: { ...existingOwners, [user.uid]: role } }, { merge: true });
+    } catch (e) {
+      /* تجاهل خطأ مؤقت */
+    }
+  };
+
+  const revokeAccess = async (email) => {
+    if (!user) return;
+    const cleanEmail = email.trim().toLowerCase();
+    const ref = doc(db, "access", user.uid);
+    try {
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const existing = { ...(snap.data().members || {}) };
+        delete existing[cleanEmail];
+        await setDoc(ref, { members: existing }, { merge: false });
+      }
+
+      const lookupRef = doc(db, "access_by_email", cleanEmail);
+      const lookupSnap = await getDoc(lookupRef);
+      if (lookupSnap.exists()) {
+        const existingOwners = { ...(lookupSnap.data().owners || {}) };
+        delete existingOwners[user.uid];
+        await setDoc(lookupRef, { owners: existingOwners }, { merge: false });
+      }
     } catch (e) {
       /* تجاهل خطأ مؤقت */
     }
@@ -898,8 +954,8 @@ export default function App() {
                 </span>
                 <button
                   onClick={() => {
-                    if (!user) return;
-                    updateDoc(doc(db, "users", user.uid, "visits", active.id), {
+                    if (!user || !ownerUid) return;
+                    updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
                       callDateTime: "",
                       notified: false,
                     }).catch(() => {});
