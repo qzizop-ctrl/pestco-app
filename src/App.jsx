@@ -437,6 +437,10 @@ export default function App() {
 
   const deleteVisit = async (id) => {
     if (!user) return;
+    const confirmMsg = lang === "ar" 
+      ? "هل أنت متأكد من حذف هذا العميل؟" 
+      : "Are you sure you want to delete this customer?";
+    if (!window.confirm(confirmMsg)) return;
     try {
       await deleteDoc(doc(db, "users", user.uid, "visits", id));
       await cancelCallReminder(id);
