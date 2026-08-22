@@ -1,10 +1,27 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // كل مستخدم يقدر يقرأ ويكتب بياناته هو بس
-    // Each user can only read/write their own data
+
+    // مستند صلاحيات الوصول لكل مستخدم / Access permissions per owner
+    match /access/{ownerId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == ownerId ||
+         request.auth.token.email in resource.data.members);
+      allow write: if request.auth != null && request.auth.uid == ownerId;
+    }
+
+    // كل مستخدم يقدر يقرأ ويكتب بياناته هو بس / صاحب الإذن يقدر يشوف أو يعدل حسب دوره
     match /users/{userId}/visits/{visitId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        (exists(/databases/$(database)/documents/access/$(userId)) &&
+         request.auth.token.email in get(/databases/$(database)/documents/access/$(userId)).data.members)
+      );
+      allow write: if request.auth != null && (
+        request.auth.uid == userId ||
+        (exists(/databases/$(database)/documents/access/$(userId)) &&
+         get(/databases/$(database)/documents/access/$(userId)).data.members[request.auth.token.email] == "editor")
+      );
     }
   }
 }
