@@ -1,32 +1,37 @@
 import React, { useState, useEffect } from "react";
 import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
-  FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings,
+  FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings, MessageCircle,
 } from "lucide-react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, writeBatch,
+  getDoc, setDoc,
 } from "firebase/firestore";
-import * as XLSX from "xlsx";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
 import {
   requestNotificationPermission, scheduleCallReminder, cancelCallReminder,
 } from "./notifications";
 
-/* ---------------------------------------------------------
-   الإعدادات الثابتة / Constants
---------------------------------------------------------- */
-const PRIMARY = "#0F5132";
-const BG = "#F7F6F2";
-const TEXT = "#22282B";
+const PRIMARY = "#12332B";
+const PRIMARY_MID = "#1E5245";
+const BG = "#E4E0D5";
+const CARD_BG = "#F6F3EC";
+const TEXT = "#1B241F";
 const MUTED = "#6B7168";
 const DANGER = "#B3401F";
+const GOLD = "#C08A3E";
+const GOLD_SOFT = "#F3E6D0";
+const LINE = "#E7E2D6";
 
-/* ---------------------------------------------------------
-   الترجمة / Translations
---------------------------------------------------------- */
+const STATUS_COLORS = {
+  overdue: "#C4443A",
+  today: "#DB9A2C",
+  upcoming: "#2E6B8F",
+  none: "#9AA39B",
+};
+
 const STRINGS = {
   ar: {
     dir: "rtl",
@@ -96,11 +101,11 @@ const STRINGS = {
     addMemberBtn: "إضافة",
     noMembers: "لا يوجد أشخاص مضافين بعد",
     removeConfirm: "هل تريد إلغاء صلاحية هذا الشخص؟",
-    exportExcel: "تصدير إلى Excel",
-    importExcel: "استيراد من Excel",
-    importEmptyFile: "الملف فاضي",
-    importSuccess: (n) => `تم استيراد ${n} عميل بنجاح`,
-    importError: "خطأ في الاستيراد: ",
+    statusOverdue: "متأخرة",
+    statusToday: "اليوم",
+    statusUpcoming: "قادمة",
+    statusNone: "بدون موعد",
+    whatsapp: "واتساب",
   },
   en: {
     dir: "ltr",
@@ -170,11 +175,11 @@ const STRINGS = {
     addMemberBtn: "Add",
     noMembers: "No one added yet",
     removeConfirm: "Remove this person's access?",
-    exportExcel: "Export to Excel",
-    importExcel: "Import from Excel",
-    importEmptyFile: "File is empty",
-    importSuccess: (n) => `Successfully imported ${n} clients`,
-    importError: "Import error: ",
+    statusOverdue: "Overdue",
+    statusToday: "Today",
+    statusUpcoming: "Upcoming",
+    statusNone: "No call set",
+    whatsapp: "WhatsApp",
   },
 };
 
@@ -211,10 +216,19 @@ const emptyForm = {
   notified: false,
 };
 
-/* ---------------------------------------------------------
-   نغمة تنبيه بسيطة (تعمل لما التطبيق مفتوح فقط في هذه المعاينة)
-   Simple alert tone (only works while the app is open in this preview)
---------------------------------------------------------- */
+function visitStatus(visit) {
+  if (!visit.callDateTime) return "none";
+  const call = new Date(visit.callDateTime);
+  const now = new Date();
+  if (call.getTime() < now.getTime()) return "overdue";
+  const sameDay =
+    call.getFullYear() === now.getFullYear() &&
+    call.getMonth() === now.getMonth() &&
+    call.getDate() === now.getDate();
+  if (sameDay) return "today";
+  return "upcoming";
+}
+
 function beep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -244,77 +258,136 @@ function fmtReminder(dt, locale) {
   }
 }
 
-/* ---------------------------------------------------------
-   شعار التطبيق / App logo
---------------------------------------------------------- */
 function Logo({ size = 36 }) {
   return (
     <div
       className="flex items-center justify-center"
-      style={{ width: size, height: size, background: PRIMARY, borderRadius: 10 }}
+      style={{ width: size, height: size, background: "rgba(255,255,255,0.12)", borderRadius: 12 }}
     >
-      <ShieldCheck size={size * 0.6} color="#F7F6F2" />
+      <ShieldCheck size={size * 0.6} color="#F6F3EC" />
     </div>
   );
 }
 
-/* ---------------------------------------------------------
-   بطاقة الزيارة / Visit card
---------------------------------------------------------- */
 function VisitCard({ visit, onOpen, t }) {
-  const roleC = roleColor(visit.role);
-  const sectorC = sectorColor(visit.sector);
-  const roleLabel = t.roles[visit.role] || t.roles.other;
+  const status = visitStatus(visit);
+  const statusColor = STATUS_COLORS[status];
+  const statusLabel = {
+    overdue: t.statusOverdue,
+    today: t.statusToday,
+    upcoming: t.statusUpcoming,
+    none: t.statusNone,
+  }[status];
   const sectorLabel = t.sectors[visit.sector] || t.sectors.private;
+
+  const stop = (fn) => (e) => {
+    e.stopPropagation();
+    fn();
+  };
+
   return (
-    <button
-      onClick={() => onOpen(visit)}
-      className={`btn-press w-full flex items-stretch ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+    <div
+      className="w-full"
       style={{
         background: "#fff",
-        borderRadius: 12,
-        border: "0.5px solid #E1DFD5",
+        borderRadius: 16,
+        border: `1px solid ${LINE}`,
         overflow: "hidden",
-        marginBottom: 10,
+        boxShadow: "0 1px 2px rgba(0,0,0,.04)",
+        position: "relative",
+        marginBottom: 12,
       }}
     >
-      <div style={{ width: 6, background: sectorC, flexShrink: 0 }} />
-      <div className="flex-1 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <span className="font-bold text-base" style={{ color: TEXT }}>
-            {visit.companyName || t.noCompanyName}
-          </span>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          [t.dir === "rtl" ? "right" : "left"]: 0,
+          width: 5,
+          background: statusColor,
+        }}
+      />
+      <button
+        onClick={() => onOpen(visit)}
+        className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+        style={{
+          padding: t.dir === "rtl" ? "14px 14px 14px 10px" : "14px 10px 14px 14px",
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="font-extrabold text-base" style={{ margin: 0, color: TEXT }}>
+              {visit.companyName || t.noCompanyName}
+            </p>
+            <p className="text-xs font-bold" style={{ margin: "2px 0 0", color: GOLD }}>
+              {sectorLabel}
+            </p>
+          </div>
           <span
-            className="text-xs font-bold px-2 py-0.5 rounded-full"
-            style={{ background: roleC + "1A", color: roleC }}
+            className="text-xs font-extrabold"
+            style={{
+              background: statusColor,
+              color: "#fff",
+              borderRadius: 999,
+              padding: "4px 10px",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
           >
-            {roleLabel}
+            {statusLabel}
           </span>
         </div>
-        <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-1" style={{ color: MUTED }}>
-            <User size={13} />
-            <span className="text-sm">{visit.contactName || t.noContactName}</span>
-          </div>
-          <span className="text-xs font-bold" style={{ color: sectorC }}>
-            {sectorLabel}
-          </span>
+
+        <div className="flex items-center gap-1 mt-2" style={{ color: MUTED }}>
+          <User size={13} />
+          <span className="text-sm">{visit.contactName || t.noContactName}</span>
         </div>
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-1" style={{ color: MUTED }}>
+
+        <div
+          className="flex items-center justify-between"
+          style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}
+        >
+          <div className="flex items-center gap-1" style={{ color: MUTED, fontSize: 12 }}>
             <Calendar size={13} />
-            <span className="text-xs">{visit.visitDate}</span>
+            {status === "none" ? (
+              <span>{visit.visitDate}</span>
+            ) : (
+              <span>{fmtReminder(visit.callDateTime, t.locale)}</span>
+            )}
           </div>
-          <ChevronRight size={16} color={MUTED} style={{ transform: t.dir === "rtl" ? "rotate(180deg)" : "none" }} />
+          <div className="flex items-center gap-2">
+            {visit.phone && (
+              <a
+                href={`tel:${visit.phone}`}
+                onClick={stop(() => {})}
+                className="btn-press flex items-center justify-center"
+                style={{ width: 32, height: 32, borderRadius: 10, background: "#E5F1EA", color: "#2F9E58" }}
+                aria-label={t.phoneRow}
+              >
+                <Phone size={14} />
+              </a>
+            )}
+            {visit.phone && (
+              <a
+                href={`https://wa.me/${visit.phone.replace(/[^0-9]/g, "")}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={stop(() => {})}
+                className="btn-press flex items-center justify-center"
+                style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
+                aria-label={t.whatsapp}
+              >
+                <MessageCircle size={14} />
+              </a>
+            )}
+          </div>
         </div>
-      </div>
-    </button>
+      </button>
+    </div>
   );
 }
 
-/* ---------------------------------------------------------
-   التطبيق الرئيسي / Main app
---------------------------------------------------------- */
 export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
@@ -345,7 +418,6 @@ export default function App() {
   const t = STRINGS[lang];
   const active = visits.find((v) => v.id === activeId) || null;
 
-  // مراقبة حالة تسجيل الدخول / Watch auth state
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -354,7 +426,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // تحديد صاحب البيانات التي أشاهدها / Resolve which owner's data to view
   useEffect(() => {
     if (!user) {
       setOwnerUid(null);
@@ -381,7 +452,6 @@ export default function App() {
       });
   }, [user]);
 
-  // تحميل قائمة الأشخاص المسموح لهم بالوصول / Load access members
   useEffect(() => {
     if (!user) return;
     const ref = doc(db, "access", user.uid);
@@ -391,16 +461,12 @@ export default function App() {
     return () => unsub();
   }, [user]);
 
-  // حفظ اللغة محليًا (تفضيل جهاز، مش جزء من بيانات العميل) / Persist language locally
   useEffect(() => {
     try {
       localStorage.setItem("pestco_lang", lang);
-    } catch (e) {
-      /* التخزين المحلي غير متاح / local storage unavailable */
-    }
+    } catch (e) {}
   }, [lang]);
 
-  // مزامنة زيارات المستخدم الحالي من Firestore لحظيًا / Live-sync current user's visits from Firestore
   useEffect(() => {
     if (!user || !ownerUid) {
       setVisits([]);
@@ -426,14 +492,10 @@ export default function App() {
       if (window.Notification && Notification.permission === "default") {
         Notification.requestPermission();
       }
-    } catch (e) {
-      /* الإشعارات غير مدعومة / notifications unsupported */
-    }
+    } catch (e) {}
     requestNotificationPermission();
   }, []);
 
-  // فحص دوري لمواعيد الاتصال المستحقة (يعمل فقط طالما التطبيق مفتوح في هذه المعاينة)
-  // Periodic check for due calls (only works while the app is open in this preview)
   useEffect(() => {
     if (!user || !ownerUid) return;
     const id = setInterval(() => {
@@ -505,9 +567,7 @@ export default function App() {
         await cancelCallReminder(savedId);
       }
       setScreen("list");
-    } catch (e) {
-      /* تجاهل خطأ الحفظ المؤقت / ignore transient save error */
-    }
+    } catch (e) {}
   };
 
   const deleteVisit = async (id) => {
@@ -519,9 +579,7 @@ export default function App() {
     try {
       await deleteDoc(doc(db, "users", ownerUid, "visits", id));
       await cancelCallReminder(id);
-    } catch (e) {
-      /* تجاهل خطأ الحذف المؤقت / ignore transient delete error */
-    }
+    } catch (e) {}
     setScreen("list");
   };
 
@@ -539,12 +597,10 @@ export default function App() {
       const lookupSnap = await getDoc(lookupRef);
       const existingOwners = lookupSnap.exists() ? lookupSnap.data().owners || {} : {};
       await setDoc(lookupRef, { owners: { ...existingOwners, [user.uid]: role } }, { merge: true });
-    } catch (e) {
-      /* تجاهل خطأ مؤقت */
-    }
+    } catch (e) {}
   };
 
-  const revoke = async (email) => {
+  const revokeAccess = async (email) => {
     if (!user) return;
     const cleanEmail = email.trim().toLowerCase();
     const ref = doc(db, "access", user.uid);
@@ -563,91 +619,7 @@ export default function App() {
         delete existingOwners[user.uid];
         await setDoc(lookupRef, { owners: existingOwners }, { merge: false });
       }
-    } catch (e) {
-      /* تجاهل خطأ مؤقت */
-    }
-  };
-
-  const exportToExcel = () => {
-    const rows = visits.map((v) => ({
-      [t.companyLabel]: v.companyName || "",
-      [t.contactLabel]: v.contactName || "",
-      [t.sectorLabel]: t.sectors[v.sector] || "",
-      [t.roleLabel]: t.roles[v.role] || "",
-      [t.phoneLabel]: v.phone || "",
-      [t.emailLabel]: v.email || "",
-      [t.visitDateLabel]: v.visitDate || "",
-      [t.callDateLabel]: v.callDateTime || "",
-      [t.notesLabel]: v.notes || "",
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Visits");
-    const dateStr = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `visits_${dateStr}.xlsx`);
-  };
-
-  const importFromExcel = async (file) => {
-    if (!file || !user || !ownerUid) return;
-    try {
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data);
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(sheet);
-
-      if (rows.length === 0) {
-        alert(t.importEmptyFile);
-        return;
-      }
-
-      const sectorRev = Object.fromEntries(SECTOR_IDS.map((id) => [t.sectors[id], id]));
-      const roleRev = Object.fromEntries(ROLE_IDS.map((id) => [t.roles[id], id]));
-      const visitsRef = collection(db, "users", ownerUid, "visits");
-
-      let batch = writeBatch(db);
-      let batchCount = 0;
-      let successCount = 0;
-
-      for (const row of rows) {
-        const companyName = row[t.companyLabel] || "";
-        const contactName = row[t.contactLabel] || "";
-        if (!String(companyName).trim() && !String(contactName).trim()) continue;
-
-        const newVisit = {
-          companyName: String(companyName),
-          contactName: String(contactName),
-          sector: sectorRev[row[t.sectorLabel]] || "construction",
-          role: roleRev[row[t.roleLabel]] || "purchasing",
-          phone: String(row[t.phoneLabel] || ""),
-          email: String(row[t.emailLabel] || ""),
-          visitDate: String(row[t.visitDateLabel] || new Date().toISOString().slice(0, 10)),
-          callDateTime: String(row[t.callDateLabel] || ""),
-          notes: String(row[t.notesLabel] || ""),
-          notified: false,
-          createdAt: serverTimestamp(),
-        };
-
-        const newDocRef = doc(visitsRef);
-        batch.set(newDocRef, newVisit);
-        batchCount++;
-        successCount++;
-
-        if (batchCount === 450) {
-          await batch.commit();
-          batch = writeBatch(db);
-          batchCount = 0;
-        }
-      }
-
-      if (batchCount > 0) {
-        await batch.commit();
-      }
-
-      alert(t.importSuccess(successCount));
-    } catch (e) {
-      alert(t.importError + e.message);
-    }
+    } catch (e) {}
   };
 
   const now = Date.now();
@@ -661,15 +633,20 @@ export default function App() {
       const q = query.trim();
       if (!q) return true;
       return (
-        (v.companyName || "").includes(q) ||
-        (v.contactName || "").includes(q) ||
+        v.companyName.includes(q) ||
+        v.contactName.includes(q) ||
         (v.phone || "").includes(q) ||
         (v.notes || "").includes(q)
       );
     })
-    .sort((a, b) => (a.visitDate < b.visitDate ? 1 : -1));
+    .sort((a, b) => {
+      const sa = visitStatus(a);
+      const sb = visitStatus(b);
+      const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
+      if (order[sa] !== order[sb]) return order[sa] - order[sb];
+      return (a.visitDate < b.visitDate ? 1 : -1);
+    });
 
-  // في انتظار معرفة حالة تسجيل الدخول / Waiting to know auth state
   if (!authChecked) {
     return (
       <div
@@ -687,7 +664,6 @@ export default function App() {
     );
   }
 
-  // مفيش مستخدم مسجل دخول / No signed-in user
   if (!user) {
     return <AuthScreen lang={lang} setLang={setLang} />;
   }
@@ -719,13 +695,12 @@ export default function App() {
         }
         input:focus, textarea:focus, select:focus {
           outline: none;
-          border-color: ${PRIMARY};
+          border-color: ${PRIMARY_MID};
         }
         label { font-size: 13px; font-weight: 700; color: ${MUTED}; display:block; margin-bottom:4px; }
-        button:focus-visible { outline: 2px solid ${PRIMARY}; outline-offset: 2px; }
+        button:focus-visible { outline: 2px solid ${PRIMARY_MID}; outline-offset: 2px; }
       `}</style>
 
-      {/* الشريط العلوي الثابت / Sticky top bar */}
       <div
         className="flex items-center gap-2 px-4 py-3"
         style={{ background: PRIMARY, position: "sticky", top: 0, zIndex: 10 }}
@@ -776,16 +751,21 @@ export default function App() {
         </button>
       </div>
 
-      {/* شاشة القائمة / List screen */}
       {screen === "list" && (
         <div className="px-4 pt-4 pb-24">
           {dueReminders.length > 0 && (
             <div
-              style={{ background: "#FCEBEB", border: "0.5px solid #F09999", borderRadius: 12, padding: 12, marginBottom: 14 }}
+              style={{
+                background: "rgba(196,68,58,.1)",
+                border: "1px solid rgba(196,68,58,.35)",
+                borderRadius: 14,
+                padding: 12,
+                marginBottom: 14,
+              }}
             >
               <div className="flex items-center gap-2 mb-2">
-                <Bell size={16} color={DANGER} />
-                <span className="text-sm font-bold" style={{ color: DANGER }}>
+                <Bell size={16} color={STATUS_COLORS.overdue} />
+                <span className="text-sm font-bold" style={{ color: STATUS_COLORS.overdue }}>
                   {t.dueCalls(dueReminders.length)}
                 </span>
               </div>
@@ -813,7 +793,7 @@ export default function App() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t.searchPlaceholder}
-              style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34 }}
+              style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
             />
           </div>
 
@@ -821,7 +801,6 @@ export default function App() {
             {["all", ...SECTOR_IDS].map((id) => {
               const isActive = sectorFilter === id;
               const label = id === "all" ? t.sectorAll : t.sectors[id];
-              const c = id === "all" ? PRIMARY : sectorColor(id);
               return (
                 <button
                   key={id}
@@ -829,11 +808,11 @@ export default function App() {
                   className="btn-press font-bold text-xs"
                   style={{
                     flexShrink: 0,
-                    padding: "7px 14px",
+                    padding: "8px 16px",
                     borderRadius: 999,
-                    border: `1px solid ${c}`,
-                    background: isActive ? c : "#fff",
-                    color: isActive ? "#fff" : c,
+                    border: `1.4px solid ${isActive ? PRIMARY : LINE}`,
+                    background: isActive ? PRIMARY : "#fff",
+                    color: isActive ? "#fff" : MUTED,
                   }}
                 >
                   {label}
@@ -856,31 +835,28 @@ export default function App() {
             <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
           ))}
 
-          {myRole !== "viewer" && (
-            <button
-              onClick={openNew}
-              className="btn-press flex items-center justify-center gap-2 font-bold"
-              style={{
-                position: "fixed",
-                bottom: 20,
-                left: 20,
-                right: 20,
-                maxWidth: 380,
-                margin: "0 auto",
-                background: PRIMARY,
-                color: "#fff",
-                borderRadius: 12,
-                padding: "14px 0",
-                boxShadow: "0 4px 14px rgba(15,81,50,0.35)",
-              }}
-            >
-              <Plus size={20} /> {t.newVisit}
-            </button>
-          )}
+          <button
+            onClick={openNew}
+            className="btn-press flex items-center justify-center gap-2 font-bold"
+            style={{
+              position: "fixed",
+              bottom: 20,
+              left: 20,
+              right: 20,
+              maxWidth: 380,
+              margin: "0 auto",
+              background: GOLD,
+              color: "#fff",
+              borderRadius: 14,
+              padding: "14px 0",
+              boxShadow: "0 10px 20px rgba(192,138,62,.4)",
+            }}
+          >
+            <Plus size={20} /> {t.newVisit}
+          </button>
         </div>
       )}
 
-      {/* شاشة الإضافة / التعديل / Add-edit screen */}
       {screen === "form" && (
         <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
           <div>
@@ -975,36 +951,40 @@ export default function App() {
           <button
             onClick={saveForm}
             className="btn-press font-bold"
-            style={{ background: PRIMARY, color: "#fff", borderRadius: 10, padding: "12px 0", marginTop: 8 }}
+            style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 8 }}
           >
             {t.save}
           </button>
         </div>
       )}
 
-      {/* شاشة التفاصيل / Detail screen */}
       {screen === "detail" && active && (
         <div className="px-4 pt-4 pb-10">
-          <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E1DFD5", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
             <div className="flex items-center justify-between mb-1">
               <span className="font-bold text-lg">{active.companyName}</span>
               <span
-                className="text-xs font-bold px-2 py-0.5 rounded-full"
-                style={{ background: roleColor(active.role) + "1A", color: roleColor(active.role) }}
+                className="text-xs font-extrabold px-2 py-0.5 rounded-full"
+                style={{ background: STATUS_COLORS[visitStatus(active)], color: "#fff" }}
               >
-                {t.roles[active.role] || t.roles.other}
+                {{
+                  overdue: t.statusOverdue,
+                  today: t.statusToday,
+                  upcoming: t.statusUpcoming,
+                  none: t.statusNone,
+                }[visitStatus(active)]}
               </span>
             </div>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-1" style={{ color: MUTED }}>
                 <User size={14} /> <span className="text-sm">{active.contactName}</span>
               </div>
-              <span className="text-xs font-bold" style={{ color: sectorColor(active.sector) }}>
+              <span className="text-xs font-bold" style={{ color: GOLD }}>
                 {t.sectors[active.sector] || t.sectors.private}
               </span>
             </div>
 
-            <div className="flex flex-col gap-3" style={{ borderTop: "0.5px solid #EEE", paddingTop: 12 }}>
+            <div className="flex flex-col gap-3" style={{ borderTop: `0.5px solid ${LINE}`, paddingTop: 12 }}>
               <a
                 href={active.phone ? `tel:${active.phone}` : undefined}
                 className="flex items-center justify-between"
@@ -1013,6 +993,18 @@ export default function App() {
                 <span className="flex items-center gap-2 text-sm"><Phone size={15} /> {t.phoneRow}</span>
                 <span className="text-sm font-bold">{active.phone || "—"}</span>
               </a>
+              {active.phone && (
+                <a
+                  href={`https://wa.me/${active.phone.replace(/[^0-9]/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between"
+                  style={{ color: "#25A245", textDecoration: "none" }}
+                >
+                  <span className="flex items-center gap-2 text-sm"><MessageCircle size={15} /> {t.whatsapp}</span>
+                  <span className="text-sm font-bold">{active.phone}</span>
+                </a>
+              )}
               <a
                 href={active.email ? `mailto:${active.email}` : undefined}
                 className="flex items-center justify-between"
@@ -1030,9 +1022,16 @@ export default function App() {
             {active.callDateTime && (
               <div
                 className="flex items-center justify-between mt-3"
-                style={{ background: active.notified ? "#F2F1EA" : "#FCEBEB", borderRadius: 10, padding: 10 }}
+                style={{
+                  background: active.notified ? "#F2F1EA" : "rgba(196,68,58,.1)",
+                  borderRadius: 10,
+                  padding: 10,
+                }}
               >
-                <span className="flex items-center gap-2 text-sm font-bold" style={{ color: active.notified ? MUTED : DANGER }}>
+                <span
+                  className="flex items-center gap-2 text-sm font-bold"
+                  style={{ color: active.notified ? MUTED : STATUS_COLORS.overdue }}
+                >
                   <Bell size={15} /> {t.callDueLabel} {fmtReminder(active.callDateTime, t.locale)}
                 </span>
                 <button
@@ -1045,7 +1044,7 @@ export default function App() {
                     cancelCallReminder(active.id);
                   }}
                   className="btn-press text-xs font-bold"
-                  style={{ color: PRIMARY }}
+                  style={{ color: PRIMARY_MID }}
                 >
                   {t.callDone}
                 </button>
@@ -1053,81 +1052,35 @@ export default function App() {
             )}
 
             {active.notes && (
-              <div style={{ borderTop: "0.5px solid #EEE", marginTop: 12, paddingTop: 12 }}>
+              <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 12, paddingTop: 12 }}>
                 <span className="flex items-center gap-2 text-sm font-bold mb-1"><FileText size={15} /> {t.notesRow}</span>
                 <p className="text-sm" style={{ color: MUTED, lineHeight: 1.7 }}>{active.notes}</p>
               </div>
             )}
           </div>
 
-          {myRole !== "viewer" && (
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => openEdit(active)}
-                className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
-                style={{ background: "#fff", border: `1px solid ${PRIMARY}`, color: PRIMARY, borderRadius: 10, padding: "12px 0" }}
-              >
-                <Pencil size={16} /> {t.edit}
-              </button>
-              <button
-                onClick={() => deleteVisit(active.id)}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 10, padding: "12px 20px" }}
-              >
-                <Trash2 size={16} /> {t.delete}
-              </button>
-            </div>
-          )}
+          <div className="flex gap-3 mt-4">
+            <button
+              onClick={() => openEdit(active)}
+              className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
+              style={{ background: "#fff", border: `1px solid ${PRIMARY_MID}`, color: PRIMARY_MID, borderRadius: 14, padding: "12px 0" }}
+            >
+              <Pencil size={16} /> {t.edit}
+            </button>
+            <button
+              onClick={() => deleteVisit(active.id)}
+              className="btn-press flex items-center justify-center gap-2 font-bold"
+              style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 14, padding: "12px 20px" }}
+            >
+              <Trash2 size={16} /> {t.delete}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* شاشة الإعدادات / Settings screen */}
       {screen === "settings" && (
         <div className="px-4 pt-4 pb-10">
-          <button
-            onClick={exportToExcel}
-            className="btn-press flex items-center justify-center gap-2 font-bold"
-            style={{
-              background: PRIMARY,
-              color: "#fff",
-              borderRadius: 10,
-              padding: "12px 0",
-              width: "100%",
-              marginBottom: 10,
-            }}
-          >
-            <FileText size={16} /> {t.exportExcel}
-          </button>
-
-          <input
-            type="file"
-            id="excelImportInput"
-            accept=".xlsx,.xls"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              if (e.target.files[0]) {
-                importFromExcel(e.target.files[0]);
-                e.target.value = "";
-              }
-            }}
-          />
-          <button
-            onClick={() => document.getElementById("excelImportInput").click()}
-            className="btn-press flex items-center justify-center gap-2 font-bold"
-            style={{
-              background: "#fff",
-              border: `1px solid ${PRIMARY}`,
-              color: PRIMARY,
-              borderRadius: 10,
-              padding: "12px 0",
-              width: "100%",
-              marginBottom: 16,
-            }}
-          >
-            <FileText size={16} /> {t.importExcel}
-          </button>
-
-          <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E1DFD5", padding: 16, marginBottom: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
             <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
             <p className="text-xs mb-3" style={{ color: MUTED }}>{t.membersTitle}</p>
 
@@ -1139,7 +1092,7 @@ export default function App() {
               <div
                 key={email}
                 className="flex items-center justify-between"
-                style={{ padding: "8px 0", borderBottom: "0.5px solid #EEE" }}
+                style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
               >
                 <div>
                   <p className="text-sm font-bold" style={{ color: TEXT }}>{email}</p>
@@ -1147,7 +1100,7 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => {
-                    if (window.confirm(t.removeConfirm)) revoke(email);
+                    if (window.confirm(t.removeConfirm)) revokeAccess(email);
                   }}
                   className="btn-press"
                   style={{ color: DANGER }}
@@ -1159,7 +1112,7 @@ export default function App() {
             ))}
           </div>
 
-          <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E1DFD5", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
             <label>{t.addMemberEmail}</label>
             <input
               type="email"
@@ -1181,7 +1134,7 @@ export default function App() {
                 setNewMemberEmail("");
               }}
               className="btn-press font-bold"
-              style={{ background: PRIMARY, color: "#fff", borderRadius: 10, padding: "12px 0", marginTop: 12, width: "100%" }}
+              style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 12, width: "100%" }}
             >
               {t.addMemberBtn}
             </button>
@@ -1190,4 +1143,4 @@ export default function App() {
       )}
     </div>
   );
-      }
+            }
