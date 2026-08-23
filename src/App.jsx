@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings, MessageCircle,
+  Download, Upload,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
@@ -38,7 +40,7 @@ const STRINGS = {
     locale: "ar-EG",
     appTitle: "Pest.Co — زيارات العملاء",
     titleEdit: "تعديل الزيارة",
-    titleNew: "زيارة جديدة",
+    titleNew: "عميل جديد",
     titleDetail: "تفاصيل الزيارة",
     back: "رجوع",
     langToggle: "English",
@@ -46,8 +48,8 @@ const STRINGS = {
     searchPlaceholder: "ابحث بالشركة أو المسؤول أو الرقم أو الملاحظات",
     loading: "جارِ التحميل...",
     noVisits: "لا توجد زيارات بعد",
-    noVisitsHint: 'اضغط على "زيارة جديدة" لإضافة أول عميل',
-    newVisit: "زيارة جديدة",
+    noVisitsHint: 'اضغط على "عميل جديد" لإضافة أول عميل',
+    newVisit: "عميل جديد",
     noCompanyName: "بدون اسم شركة",
     noContactName: "بدون اسم",
     companyLabel: "اسم الشركة *",
@@ -66,7 +68,7 @@ const STRINGS = {
     callDateHint: "في نسخة الأندرويد: التطبيق هيبعتلك تنبيه حقيقي في المعاد ده حتى لو التطبيق مقفول. في نسخة المتصفح: لازم التطبيق يكون شغال.",
     notesLabel: "ملاحظات الزيارة",
     notesPlaceholder: "تفاصيل الزيارة، المطلوب متابعته، إلخ",
-    save: "حفظ الزيارة",
+    save: "إضافة عميل",
     phoneRow: "رقم الهاتف",
     emailRow: "البريد الإلكتروني",
     visitDateRow: "تاريخ الزيارة",
@@ -84,8 +86,9 @@ const STRINGS = {
     sectorLabel: "القطاع",
     sectorAll: "الكل",
     sectors: {
-      construction: "شركات المقاولات",
+      construction: "قطاع المقاولات",
       education: "قطاع التعليم",
+      consultants: "قطاع الاستشاريين",
       private: "شركات خاصة",
     },
     signOut: "تسجيل الخروج",
@@ -106,6 +109,13 @@ const STRINGS = {
     statusUpcoming: "قادمة",
     statusNone: "بدون موعد",
     whatsapp: "واتساب",
+    excelTitle: "استيراد / تصدير إكسيل",
+    exportBtn: "تصدير كل الزيارات (إكسيل)",
+    importBtn: "استيراد من ملف إكسيل",
+    importHint: "الملف لازم يكون بنفس أعمدة ملف التصدير (اسم الشركة، الشخص المسؤول، إلخ). الصفوف هتتضاف كزيارات جديدة.",
+    importSuccess: (n) => `تم استيراد ${n} زيارة بنجاح`,
+    importError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+    importing: "جارِ الاستيراد...",
   },
   en: {
     dir: "ltr",
@@ -160,6 +170,7 @@ const STRINGS = {
     sectors: {
       construction: "Construction Companies",
       education: "Education",
+      consultants: "Consultants",
       private: "Private Companies",
     },
     signOut: "Sign Out",
@@ -180,6 +191,13 @@ const STRINGS = {
     statusUpcoming: "Upcoming",
     statusNone: "No call set",
     whatsapp: "WhatsApp",
+    excelTitle: "Excel Import / Export",
+    exportBtn: "Export all visits (Excel)",
+    importBtn: "Import from Excel file",
+    importHint: "The file must use the same columns as the exported file (Company Name, Contact Person, etc). Rows will be added as new visits.",
+    importSuccess: (n) => `Successfully imported ${n} visit${n === 1 ? "" : "s"}`,
+    importError: "Something went wrong reading the file, please check the file format",
+    importing: "Importing...",
   },
 };
 
@@ -193,14 +211,59 @@ const ROLE_COLORS = {
 
 const roleColor = (id) => ROLE_COLORS[id] || ROLE_COLORS.other;
 
-const SECTOR_IDS = ["construction", "education", "private"];
+const SECTOR_IDS = ["construction", "education", "consultants", "private"];
 const SECTOR_COLORS = {
   construction: "#8C5A2C",
   education: "#2C6E8C",
+  consultants: "#3D8C6C",
   private: "#6B4C8C",
 };
 
 const sectorColor = (id) => SECTOR_COLORS[id] || SECTOR_COLORS.private;
+
+// Matches an imported Excel cell value (Arabic or English label, or raw id) to a sector id
+function findSectorId(value) {
+  const v = (value || "").toString().trim();
+  if (SECTOR_IDS.includes(v)) return v;
+  for (const langKey of Object.keys(STRINGS)) {
+    const map = STRINGS[langKey].sectors;
+    const found = Object.entries(map).find(([, label]) => label === v);
+    if (found) return found[0];
+  }
+  return "private";
+}
+
+// Matches an imported Excel cell value (Arabic or English label, or raw id) to a role id
+function findRoleId(value) {
+  const v = (value || "").toString().trim();
+  if (ROLE_IDS.includes(v)) return v;
+  for (const langKey of Object.keys(STRINGS)) {
+    const map = STRINGS[langKey].roles;
+    const found = Object.entries(map).find(([, label]) => label === v);
+    if (found) return found[0];
+  }
+  return "other";
+}
+
+// Normalizes an Excel cell (Date object or string) into a yyyy-mm-dd date string
+function normalizeExcelDate(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}`;
+  }
+  return String(val).trim();
+}
+
+// Normalizes an Excel cell (Date object or string) into a yyyy-mm-ddThh:mm datetime-local string
+function normalizeExcelDateTime(val) {
+  if (!val) return "";
+  if (val instanceof Date) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}T${pad(val.getHours())}:${pad(val.getMinutes())}`;
+  }
+  return String(val).trim();
+}
 
 const emptyForm = {
   id: null,
@@ -405,7 +468,8 @@ export default function App() {
   const [newMemberRole, setNewMemberRole] = useState("viewer");
   const [ownerUid, setOwnerUid] = useState(null);
   const [myRole, setMyRole] = useState("owner");
-  const [fabVisible, setFabVisible] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   const [lang, setLang] = useState(() => {
     try {
@@ -518,35 +582,6 @@ export default function App() {
     return () => clearInterval(id);
   }, [visits, t, user, ownerUid]);
 
-  // Swipe-from-left-edge detector: reveals the "New Visit" FAB
-  useEffect(() => {
-    if (screen !== "list") return;
-    let startX = 0;
-    let startY = 0;
-
-    const handleTouchStart = (e) => {
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-    };
-
-    const handleTouchEnd = (e) => {
-      const endX = e.changedTouches[0].clientX;
-      const endY = e.changedTouches[0].clientY;
-      const deltaX = endX - startX;
-      const deltaY = Math.abs(endY - startY);
-      if (startX < 40 && deltaX > 60 && deltaY < 50) {
-        setFabVisible(true);
-      }
-    };
-
-    window.addEventListener("touchstart", handleTouchStart);
-    window.addEventListener("touchend", handleTouchEnd);
-    return () => {
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [screen]);
-
   const openNew = () => {
     setForm(emptyForm);
     setErrors({});
@@ -652,6 +687,105 @@ export default function App() {
     } catch (e) {}
   };
 
+  const exportToExcel = () => {
+    const rows = visits.map((v) => ({
+      [t.companyLabel.replace(" *", "")]: v.companyName || "",
+      [t.contactLabel.replace(" *", "")]: v.contactName || "",
+      [t.sectorLabel]: t.sectors[v.sector] || v.sector || "",
+      [t.roleLabel]: t.roles[v.role] || v.role || "",
+      [t.phoneLabel]: v.phone || "",
+      [t.emailLabel]: v.email || "",
+      [t.visitDateLabel]: v.visitDate || "",
+      [t.callDateLabel]: v.callDateTime || "",
+      [t.notesLabel]: v.notes || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Visits");
+    XLSX.writeFile(wb, `pestco_visits_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const triggerImportPicker = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file || !user || !ownerUid) return;
+
+    setImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: "array", cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      const headerMap = {
+        companyName: [
+          STRINGS.ar.companyLabel, STRINGS.en.companyLabel,
+          STRINGS.ar.companyLabel.replace(" *", ""), STRINGS.en.companyLabel.replace(" *", ""),
+        ],
+        contactName: [
+          STRINGS.ar.contactLabel, STRINGS.en.contactLabel,
+          STRINGS.ar.contactLabel.replace(" *", ""), STRINGS.en.contactLabel.replace(" *", ""),
+        ],
+        sector: [STRINGS.ar.sectorLabel, STRINGS.en.sectorLabel],
+        role: [STRINGS.ar.roleLabel, STRINGS.en.roleLabel],
+        phone: [STRINGS.ar.phoneLabel, STRINGS.en.phoneLabel],
+        email: [STRINGS.ar.emailLabel, STRINGS.en.emailLabel],
+        visitDate: [STRINGS.ar.visitDateLabel, STRINGS.en.visitDateLabel],
+        callDateTime: [STRINGS.ar.callDateLabel, STRINGS.en.callDateLabel],
+        notes: [STRINGS.ar.notesLabel, STRINGS.en.notesLabel],
+      };
+
+      const getField = (row, key) => {
+        for (const candidate of headerMap[key]) {
+          if (row[candidate] !== undefined && row[candidate] !== "") return row[candidate];
+        }
+        return "";
+      };
+
+      let count = 0;
+      for (const row of rows) {
+        const companyName = String(getField(row, "companyName") || "").trim();
+        const contactName = String(getField(row, "contactName") || "").trim();
+        if (!companyName && !contactName) continue;
+
+        const callDateTime = normalizeExcelDateTime(getField(row, "callDateTime"));
+        const visitData = {
+          companyName,
+          contactName,
+          sector: findSectorId(getField(row, "sector")),
+          role: findRoleId(getField(row, "role")),
+          phone: String(getField(row, "phone") || "").trim(),
+          email: String(getField(row, "email") || "").trim(),
+          visitDate: normalizeExcelDate(getField(row, "visitDate")) || new Date().toISOString().slice(0, 10),
+          notes: String(getField(row, "notes") || "").trim(),
+          callDateTime,
+          notified: false,
+          createdAt: serverTimestamp(),
+        };
+
+        const ref = await addDoc(collection(db, "users", ownerUid, "visits"), visitData);
+        if (callDateTime) {
+          await scheduleCallReminder(
+            ref.id,
+            callDateTime,
+            `${t.reminderTitle} ${companyName}`,
+            t.reminderBody(contactName)
+          );
+        }
+        count++;
+      }
+      alert(t.importSuccess(count));
+    } catch (err) {
+      alert(t.importError);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const now = Date.now();
   const dueReminders = visits
     .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
@@ -712,10 +846,6 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
         .btn-press:active { transform: scale(0.98); }
-        @keyframes swipeHintPulse {
-          0%, 100% { opacity: 0.35; }
-          50% { opacity: 0.7; }
-        }
         input, textarea, select {
           font-family: 'Tajawal', sans-serif;
           width: 100%;
@@ -869,50 +999,26 @@ export default function App() {
             <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
           ))}
 
-          {fabVisible && (
-            <button
-              onClick={() => {
-                openNew();
-                setFabVisible(false);
-              }}
-              className="btn-press flex items-center justify-center"
-              style={{
-                position: "fixed",
-                bottom: 20,
-                left: 20,
-                width: 56,
-                height: 56,
-                borderRadius: "50%",
-                background: GOLD,
-                color: "#fff",
-                border: "none",
-                boxShadow: "0 10px 20px rgba(192,138,62,.4)",
-                zIndex: 20,
-              }}
-              aria-label={t.newVisit}
-            >
-              <Plus size={26} />
-            </button>
-          )}
-
-          {!fabVisible && (
-            <div
-              style={{
-                position: "fixed",
-                left: 0,
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: 5,
-                height: 56,
-                borderRadius: "0 8px 8px 0",
-                background: GOLD,
-                opacity: 0.55,
-                zIndex: 15,
-                pointerEvents: "none",
-                animation: "swipeHintPulse 1.8s ease-in-out infinite",
-              }}
-            />
-          )}
+          <button
+            onClick={openNew}
+            className="btn-press flex items-center justify-center"
+            style={{
+              position: "fixed",
+              bottom: 20,
+              left: 20,
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: GOLD,
+              color: "#fff",
+              border: "none",
+              boxShadow: "0 10px 20px rgba(192,138,62,.4)",
+              zIndex: 20,
+            }}
+            aria-label={t.newVisit}
+          >
+            <Plus size={26} />
+          </button>
         </div>
       )}
 
@@ -1169,6 +1275,50 @@ export default function App() {
                 </button>
               </div>
             ))}
+          </div>
+
+          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+            <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
+
+            <button
+              onClick={exportToExcel}
+              className="btn-press flex items-center justify-center gap-2 font-bold"
+              style={{
+                background: PRIMARY_MID,
+                color: "#fff",
+                borderRadius: 14,
+                padding: "12px 0",
+                width: "100%",
+                marginBottom: 10,
+              }}
+            >
+              <Download size={16} /> {t.exportBtn}
+            </button>
+
+            <button
+              onClick={triggerImportPicker}
+              disabled={importing}
+              className="btn-press flex items-center justify-center gap-2 font-bold"
+              style={{
+                background: "#fff",
+                border: `1px solid ${PRIMARY_MID}`,
+                color: PRIMARY_MID,
+                borderRadius: 14,
+                padding: "12px 0",
+                width: "100%",
+                opacity: importing ? 0.6 : 1,
+              }}
+            >
+              <Upload size={16} /> {importing ? t.importing : t.importBtn}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleImportFile}
+              style={{ display: "none" }}
+            />
+            <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importHint}</p>
           </div>
 
           <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
