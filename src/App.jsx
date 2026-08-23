@@ -405,6 +405,7 @@ export default function App() {
   const [newMemberRole, setNewMemberRole] = useState("viewer");
   const [ownerUid, setOwnerUid] = useState(null);
   const [myRole, setMyRole] = useState("owner");
+  const [fabVisible, setFabVisible] = useState(false);
 
   const [lang, setLang] = useState(() => {
     try {
@@ -516,6 +517,35 @@ export default function App() {
     }, 15000);
     return () => clearInterval(id);
   }, [visits, t, user, ownerUid]);
+
+  // Swipe-from-left-edge detector: reveals the "New Visit" FAB
+  useEffect(() => {
+    if (screen !== "list") return;
+    let startX = 0;
+    let startY = 0;
+
+    const handleTouchStart = (e) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (e) => {
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const deltaX = endX - startX;
+      const deltaY = Math.abs(endY - startY);
+      if (startX < 40 && deltaX > 60 && deltaY < 50) {
+        setFabVisible(true);
+      }
+    };
+
+    window.addEventListener("touchstart", handleTouchStart);
+    window.addEventListener("touchend", handleTouchEnd);
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [screen]);
 
   const openNew = () => {
     setForm(emptyForm);
@@ -682,6 +712,10 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
         .btn-press:active { transform: scale(0.98); }
+        @keyframes swipeHintPulse {
+          0%, 100% { opacity: 0.35; }
+          50% { opacity: 0.7; }
+        }
         input, textarea, select {
           font-family: 'Tajawal', sans-serif;
           width: 100%;
@@ -835,25 +869,50 @@ export default function App() {
             <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
           ))}
 
-          <button
-            onClick={openNew}
-            className="btn-press flex items-center justify-center gap-2 font-bold"
-            style={{
-              position: "fixed",
-              bottom: 20,
-              left: 20,
-              right: 20,
-              maxWidth: 380,
-              margin: "0 auto",
-              background: GOLD,
-              color: "#fff",
-              borderRadius: 14,
-              padding: "14px 0",
-              boxShadow: "0 10px 20px rgba(192,138,62,.4)",
-            }}
-          >
-            <Plus size={20} /> {t.newVisit}
-          </button>
+          {fabVisible && (
+            <button
+              onClick={() => {
+                openNew();
+                setFabVisible(false);
+              }}
+              className="btn-press flex items-center justify-center"
+              style={{
+                position: "fixed",
+                bottom: 20,
+                left: 20,
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: GOLD,
+                color: "#fff",
+                border: "none",
+                boxShadow: "0 10px 20px rgba(192,138,62,.4)",
+                zIndex: 20,
+              }}
+              aria-label={t.newVisit}
+            >
+              <Plus size={26} />
+            </button>
+          )}
+
+          {!fabVisible && (
+            <div
+              style={{
+                position: "fixed",
+                left: 0,
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: 5,
+                height: 56,
+                borderRadius: "0 8px 8px 0",
+                background: GOLD,
+                opacity: 0.55,
+                zIndex: 15,
+                pointerEvents: "none",
+                animation: "swipeHintPulse 1.8s ease-in-out infinite",
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -1143,4 +1202,4 @@ export default function App() {
       )}
     </div>
   );
-            }
+}
