@@ -38,14 +38,14 @@ const STRINGS = {
   ar: {
     dir: "rtl",
     locale: "ar-EG",
-    appTitle: "Pest.Co — زيارات العملاء",
+    appTitle: "Pest.Co — بيانات العملاء",
     titleEdit: "تعديل الزيارة",
     titleNew: "عميل جديد",
     titleDetail: "تفاصيل الزيارة",
     back: "رجوع",
     langToggle: "English",
     dueCalls: (n) => `عندك ${n} مكالمة مستحقة`,
-    searchPlaceholder: "ابحث بالشركة أو المسؤول أو الرقم أو الملاحظات",
+    searchPlaceholder: "ابحث بالشركة أو المسؤول أو الرقم أو الملاحظات أو التاريخ",
     loading: "جارِ التحميل...",
     noVisits: "لا توجد زيارات بعد",
     noVisitsHint: 'اضغط على "عميل جديد" لإضافة أول عميل',
@@ -121,14 +121,14 @@ const STRINGS = {
   en: {
     dir: "ltr",
     locale: "en-US",
-    appTitle: "Pest.Co — Client Visits",
+    appTitle: "Pest.Co — Client Data",
     titleEdit: "Edit Visit",
     titleNew: "New Customer",
     titleDetail: "Visit Details",
     back: "Back",
     langToggle: "عربي",
     dueCalls: (n) => `You have ${n} call${n === 1 ? "" : "s"} due`,
-    searchPlaceholder: "Search by company, contact, phone or notes",
+    searchPlaceholder: "Search by company, contact, phone, notes or date",
     loading: "Loading...",
     noVisits: "No visits yet",
     noVisitsHint: 'Tap "New Customer" to add your first client',
@@ -846,7 +846,10 @@ export default function App() {
         v.companyName.includes(q) ||
         v.contactName.includes(q) ||
         (v.phone || "").includes(q) ||
-        (v.notes || "").includes(q)
+        (v.notes || "").includes(q) ||
+        (v.visitDate || "").includes(q) ||
+        (v.callDateTime || "").includes(q) ||
+        fmtReminder(v.callDateTime, t.locale).includes(q)
       );
     })
     .sort((a, b) => {
