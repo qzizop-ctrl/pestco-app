@@ -485,6 +485,12 @@ export default function App() {
   const t = STRINGS[lang];
   const active = visits.find((v) => v.id === activeId) || null;
 
+  // Permission flags derived from myRole (set from the access_by_email lookup).
+  // canEdit: can create/update/delete visits, import/export Excel.
+  // isOwnerAccount: can manage who has access to this account's data.
+  const canEdit = myRole === "owner" || myRole === "editor";
+  const isOwnerAccount = myRole === "owner";
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -585,12 +591,14 @@ export default function App() {
   }, [visits, t, user, ownerUid]);
 
   const openNew = () => {
+    if (!canEdit) return;
     setForm(emptyForm);
     setErrors({});
     setScreen("form");
   };
 
   const openEdit = (visit) => {
+    if (!canEdit) return;
     setForm(visit);
     setErrors({});
     setScreen("form");
@@ -630,6 +638,9 @@ export default function App() {
   };
 
   const saveForm = async () => {
+    // Defense in depth: even if the UI hid the buttons, never let a
+    // viewer's client write. The Firestore rules enforce this too.
+    if (!canEdit) return;
     if (!validate() || !user || !ownerUid) return;
 
     const duplicate = form.phone ? findDuplicatePhone(form.phone, form.id) : null;
@@ -665,6 +676,7 @@ export default function App() {
   };
 
   const deleteVisit = async (id) => {
+    if (!canEdit) return;
     if (!user || !ownerUid) return;
     const confirmMsg = lang === "ar"
       ? "هل أنت متأكد من حذف هذا العميل؟"
@@ -678,6 +690,7 @@ export default function App() {
   };
 
   const grantAccess = async (email, role) => {
+    if (!isOwnerAccount) return;
     if (!user) return;
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
@@ -695,6 +708,7 @@ export default function App() {
   };
 
   const revokeAccess = async (email) => {
+    if (!isOwnerAccount) return;
     if (!user) return;
     const cleanEmail = email.trim().toLowerCase();
     const ref = doc(db, "access", user.uid);
@@ -717,6 +731,7 @@ export default function App() {
   };
 
   const exportToExcel = () => {
+    if (!canEdit) return;
     const rows = visits.map((v) => ({
       [t.companyLabel.replace(" *", "")]: v.companyName || "",
       [t.contactLabel.replace(" *", "")]: v.contactName || "",
@@ -735,12 +750,14 @@ export default function App() {
   };
 
   const triggerImportPicker = () => {
+    if (!canEdit) return;
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
   const handleImportFile = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
+    if (!canEdit) return;
     if (!file || !user || !ownerUid) return;
 
     setImporting(true);
@@ -1028,30 +1045,32 @@ export default function App() {
             <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
           ))}
 
-          <button
-            onClick={openNew}
-            className="btn-press flex items-center justify-center"
-            style={{
-              position: "fixed",
-              bottom: 20,
-              left: 20,
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              background: GOLD,
-              color: "#fff",
-              border: "none",
-              boxShadow: "0 10px 20px rgba(192,138,62,.4)",
-              zIndex: 20,
-            }}
-            aria-label={t.newVisit}
-          >
-            <Plus size={26} />
-          </button>
+          {canEdit && (
+            <button
+              onClick={openNew}
+              className="btn-press flex items-center justify-center"
+              style={{
+                position: "fixed",
+                bottom: 20,
+                left: 20,
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: GOLD,
+                color: "#fff",
+                border: "none",
+                boxShadow: "0 10px 20px rgba(192,138,62,.4)",
+                zIndex: 20,
+              }}
+              aria-label={t.newVisit}
+            >
+              <Plus size={26} />
+            </button>
+          )}
         </div>
       )}
 
-      {screen === "form" && (
+      {screen === "form" && canEdit && (
         <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
           <div>
             <label>{t.companyLabel}</label>
@@ -1228,20 +1247,22 @@ export default function App() {
                 >
                   <Bell size={15} /> {t.callDueLabel} {fmtReminder(active.callDateTime, t.locale)}
                 </span>
-                <button
-                  onClick={() => {
-                    if (!user || !ownerUid) return;
-                    updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
-                      callDateTime: "",
-                      notified: false,
-                    }).catch(() => {});
-                    cancelCallReminder(active.id);
-                  }}
-                  className="btn-press text-xs font-bold"
-                  style={{ color: PRIMARY_MID }}
-                >
-                  {t.callDone}
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => {
+                      if (!user || !ownerUid) return;
+                      updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
+                        callDateTime: "",
+                        notified: false,
+                      }).catch(() => {});
+                      cancelCallReminder(active.id);
+                    }}
+                    className="btn-press text-xs font-bold"
+                    style={{ color: PRIMARY_MID }}
+                  >
+                    {t.callDone}
+                  </button>
+                )}
               </div>
             )}
 
@@ -1253,130 +1274,138 @@ export default function App() {
             )}
           </div>
 
-          <div className="flex gap-3 mt-4">
-            <button
-              onClick={() => openEdit(active)}
-              className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
-              style={{ background: "#fff", border: `1px solid ${PRIMARY_MID}`, color: PRIMARY_MID, borderRadius: 14, padding: "12px 0" }}
-            >
-              <Pencil size={16} /> {t.edit}
-            </button>
-            <button
-              onClick={() => deleteVisit(active.id)}
-              className="btn-press flex items-center justify-center gap-2 font-bold"
-              style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 14, padding: "12px 20px" }}
-            >
-              <Trash2 size={16} /> {t.delete}
-            </button>
-          </div>
+          {canEdit && (
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => openEdit(active)}
+                className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
+                style={{ background: "#fff", border: `1px solid ${PRIMARY_MID}`, color: PRIMARY_MID, borderRadius: 14, padding: "12px 0" }}
+              >
+                <Pencil size={16} /> {t.edit}
+              </button>
+              <button
+                onClick={() => deleteVisit(active.id)}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 14, padding: "12px 20px" }}
+              >
+                <Trash2 size={16} /> {t.delete}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
       {screen === "settings" && (
         <div className="px-4 pt-4 pb-10">
-          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-            <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
-            <p className="text-xs mb-3" style={{ color: MUTED }}>{t.membersTitle}</p>
+          {isOwnerAccount && (
+            <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
+              <p className="text-xs mb-3" style={{ color: MUTED }}>{t.membersTitle}</p>
 
-            {Object.keys(members).length === 0 && (
-              <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noMembers}</p>
-            )}
+              {Object.keys(members).length === 0 && (
+                <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noMembers}</p>
+              )}
 
-            {Object.entries(members).map(([email, role]) => (
-              <div
-                key={email}
-                className="flex items-center justify-between"
-                style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
-              >
-                <div>
-                  <p className="text-sm font-bold" style={{ color: TEXT }}>{email}</p>
-                  <p className="text-xs" style={{ color: MUTED }}>{role === "editor" ? t.roleEditor : t.roleViewer}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    if (window.confirm(t.removeConfirm)) revokeAccess(email);
-                  }}
-                  className="btn-press"
-                  style={{ color: DANGER }}
-                  aria-label={t.delete}
+              {Object.entries(members).map(([email, role]) => (
+                <div
+                  key={email}
+                  className="flex items-center justify-between"
+                  style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
                 >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-            <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
-
-            <button
-              onClick={exportToExcel}
-              className="btn-press flex items-center justify-center gap-2 font-bold"
-              style={{
-                background: PRIMARY_MID,
-                color: "#fff",
-                borderRadius: 14,
-                padding: "12px 0",
-                width: "100%",
-                marginBottom: 10,
-              }}
-            >
-              <Download size={16} /> {t.exportBtn}
-            </button>
-
-            <button
-              onClick={triggerImportPicker}
-              disabled={importing}
-              className="btn-press flex items-center justify-center gap-2 font-bold"
-              style={{
-                background: "#fff",
-                border: `1px solid ${PRIMARY_MID}`,
-                color: PRIMARY_MID,
-                borderRadius: 14,
-                padding: "12px 0",
-                width: "100%",
-                opacity: importing ? 0.6 : 1,
-              }}
-            >
-              <Upload size={16} /> {importing ? t.importing : t.importBtn}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              onChange={handleImportFile}
-              style={{ display: "none" }}
-            />
-            <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importHint}</p>
-          </div>
-
-          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
-            <label>{t.addMemberEmail}</label>
-            <input
-              type="email"
-              value={newMemberEmail}
-              onChange={(e) => setNewMemberEmail(e.target.value)}
-              placeholder={t.emailPlaceholder}
-            />
-            <div style={{ marginTop: 10 }}>
-              <label>{t.addMemberRole}</label>
-              <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)}>
-                <option value="viewer">{t.roleViewer}</option>
-                <option value="editor">{t.roleEditor}</option>
-              </select>
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: TEXT }}>{email}</p>
+                    <p className="text-xs" style={{ color: MUTED }}>{role === "editor" ? t.roleEditor : t.roleViewer}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(t.removeConfirm)) revokeAccess(email);
+                    }}
+                    className="btn-press"
+                    style={{ color: DANGER }}
+                    aria-label={t.delete}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
             </div>
-            <button
-              onClick={async () => {
-                if (!newMemberEmail.trim()) return;
-                await grantAccess(newMemberEmail, newMemberRole);
-                setNewMemberEmail("");
-              }}
-              className="btn-press font-bold"
-              style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 12, width: "100%" }}
-            >
-              {t.addMemberBtn}
-            </button>
-          </div>
+          )}
+
+          {canEdit && (
+            <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+              <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
+
+              <button
+                onClick={exportToExcel}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: PRIMARY_MID,
+                  color: "#fff",
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  marginBottom: 10,
+                }}
+              >
+                <Download size={16} /> {t.exportBtn}
+              </button>
+
+              <button
+                onClick={triggerImportPicker}
+                disabled={importing}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: "#fff",
+                  border: `1px solid ${PRIMARY_MID}`,
+                  color: PRIMARY_MID,
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  opacity: importing ? 0.6 : 1,
+                }}
+              >
+                <Upload size={16} /> {importing ? t.importing : t.importBtn}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleImportFile}
+                style={{ display: "none" }}
+              />
+              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importHint}</p>
+            </div>
+          )}
+
+          {isOwnerAccount && (
+            <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
+              <label>{t.addMemberEmail}</label>
+              <input
+                type="email"
+                value={newMemberEmail}
+                onChange={(e) => setNewMemberEmail(e.target.value)}
+                placeholder={t.emailPlaceholder}
+              />
+              <div style={{ marginTop: 10 }}>
+                <label>{t.addMemberRole}</label>
+                <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)}>
+                  <option value="viewer">{t.roleViewer}</option>
+                  <option value="editor">{t.roleEditor}</option>
+                </select>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!newMemberEmail.trim()) return;
+                  await grantAccess(newMemberEmail, newMemberRole);
+                  setNewMemberEmail("");
+                }}
+                className="btn-press font-bold"
+                style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 12, width: "100%" }}
+              >
+                {t.addMemberBtn}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
