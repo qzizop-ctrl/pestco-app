@@ -116,6 +116,7 @@ const STRINGS = {
     importSuccess: (n) => `تم استيراد ${n} زيارة بنجاح`,
     importError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
     importing: "جارِ الاستيراد...",
+    duplicatePhoneWarning: (company) => `رقم الهاتف ده مسجل بالفعل عند "${company}". هل تريد الإضافة برضو؟`,
   },
   en: {
     dir: "ltr",
@@ -198,6 +199,7 @@ const STRINGS = {
     importSuccess: (n) => `Successfully imported ${n} visit${n === 1 ? "" : "s"}`,
     importError: "Something went wrong reading the file, please check the file format",
     importing: "Importing...",
+    duplicatePhoneWarning: (company) => `This phone number is already saved for "${company}". Add anyway?`,
   },
 };
 
@@ -607,8 +609,35 @@ export default function App() {
     return Object.keys(e).length === 0;
   };
 
+  // Normalizes a phone number to its core digits, ignoring +2 / 0020 / leading 0 variations
+  const corePhoneDigits = (phone) => {
+    let d = (phone || "").replace(/[^0-9]/g, "");
+    if (!d) return "";
+    if (d.startsWith("00")) d = d.slice(2);
+    if (d.startsWith("20") && d.length > 10) d = d.slice(2);
+    if (d.startsWith("0")) d = d.slice(1);
+    return d;
+  };
+
+  const findDuplicatePhone = (phone, excludeId) => {
+    const clean = corePhoneDigits(phone);
+    if (!clean) return null;
+    return (
+      visits.find(
+        (v) => v.id !== excludeId && corePhoneDigits(v.phone) === clean
+      ) || null
+    );
+  };
+
   const saveForm = async () => {
     if (!validate() || !user || !ownerUid) return;
+
+    const duplicate = form.phone ? findDuplicatePhone(form.phone, form.id) : null;
+    if (duplicate) {
+      const proceed = window.confirm(t.duplicatePhoneWarning(duplicate.companyName));
+      if (!proceed) return;
+    }
+
     const { id, ...data } = form;
     try {
       let savedId = id;
