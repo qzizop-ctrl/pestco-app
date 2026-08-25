@@ -1129,6 +1129,7 @@ export default function App() {
         (v.visitDate || "").includes(q) ||
         (v.callDateTime || "").includes(q) ||
         (v.tags || []).some((tag) => tag.includes(q)) ||
+        (v.activityLog || []).some((entry) => (entry.text || "").includes(q)) ||
         fmtReminder(v.callDateTime, t.locale).includes(q)
       );
     })
