@@ -1156,18 +1156,18 @@ export default function App() {
     .filter((v) => stageFilter === "all" || v.stage === stageFilter)
     .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
     .filter((v) => {
-      const q = query.trim();
+      const q = query.trim().toLowerCase();
       if (!q) return true;
       return (
-        v.companyName.includes(q) ||
-        v.contactName.includes(q) ||
-        (v.phone || "").includes(q) ||
-        (v.notes || "").includes(q) ||
-        (v.visitDate || "").includes(q) ||
-        (v.callDateTime || "").includes(q) ||
-        (v.tags || []).some((tag) => tag.includes(q)) ||
-        (v.activityLog || []).some((entry) => (entry.text || "").includes(q)) ||
-        fmtReminder(v.callDateTime, t.locale).includes(q)
+        v.companyName.toLowerCase().includes(q) ||
+        v.contactName.toLowerCase().includes(q) ||
+        (v.phone || "").toLowerCase().includes(q) ||
+        (v.notes || "").toLowerCase().includes(q) ||
+        (v.visitDate || "").toLowerCase().includes(q) ||
+        (v.callDateTime || "").toLowerCase().includes(q) ||
+        (v.tags || []).some((tag) => tag.toLowerCase().includes(q)) ||
+        (v.activityLog || []).some((entry) => (entry.text || "").toLowerCase().includes(q)) ||
+        fmtReminder(v.callDateTime, t.locale).toLowerCase().includes(q)
       );
     })
     .sort((a, b) => {
