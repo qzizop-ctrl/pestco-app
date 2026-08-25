@@ -477,8 +477,8 @@ function VisitCard({ visit, onOpen, t }) {
     none: t.statusNone,
   }[status];
   const sectorLabel = t.sectors[visit.sector] || t.sectors.private;
-  const stageId = visit.stage || "survey";
-  const stageLabel = t.stages[stageId] || t.stages.survey;
+  const stageId = visit.stage || "";
+  const stageLabel = stageId ? (t.stages[stageId] || "") : "";
   const tags = visit.tags || [];
 
   const stop = (fn) => (e) => {
@@ -541,12 +541,14 @@ function VisitCard({ visit, onOpen, t }) {
         </div>
 
         <div className="flex items-center flex-wrap gap-1 mt-2">
-          <span
-            className="text-xs font-bold"
-            style={{ background: stageColor(stageId), color: "#fff", borderRadius: 999, padding: "3px 9px" }}
-          >
-            {stageLabel}
-          </span>
+          {stageLabel && (
+            <span
+              className="text-xs font-bold"
+              style={{ background: stageColor(stageId), color: "#fff", borderRadius: 999, padding: "3px 9px" }}
+            >
+              {stageLabel}
+            </span>
+          )}
           {tags.slice(0, 3).map((tag) => (
             <TagChip key={tag} label={tag} />
           ))}
@@ -1138,7 +1140,7 @@ export default function App() {
       const sb = visitStatus(b);
       const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
       if (order[sa] !== order[sb]) return order[sa] - order[sb];
-      return (a.visitDate < b.visitDate ? 1 : -1);
+      return (a.visitDate < b.visitDate ? 1 : a.visitDate > b.visitDate ? -1 : 0);
     });
 
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
