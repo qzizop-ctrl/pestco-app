@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings, MessageCircle,
-  Download, Upload, Tag, Wifi, WifiOff, RefreshCw, Workflow, Clock, StickyNote,
+  Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, arrayUnion, enableIndexedDbPersistence,
+  getDoc, setDoc, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -135,10 +135,12 @@ const STRINGS = {
     noActivity: "لا يوجد نشاط مسجل بعد",
     activityCreated: "تم إنشاء العميل",
     activityStageChanged: (stage) => `تم تغيير مرحلة المشروع إلى: ${stage}`,
+    activityStageCleared: "تم إلغاء مرحلة المشروع",
     activityCallSet: (date) => `تم تحديد موعد متابعة: ${date}`,
     activityCallDone: "تم الاتصال ✓",
-    offlineBanner: "غير متصل بالإنترنت - التغييرات هتتزامن تلقائيًا لما النت يرجع",
-    syncingBanner: "جارِ مزامنة البيانات...",
+    offlineBanner: "غير متصل بالإنترنت - لازم يكون فيه نت عشان تقدر تحفظ أي تعديل",
+    requireOnlineMsg: "لازم يكون فيه اتصال بالإنترنت عشان تقدر تحفظ",
+    deleteActivityConfirm: "هل تريد حذف هذا النشاط؟",
   },
   en: {
     dir: "ltr",
@@ -240,10 +242,12 @@ const STRINGS = {
     noActivity: "No activity logged yet",
     activityCreated: "Customer created",
     activityStageChanged: (stage) => `Project stage changed to: ${stage}`,
+    activityStageCleared: "Project stage cleared",
     activityCallSet: (date) => `Follow-up scheduled: ${date}`,
     activityCallDone: "Called ✓",
-    offlineBanner: "You're offline - changes will sync automatically once you're back online",
-    syncingBanner: "Syncing data...",
+    offlineBanner: "You're offline - you need a connection to save any changes",
+    requireOnlineMsg: "You need an internet connection to save changes",
+    deleteActivityConfirm: "Delete this activity entry?",
   },
 };
 
@@ -622,7 +626,6 @@ export default function App() {
   const [importing, setImporting] = useState(false);
   const [newActivityText, setNewActivityText] = useState("");
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
-  const [pendingWrites, setPendingWrites] = useState(false);
   const fileInputRef = useRef(null);
 
   const [lang, setLang] = useState(() => {
@@ -643,14 +646,9 @@ export default function App() {
   const canEdit = myRole === "owner" || myRole === "editor";
   const isOwnerAccount = myRole === "owner";
 
-  // Enables local offline persistence once, so reads/writes keep working
-  // without a connection and Firestore auto-syncs when it comes back.
-  useEffect(() => {
-    enableIndexedDbPersistence(db).catch(() => {
-      // Fails silently in unsupported browsers or multiple open tabs;
-      // the app still works online, just without offline cache.
-    });
-  }, []);
+  // No offline persistence / write queue on purpose: writes are only ever
+  // attempted while online (see requireOnline below), so there's nothing
+  // to cache locally or replay later.
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -722,11 +720,9 @@ export default function App() {
     const ref = collection(db, "users", ownerUid, "visits");
     const unsub = onSnapshot(
       ref,
-      { includeMetadataChanges: true },
       (snap) => {
         const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setVisits(next);
-        setPendingWrites(snap.metadata.hasPendingWrites);
         setLoaded(true);
       },
       () => setLoaded(true)
@@ -764,12 +760,33 @@ export default function App() {
     return () => clearInterval(id);
   }, [visits, t, user, ownerUid]);
 
+  // Blocks any write attempt while offline instead of queueing it for later sync.
+  const requireOnline = () => {
+    if (!isOnline) {
+      alert(t.requireOnlineMsg);
+      return false;
+    }
+    return true;
+  };
+
   // Appends one entry to a visit's activity timeline without overwriting the rest of the log.
   const appendActivity = async (visitId, activity) => {
     if (!ownerUid) return;
     try {
       await updateDoc(doc(db, "users", ownerUid, "visits", visitId), {
         activityLog: arrayUnion(activity),
+      });
+    } catch (e) {}
+  };
+
+  // Removes one entry from a visit's activity timeline (with confirmation).
+  const deleteActivity = async (entry) => {
+    if (!canEdit || !active || !ownerUid) return;
+    if (!requireOnline()) return;
+    if (!window.confirm(t.deleteActivityConfirm)) return;
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
+        activityLog: arrayRemove(entry),
       });
     } catch (e) {}
   };
@@ -834,6 +851,7 @@ export default function App() {
     // Defense in depth: even if the UI hid the buttons, never let a
     // viewer's client write. The Firestore rules enforce this too.
     if (!canEdit) return;
+    if (!requireOnline()) return;
     if (!validate() || !user || !ownerUid) return;
 
     const duplicate = form.phone ? findDuplicatePhone(form.phone, form.id) : null;
@@ -863,7 +881,13 @@ export default function App() {
         await appendActivity(savedId, buildActivity("created", t.activityCreated));
       } else {
         if (original && original.stage !== data.stage) {
-          await appendActivity(savedId, buildActivity("stage", t.activityStageChanged(t.stages[data.stage] || data.stage)));
+          await appendActivity(
+            savedId,
+            buildActivity(
+              "stage",
+              data.stage ? t.activityStageChanged(t.stages[data.stage] || data.stage) : t.activityStageCleared
+            )
+          );
         }
         if (original && original.callDateTime !== data.callDateTime && data.callDateTime) {
           await appendActivity(savedId, buildActivity("call", t.activityCallSet(fmtReminder(data.callDateTime, t.locale))));
@@ -886,6 +910,7 @@ export default function App() {
 
   const deleteVisit = async (id) => {
     if (!canEdit) return;
+    if (!requireOnline()) return;
     if (!user || !ownerUid) return;
     const confirmMsg = lang === "ar"
       ? "هل أنت متأكد من حذف هذا العميل؟"
@@ -899,17 +924,28 @@ export default function App() {
   };
 
   // Quick stage change from the detail screen, without opening the full edit form.
+  // Tapping the currently-active stage again clears it instead of no-op'ing.
   const changeStage = async (visit, newStage) => {
     if (!canEdit) return;
-    if (!ownerUid || newStage === visit.stage) return;
+    if (!requireOnline()) return;
+    if (!ownerUid) return;
+    const current = visit.stage || "";
+    const target = newStage === current ? "" : newStage;
     try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { stage: newStage });
-      await appendActivity(visit.id, buildActivity("stage", t.activityStageChanged(t.stages[newStage] || newStage)));
+      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { stage: target });
+      await appendActivity(
+        visit.id,
+        buildActivity(
+          "stage",
+          target ? t.activityStageChanged(t.stages[target] || target) : t.activityStageCleared
+        )
+      );
     } catch (e) {}
   };
 
   const submitActivity = async () => {
     if (!canEdit || !active) return;
+    if (!requireOnline()) return;
     const text = newActivityText.trim();
     if (!text) return;
     await appendActivity(active.id, buildActivity("note", text));
@@ -918,6 +954,7 @@ export default function App() {
 
   const grantAccess = async (email, role) => {
     if (!isOwnerAccount) return;
+    if (!requireOnline()) return;
     if (!user) return;
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
@@ -936,6 +973,7 @@ export default function App() {
 
   const revokeAccess = async (email) => {
     if (!isOwnerAccount) return;
+    if (!requireOnline()) return;
     if (!user) return;
     const cleanEmail = email.trim().toLowerCase();
     const ref = doc(db, "access", user.uid);
@@ -980,6 +1018,7 @@ export default function App() {
 
   const triggerImportPicker = () => {
     if (!canEdit) return;
+    if (!requireOnline()) return;
     if (fileInputRef.current) fileInputRef.current.click();
   };
 
@@ -987,6 +1026,7 @@ export default function App() {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
     if (!canEdit) return;
+    if (!requireOnline()) return;
     if (!file || !user || !ownerUid) return;
 
     setImporting(true);
@@ -1100,7 +1140,7 @@ export default function App() {
       return (a.visitDate < b.visitDate ? 1 : -1);
     });
 
-  const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "survey") : 0;
+  const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
   const activityLog = active ? [...(active.activityLog || [])].sort((a, b) => (a.at < b.at ? 1 : -1)) : [];
 
   if (!authChecked) {
@@ -1186,11 +1226,7 @@ export default function App() {
             aria-label={isOnline ? "online" : "offline"}
             title={isOnline ? "" : t.offlineBanner}
           >
-            {isOnline ? (
-              pendingWrites ? <RefreshCw size={15} /> : <Wifi size={15} />
-            ) : (
-              <WifiOff size={15} />
-            )}
+            {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
           </span>
         )}
         {screen === "list" && (
@@ -1236,21 +1272,6 @@ export default function App() {
             >
               <WifiOff size={14} color={STATUS_COLORS.today} />
               <span className="text-xs font-bold" style={{ color: "#8C6110" }}>{t.offlineBanner}</span>
-            </div>
-          )}
-          {isOnline && pendingWrites && (
-            <div
-              className="flex items-center gap-2"
-              style={{
-                background: "rgba(46,107,143,.1)",
-                border: "1px solid rgba(46,107,143,.35)",
-                borderRadius: 12,
-                padding: "8px 12px",
-                marginBottom: 12,
-              }}
-            >
-              <RefreshCw size={14} color={STATUS_COLORS.upcoming} />
-              <span className="text-xs font-bold" style={{ color: STATUS_COLORS.upcoming }}>{t.syncingBanner}</span>
             </div>
           )}
 
@@ -1589,8 +1610,8 @@ export default function App() {
               <label style={{ marginBottom: 8 }}>{t.pipelineLabel}</label>
               <div className="flex items-center" style={{ gap: 4 }}>
                 {STAGE_IDS.map((id, idx) => {
-                  const isCurrent = id === (active.stage || "survey");
-                  const isPast = idx < activeStageIdx;
+                  const isCurrent = id === active.stage;
+                  const isPast = activeStageIdx >= 0 && idx < activeStageIdx;
                   return (
                     <React.Fragment key={id}>
                       <button
@@ -1671,6 +1692,7 @@ export default function App() {
                 {canEdit && (
                   <button
                     onClick={async () => {
+                      if (!requireOnline()) return;
                       if (!user || !ownerUid) return;
                       updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
                         callDateTime: "",
@@ -1737,8 +1759,22 @@ export default function App() {
                             background: color,
                           }}
                         />
-                        <p className="text-sm" style={{ margin: 0, color: TEXT }}>{entry.text}</p>
-                        <span className="text-xs" style={{ color: MUTED }}>{fmtActivityDate(entry.at, t.locale)}</span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm" style={{ margin: 0, color: TEXT }}>{entry.text}</p>
+                            <span className="text-xs" style={{ color: MUTED }}>{fmtActivityDate(entry.at, t.locale)}</span>
+                          </div>
+                          {canEdit && (
+                            <button
+                              onClick={() => deleteActivity(entry)}
+                              className="btn-press flex-shrink-0"
+                              style={{ color: DANGER }}
+                              aria-label={t.delete}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
