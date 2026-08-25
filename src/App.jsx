@@ -324,6 +324,36 @@ function parseTagsCell(value) {
     .filter(Boolean);
 }
 
+// Parses a visitDate value that might be stored as ISO (yyyy-mm-dd, from the
+// date input) or as raw text like "d-m-yyyy" / "dd-mm-yyyy" (from older Excel
+// imports), returning a real Date object so sorting/comparisons are correct
+// regardless of which format is stored.
+function parseVisitDate(str) {
+  if (!str) return null;
+  const s = String(str).trim();
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    const d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+    return isNaN(d) ? null : d;
+  }
+  const dmy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  if (dmy) {
+    const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+    return isNaN(d) ? null : d;
+  }
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+// Normalizes any supported visitDate format back to ISO yyyy-mm-dd, the
+// format the <input type="date"> control expects.
+function toISODate(str) {
+  const d = parseVisitDate(str);
+  if (!d) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 // Normalizes an Excel cell (Date object or string) into a yyyy-mm-dd date string
 function normalizeExcelDate(val) {
   if (!val) return "";
@@ -331,7 +361,7 @@ function normalizeExcelDate(val) {
     const pad = (n) => String(n).padStart(2, "0");
     return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}`;
   }
-  return String(val).trim();
+  return toISODate(val) || String(val).trim();
 }
 
 // Normalizes an Excel cell (Date object or string) into a yyyy-mm-ddThh:mm datetime-local string
@@ -802,7 +832,12 @@ export default function App() {
 
   const openEdit = (visit) => {
     if (!canEdit) return;
-    setForm({ ...emptyForm, ...visit, tagsInput: (visit.tags || []).join(", ") });
+    setForm({
+      ...emptyForm,
+      ...visit,
+      visitDate: toISODate(visit.visitDate),
+      tagsInput: (visit.tags || []).join(", "),
+    });
     setErrors({});
     setScreen("form");
   };
@@ -1140,10 +1175,12 @@ export default function App() {
       const sb = visitStatus(b);
       const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
       if (order[sa] !== order[sb]) return order[sa] - order[sb];
-      if (!a.visitDate && !b.visitDate) return 0;
-      if (!a.visitDate) return 1;
-      if (!b.visitDate) return -1;
-      return (a.visitDate < b.visitDate ? 1 : a.visitDate > b.visitDate ? -1 : 0);
+      const da = parseVisitDate(a.visitDate);
+      const db = parseVisitDate(b.visitDate);
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return db - da;
     });
 
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
