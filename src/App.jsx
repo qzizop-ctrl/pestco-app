@@ -1140,6 +1140,9 @@ export default function App() {
       const sb = visitStatus(b);
       const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
       if (order[sa] !== order[sb]) return order[sa] - order[sb];
+      if (!a.visitDate && !b.visitDate) return 0;
+      if (!a.visitDate) return 1;
+      if (!b.visitDate) return -1;
       return (a.visitDate < b.visitDate ? 1 : a.visitDate > b.visitDate ? -1 : 0);
     });
 
