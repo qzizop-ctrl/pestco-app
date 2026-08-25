@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings, MessageCircle,
-  Download, Upload,
+  Download, Upload, Tag, Wifi, WifiOff, RefreshCw, Workflow, Clock, StickyNote,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc,
+  getDoc, setDoc, arrayUnion, enableIndexedDbPersistence,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -44,7 +44,7 @@ const STRINGS = {
     titleDetail: "تفاصيل الزيارة",
     back: "رجوع",
     langToggle: "English",
-    dueCalls: (n) => `عندك ${n} مكالمة مستحقة`,
+    dueCalls: (n) => `عندك ${n} متابعة مستحقة`,
     searchPlaceholder: "ابحث بالشركة أو المسؤول أو الرقم أو الملاحظات أو التاريخ",
     loading: "جارِ التحميل...",
     noVisits: "لا توجد زيارات بعد",
@@ -64,15 +64,15 @@ const STRINGS = {
     emailLabel: "البريد الإلكتروني",
     emailPlaceholder: "name@company.com",
     visitDateLabel: "تاريخ الزيارة",
-    callDateLabel: "موعد الاتصال القادم (اختياري)",
+    callDateLabel: "موعد المتابعة القادم (اختياري)",
     callDateHint: "في نسخة الأندرويد: التطبيق هيبعتلك تنبيه حقيقي في المعاد ده حتى لو التطبيق مقفول. في نسخة المتصفح: لازم التطبيق يكون شغال.",
     notesLabel: "ملاحظات الزيارة",
     notesPlaceholder: "تفاصيل الزيارة، المطلوب متابعته، إلخ",
-    save: "إضافة عميل",
+    save: "حفظ العميل",
     phoneRow: "رقم الهاتف",
     emailRow: "البريد الإلكتروني",
     visitDateRow: "تاريخ الزيارة",
-    callDueLabel: "موعد الاتصال:",
+    callDueLabel: "موعد المتابعة:",
     callDone: "تم الاتصال ✓",
     notesRow: "ملاحظات",
     edit: "تعديل",
@@ -92,8 +92,8 @@ const STRINGS = {
       private: "شركات خاصة",
     },
     signOut: "تسجيل الخروج",
-    reminderTitle: "تذكير اتصال:",
-    reminderBody: (contact) => `موعد الاتصال بـ ${contact} حان الآن`,
+    reminderTitle: "تذكير متابعة:",
+    reminderBody: (contact) => `موعد متابعة ${contact} حان الآن`,
     settingsTitle: "الإعدادات",
     manageAccess: "إدارة المشاركة",
     membersTitle: "الأشخاص الذين لديهم صلاحية الوصول",
@@ -117,6 +117,28 @@ const STRINGS = {
     importError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
     importing: "جارِ الاستيراد...",
     duplicatePhoneWarning: (company) => `رقم الهاتف ده مسجل بالفعل عند "${company}". هل تريد الإضافة برضو؟`,
+    pipelineLabel: "مرحلة المشروع",
+    pipelineAll: "كل المراحل",
+    stages: {
+      survey: "معاينة",
+      quote: "عرض سعر",
+      install: "تركيب",
+      maintenance: "صيانة",
+    },
+    tagsLabel: "الوسوم (Tags)",
+    tagsPlaceholder: "افصل بينهم بفاصلة، مثال: VIP, يحتاج عرض سعر",
+    tagsAll: "كل الوسوم",
+    noTags: "بدون وسوم",
+    activityLabel: "سجل النشاط",
+    addActivityPlaceholder: "أضف ملاحظة أو نشاط جديد...",
+    addActivityBtn: "إضافة",
+    noActivity: "لا يوجد نشاط مسجل بعد",
+    activityCreated: "تم إنشاء العميل",
+    activityStageChanged: (stage) => `تم تغيير مرحلة المشروع إلى: ${stage}`,
+    activityCallSet: (date) => `تم تحديد موعد متابعة: ${date}`,
+    activityCallDone: "تم الاتصال ✓",
+    offlineBanner: "غير متصل بالإنترنت - التغييرات هتتزامن تلقائيًا لما النت يرجع",
+    syncingBanner: "جارِ مزامنة البيانات...",
   },
   en: {
     dir: "ltr",
@@ -127,7 +149,7 @@ const STRINGS = {
     titleDetail: "Visit Details",
     back: "Back",
     langToggle: "عربي",
-    dueCalls: (n) => `You have ${n} call${n === 1 ? "" : "s"} due`,
+    dueCalls: (n) => `You have ${n} follow-up${n === 1 ? "" : "s"} due`,
     searchPlaceholder: "Search by company, contact, phone, notes or date",
     loading: "Loading...",
     noVisits: "No visits yet",
@@ -147,15 +169,15 @@ const STRINGS = {
     emailLabel: "Email",
     emailPlaceholder: "name@company.com",
     visitDateLabel: "Visit Date",
-    callDateLabel: "Next Call Date (optional)",
+    callDateLabel: "Next Follow-up Date (optional)",
     callDateHint: "On the Android app: you'll get a real alert at this time even if the app is closed. On the web version: the app needs to be open.",
     notesLabel: "Visit Notes",
     notesPlaceholder: "Visit details, follow-ups needed, etc.",
-    save: "Add Customer",
+    save: "Save Customer",
     phoneRow: "Phone Number",
     emailRow: "Email",
     visitDateRow: "Visit Date",
-    callDueLabel: "Call due:",
+    callDueLabel: "Follow-up due:",
     callDone: "Called ✓",
     notesRow: "Notes",
     edit: "Edit",
@@ -175,8 +197,8 @@ const STRINGS = {
       private: "Private Companies",
     },
     signOut: "Sign Out",
-    reminderTitle: "Call reminder:",
-    reminderBody: (contact) => `It's time to call ${contact}`,
+    reminderTitle: "Follow-up reminder:",
+    reminderBody: (contact) => `It's time to follow up with ${contact}`,
     settingsTitle: "Settings",
     manageAccess: "Manage Access",
     membersTitle: "People with access",
@@ -200,6 +222,28 @@ const STRINGS = {
     importError: "Something went wrong reading the file, please check the file format",
     importing: "Importing...",
     duplicatePhoneWarning: (company) => `This phone number is already saved for "${company}". Add anyway?`,
+    pipelineLabel: "Project Stage",
+    pipelineAll: "All Stages",
+    stages: {
+      survey: "Survey",
+      quote: "Quote",
+      install: "Installation",
+      maintenance: "Maintenance",
+    },
+    tagsLabel: "Tags",
+    tagsPlaceholder: "Comma separated, e.g. VIP, Needs quote",
+    tagsAll: "All Tags",
+    noTags: "No tags",
+    activityLabel: "Activity Log",
+    addActivityPlaceholder: "Add a note or new activity...",
+    addActivityBtn: "Add",
+    noActivity: "No activity logged yet",
+    activityCreated: "Customer created",
+    activityStageChanged: (stage) => `Project stage changed to: ${stage}`,
+    activityCallSet: (date) => `Follow-up scheduled: ${date}`,
+    activityCallDone: "Called ✓",
+    offlineBanner: "You're offline - changes will sync automatically once you're back online",
+    syncingBanner: "Syncing data...",
   },
 };
 
@@ -222,6 +266,15 @@ const SECTOR_COLORS = {
 };
 
 const sectorColor = (id) => SECTOR_COLORS[id] || SECTOR_COLORS.private;
+
+const STAGE_IDS = ["survey", "quote", "install", "maintenance"];
+const STAGE_COLORS = {
+  survey: "#6B7168",
+  quote: "#B9832A",
+  install: "#0F6E56",
+  maintenance: "#534AB7",
+};
+const stageColor = (id) => STAGE_COLORS[id] || STAGE_COLORS.survey;
 
 // Matches an imported Excel cell value (Arabic or English label, or raw id) to a sector id
 function findSectorId(value) {
@@ -247,6 +300,26 @@ function findRoleId(value) {
   return "other";
 }
 
+// Matches an imported Excel cell value (Arabic or English label, or raw id) to a pipeline stage id
+function findStageId(value) {
+  const v = (value || "").toString().trim();
+  if (STAGE_IDS.includes(v)) return v;
+  for (const langKey of Object.keys(STRINGS)) {
+    const map = STRINGS[langKey].stages;
+    const found = Object.entries(map).find(([, label]) => label === v);
+    if (found) return found[0];
+  }
+  return "survey";
+}
+
+// Splits a comma separated Excel cell into a clean tag array
+function parseTagsCell(value) {
+  return String(value || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 // Normalizes an Excel cell (Date object or string) into a yyyy-mm-dd date string
 function normalizeExcelDate(val) {
   if (!val) return "";
@@ -267,18 +340,44 @@ function normalizeExcelDateTime(val) {
   return String(val).trim();
 }
 
+// Builds a unique activity-log entry for a visit's timeline
+function buildActivity(type, text) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    text,
+    at: new Date().toISOString(),
+  };
+}
+
+const ACTIVITY_ICONS = {
+  created: Plus,
+  stage: Workflow,
+  call: Bell,
+  note: StickyNote,
+};
+const ACTIVITY_COLORS = {
+  created: "#0F6E56",
+  stage: "#534AB7",
+  call: "#2E6B8F",
+  note: "#B9832A",
+};
+
 const emptyForm = {
   id: null,
   companyName: "",
   contactName: "",
   sector: "construction",
   role: "purchasing",
+  stage: "survey",
+  tagsInput: "",
   phone: "",
   email: "",
   visitDate: new Date().toISOString().slice(0, 10),
   notes: "",
   callDateTime: "",
   notified: false,
+  activityLog: [],
 };
 
 function visitStatus(visit) {
@@ -323,6 +422,15 @@ function fmtReminder(dt, locale) {
   }
 }
 
+function fmtActivityDate(dt, locale) {
+  try {
+    const d = new Date(dt);
+    return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return dt;
+  }
+}
+
 function Logo({ size = 36 }) {
   return (
     <div
@@ -331,6 +439,27 @@ function Logo({ size = 36 }) {
     >
       <ShieldCheck size={size * 0.6} color="#F6F3EC" />
     </div>
+  );
+}
+
+function TagChip({ label, onRemove }) {
+  return (
+    <span
+      className="flex items-center gap-1 text-xs font-bold"
+      style={{ background: GOLD_SOFT, color: "#7A5420", borderRadius: 999, padding: "3px 8px" }}
+    >
+      {label}
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="btn-press flex items-center justify-center"
+          style={{ color: "#7A5420" }}
+          aria-label="x"
+        >
+          <X size={11} />
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -344,6 +473,9 @@ function VisitCard({ visit, onOpen, t }) {
     none: t.statusNone,
   }[status];
   const sectorLabel = t.sectors[visit.sector] || t.sectors.private;
+  const stageId = visit.stage || "survey";
+  const stageLabel = t.stages[stageId] || t.stages.survey;
+  const tags = visit.tags || [];
 
   const stop = (fn) => (e) => {
     e.stopPropagation();
@@ -404,6 +536,21 @@ function VisitCard({ visit, onOpen, t }) {
           </span>
         </div>
 
+        <div className="flex items-center flex-wrap gap-1 mt-2">
+          <span
+            className="text-xs font-bold"
+            style={{ background: stageColor(stageId), color: "#fff", borderRadius: 999, padding: "3px 9px" }}
+          >
+            {stageLabel}
+          </span>
+          {tags.slice(0, 3).map((tag) => (
+            <TagChip key={tag} label={tag} />
+          ))}
+          {tags.length > 3 && (
+            <span className="text-xs" style={{ color: MUTED }}>+{tags.length - 3}</span>
+          )}
+        </div>
+
         <div className="flex items-center gap-1 mt-2" style={{ color: MUTED }}>
           <User size={13} />
           <span className="text-sm">{visit.contactName || t.noContactName}</span>
@@ -462,6 +609,8 @@ export default function App() {
   const [screen, setScreen] = useState("list"); // list | form | detail
   const [query, setQuery] = useState("");
   const [sectorFilter, setSectorFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
   const [form, setForm] = useState(emptyForm);
   const [activeId, setActiveId] = useState(null);
   const [errors, setErrors] = useState({});
@@ -471,6 +620,9 @@ export default function App() {
   const [ownerUid, setOwnerUid] = useState(null);
   const [myRole, setMyRole] = useState("owner");
   const [importing, setImporting] = useState(false);
+  const [newActivityText, setNewActivityText] = useState("");
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+  const [pendingWrites, setPendingWrites] = useState(false);
   const fileInputRef = useRef(null);
 
   const [lang, setLang] = useState(() => {
@@ -490,6 +642,26 @@ export default function App() {
   // isOwnerAccount: can manage who has access to this account's data.
   const canEdit = myRole === "owner" || myRole === "editor";
   const isOwnerAccount = myRole === "owner";
+
+  // Enables local offline persistence once, so reads/writes keep working
+  // without a connection and Firestore auto-syncs when it comes back.
+  useEffect(() => {
+    enableIndexedDbPersistence(db).catch(() => {
+      // Fails silently in unsupported browsers or multiple open tabs;
+      // the app still works online, just without offline cache.
+    });
+  }, []);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -550,9 +722,11 @@ export default function App() {
     const ref = collection(db, "users", ownerUid, "visits");
     const unsub = onSnapshot(
       ref,
+      { includeMetadataChanges: true },
       (snap) => {
         const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setVisits(next);
+        setPendingWrites(snap.metadata.hasPendingWrites);
         setLoaded(true);
       },
       () => setLoaded(true)
@@ -590,6 +764,16 @@ export default function App() {
     return () => clearInterval(id);
   }, [visits, t, user, ownerUid]);
 
+  // Appends one entry to a visit's activity timeline without overwriting the rest of the log.
+  const appendActivity = async (visitId, activity) => {
+    if (!ownerUid) return;
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", visitId), {
+        activityLog: arrayUnion(activity),
+      });
+    } catch (e) {}
+  };
+
   const openNew = () => {
     if (!canEdit) return;
     setForm(emptyForm);
@@ -599,13 +783,14 @@ export default function App() {
 
   const openEdit = (visit) => {
     if (!canEdit) return;
-    setForm(visit);
+    setForm({ ...emptyForm, ...visit, tagsInput: (visit.tags || []).join(", ") });
     setErrors({});
     setScreen("form");
   };
 
   const openDetail = (visit) => {
     setActiveId(visit.id);
+    setNewActivityText("");
     setScreen("detail");
   };
 
@@ -637,6 +822,14 @@ export default function App() {
     );
   };
 
+  const removeTagFromForm = (tag) => {
+    const remaining = (form.tagsInput || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s && s !== tag);
+    setForm({ ...form, tagsInput: remaining.join(", ") });
+  };
+
   const saveForm = async () => {
     // Defense in depth: even if the UI hid the buttons, never let a
     // viewer's client write. The Firestore rules enforce this too.
@@ -649,7 +842,10 @@ export default function App() {
       if (!proceed) return;
     }
 
-    const { id, ...data } = form;
+    const { id, tagsInput, activityLog, ...rest } = form;
+    const data = { ...rest, tags: parseTagsCell(tagsInput) };
+    const original = id ? visits.find((v) => v.id === id) : null;
+
     try {
       let savedId = id;
       if (id) {
@@ -657,10 +853,23 @@ export default function App() {
       } else {
         const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
           ...data,
+          activityLog: [],
           createdAt: serverTimestamp(),
         });
         savedId = ref.id;
       }
+
+      if (!id) {
+        await appendActivity(savedId, buildActivity("created", t.activityCreated));
+      } else {
+        if (original && original.stage !== data.stage) {
+          await appendActivity(savedId, buildActivity("stage", t.activityStageChanged(t.stages[data.stage] || data.stage)));
+        }
+        if (original && original.callDateTime !== data.callDateTime && data.callDateTime) {
+          await appendActivity(savedId, buildActivity("call", t.activityCallSet(fmtReminder(data.callDateTime, t.locale))));
+        }
+      }
+
       if (data.callDateTime) {
         await scheduleCallReminder(
           savedId,
@@ -687,6 +896,24 @@ export default function App() {
       await cancelCallReminder(id);
     } catch (e) {}
     setScreen("list");
+  };
+
+  // Quick stage change from the detail screen, without opening the full edit form.
+  const changeStage = async (visit, newStage) => {
+    if (!canEdit) return;
+    if (!ownerUid || newStage === visit.stage) return;
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { stage: newStage });
+      await appendActivity(visit.id, buildActivity("stage", t.activityStageChanged(t.stages[newStage] || newStage)));
+    } catch (e) {}
+  };
+
+  const submitActivity = async () => {
+    if (!canEdit || !active) return;
+    const text = newActivityText.trim();
+    if (!text) return;
+    await appendActivity(active.id, buildActivity("note", text));
+    setNewActivityText("");
   };
 
   const grantAccess = async (email, role) => {
@@ -737,6 +964,8 @@ export default function App() {
       [t.contactLabel.replace(" *", "")]: v.contactName || "",
       [t.sectorLabel]: t.sectors[v.sector] || v.sector || "",
       [t.roleLabel]: t.roles[v.role] || v.role || "",
+      [t.pipelineLabel]: t.stages[v.stage] || v.stage || "",
+      [t.tagsLabel]: (v.tags || []).join(", "),
       [t.phoneLabel]: v.phone || "",
       [t.emailLabel]: v.email || "",
       [t.visitDateLabel]: v.visitDate || "",
@@ -778,6 +1007,8 @@ export default function App() {
         ],
         sector: [STRINGS.ar.sectorLabel, STRINGS.en.sectorLabel],
         role: [STRINGS.ar.roleLabel, STRINGS.en.roleLabel],
+        stage: [STRINGS.ar.pipelineLabel, STRINGS.en.pipelineLabel],
+        tags: [STRINGS.ar.tagsLabel, STRINGS.en.tagsLabel],
         phone: [STRINGS.ar.phoneLabel, STRINGS.en.phoneLabel],
         email: [STRINGS.ar.emailLabel, STRINGS.en.emailLabel],
         visitDate: [STRINGS.ar.visitDateLabel, STRINGS.en.visitDateLabel],
@@ -804,16 +1035,20 @@ export default function App() {
           contactName,
           sector: findSectorId(getField(row, "sector")),
           role: findRoleId(getField(row, "role")),
+          stage: findStageId(getField(row, "stage")),
+          tags: parseTagsCell(getField(row, "tags")),
           phone: String(getField(row, "phone") || "").trim(),
           email: String(getField(row, "email") || "").trim(),
           visitDate: normalizeExcelDate(getField(row, "visitDate")) || new Date().toISOString().slice(0, 10),
           notes: String(getField(row, "notes") || "").trim(),
           callDateTime,
           notified: false,
+          activityLog: [],
           createdAt: serverTimestamp(),
         };
 
         const ref = await addDoc(collection(db, "users", ownerUid, "visits"), visitData);
+        await appendActivity(ref.id, buildActivity("created", t.activityCreated));
         if (callDateTime) {
           await scheduleCallReminder(
             ref.id,
@@ -837,8 +1072,12 @@ export default function App() {
     .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
     .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime));
 
+  const allTags = Array.from(new Set(visits.flatMap((v) => v.tags || []))).sort();
+
   const filtered = visits
     .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
+    .filter((v) => stageFilter === "all" || v.stage === stageFilter)
+    .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
     .filter((v) => {
       const q = query.trim();
       if (!q) return true;
@@ -849,6 +1088,7 @@ export default function App() {
         (v.notes || "").includes(q) ||
         (v.visitDate || "").includes(q) ||
         (v.callDateTime || "").includes(q) ||
+        (v.tags || []).some((tag) => tag.includes(q)) ||
         fmtReminder(v.callDateTime, t.locale).includes(q)
       );
     })
@@ -859,6 +1099,9 @@ export default function App() {
       if (order[sa] !== order[sb]) return order[sa] - order[sb];
       return (a.visitDate < b.visitDate ? 1 : -1);
     });
+
+  const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "survey") : 0;
+  const activityLog = active ? [...(active.activityLog || [])].sort((a, b) => (a.at < b.at ? 1 : -1)) : [];
 
   if (!authChecked) {
     return (
@@ -937,6 +1180,20 @@ export default function App() {
           {screen === "settings" && t.settingsTitle}
         </span>
         {screen === "list" && (
+          <span
+            className="flex items-center"
+            style={{ color: "#fff", opacity: 0.9 }}
+            aria-label={isOnline ? "online" : "offline"}
+            title={isOnline ? "" : t.offlineBanner}
+          >
+            {isOnline ? (
+              pendingWrites ? <RefreshCw size={15} /> : <Wifi size={15} />
+            ) : (
+              <WifiOff size={15} />
+            )}
+          </span>
+        )}
+        {screen === "list" && (
           <button
             onClick={() => setScreen("settings")}
             className="btn-press flex items-center"
@@ -966,6 +1223,37 @@ export default function App() {
 
       {screen === "list" && (
         <div className="px-4 pt-4 pb-24">
+          {!isOnline && (
+            <div
+              className="flex items-center gap-2"
+              style={{
+                background: "rgba(219,154,44,.12)",
+                border: "1px solid rgba(219,154,44,.4)",
+                borderRadius: 12,
+                padding: "8px 12px",
+                marginBottom: 12,
+              }}
+            >
+              <WifiOff size={14} color={STATUS_COLORS.today} />
+              <span className="text-xs font-bold" style={{ color: "#8C6110" }}>{t.offlineBanner}</span>
+            </div>
+          )}
+          {isOnline && pendingWrites && (
+            <div
+              className="flex items-center gap-2"
+              style={{
+                background: "rgba(46,107,143,.1)",
+                border: "1px solid rgba(46,107,143,.35)",
+                borderRadius: 12,
+                padding: "8px 12px",
+                marginBottom: 12,
+              }}
+            >
+              <RefreshCw size={14} color={STATUS_COLORS.upcoming} />
+              <span className="text-xs font-bold" style={{ color: STATUS_COLORS.upcoming }}>{t.syncingBanner}</span>
+            </div>
+          )}
+
           {dueReminders.length > 0 && (
             <div
               style={{
@@ -1010,7 +1298,7 @@ export default function App() {
             />
           </div>
 
-          <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
+          <div className="flex items-center gap-2 mb-2" style={{ overflowX: "auto" }}>
             {["all", ...SECTOR_IDS].map((id) => {
               const isActive = sectorFilter === id;
               const label = id === "all" ? t.sectorAll : t.sectors[id];
@@ -1033,6 +1321,70 @@ export default function App() {
               );
             })}
           </div>
+
+          <div className="flex items-center gap-2 mb-2" style={{ overflowX: "auto" }}>
+            {["all", ...STAGE_IDS].map((id) => {
+              const isActive = stageFilter === id;
+              const label = id === "all" ? t.pipelineAll : t.stages[id];
+              const bg = id === "all" ? (isActive ? PRIMARY : "#fff") : (isActive ? stageColor(id) : "#fff");
+              return (
+                <button
+                  key={id}
+                  onClick={() => setStageFilter(id)}
+                  className="btn-press font-bold text-xs"
+                  style={{
+                    flexShrink: 0,
+                    padding: "8px 16px",
+                    borderRadius: 999,
+                    border: `1.4px solid ${isActive ? bg : LINE}`,
+                    background: bg,
+                    color: isActive ? "#fff" : MUTED,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {allTags.length > 0 && (
+            <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
+              <button
+                onClick={() => setTagFilter("all")}
+                className="btn-press font-bold text-xs flex items-center gap-1"
+                style={{
+                  flexShrink: 0,
+                  padding: "8px 16px",
+                  borderRadius: 999,
+                  border: `1.4px solid ${tagFilter === "all" ? PRIMARY : LINE}`,
+                  background: tagFilter === "all" ? PRIMARY : "#fff",
+                  color: tagFilter === "all" ? "#fff" : MUTED,
+                }}
+              >
+                <Tag size={12} /> {t.tagsAll}
+              </button>
+              {allTags.map((tag) => {
+                const isActive = tagFilter === tag;
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => setTagFilter(tag)}
+                    className="btn-press font-bold text-xs"
+                    style={{
+                      flexShrink: 0,
+                      padding: "8px 16px",
+                      borderRadius: 999,
+                      border: `1.4px solid ${isActive ? GOLD : LINE}`,
+                      background: isActive ? GOLD : "#fff",
+                      color: isActive ? "#fff" : MUTED,
+                    }}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {!loaded && <p className="text-sm text-center py-8" style={{ color: MUTED }}>{t.loading}</p>}
 
@@ -1096,6 +1448,15 @@ export default function App() {
           </div>
 
           <div>
+            <label>{t.pipelineLabel}</label>
+            <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
+              {STAGE_IDS.map((id) => (
+                <option key={id} value={id}>{t.stages[id]}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label>{t.sectorLabel}</label>
             <select value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
               {SECTOR_IDS.map((id) => (
@@ -1111,6 +1472,22 @@ export default function App() {
                 <option key={id} value={id}>{t.roles[id]}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label>{t.tagsLabel}</label>
+            <input
+              value={form.tagsInput}
+              onChange={(e) => setForm({ ...form, tagsInput: e.target.value })}
+              placeholder={t.tagsPlaceholder}
+            />
+            {parseTagsCell(form.tagsInput).length > 0 && (
+              <div className="flex items-center flex-wrap gap-1 mt-2">
+                {parseTagsCell(form.tagsInput).map((tag) => (
+                  <TagChip key={tag} label={tag} onRemove={() => removeTagFromForm(tag)} />
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -1191,13 +1568,54 @@ export default function App() {
                 }[visitStatus(active)]}
               </span>
             </div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-1" style={{ color: MUTED }}>
                 <User size={14} /> <span className="text-sm">{active.contactName}</span>
               </div>
               <span className="text-xs font-bold" style={{ color: GOLD }}>
                 {t.sectors[active.sector] || t.sectors.private}
               </span>
+            </div>
+
+            {(active.tags || []).length > 0 && (
+              <div className="flex items-center flex-wrap gap-1 mb-3">
+                {active.tags.map((tag) => (
+                  <TagChip key={tag} label={tag} />
+                ))}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ marginBottom: 8 }}>{t.pipelineLabel}</label>
+              <div className="flex items-center" style={{ gap: 4 }}>
+                {STAGE_IDS.map((id, idx) => {
+                  const isCurrent = id === (active.stage || "survey");
+                  const isPast = idx < activeStageIdx;
+                  return (
+                    <React.Fragment key={id}>
+                      <button
+                        onClick={() => changeStage(active, id)}
+                        disabled={!canEdit}
+                        className="btn-press flex-1 text-center"
+                        style={{
+                          padding: "8px 2px",
+                          borderRadius: 10,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          background: isCurrent || isPast ? stageColor(id) : "#F2F1EA",
+                          color: isCurrent || isPast ? "#fff" : MUTED,
+                          border: "none",
+                        }}
+                      >
+                        {t.stages[id]}
+                      </button>
+                      {idx < STAGE_IDS.length - 1 && (
+                        <div style={{ width: 6, height: 2, background: isPast ? stageColor(id) : "#F2F1EA", flexShrink: 0 }} />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="flex flex-col gap-3" style={{ borderTop: `0.5px solid ${LINE}`, paddingTop: 12 }}>
@@ -1252,13 +1670,14 @@ export default function App() {
                 </span>
                 {canEdit && (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (!user || !ownerUid) return;
                       updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
                         callDateTime: "",
                         notified: false,
                       }).catch(() => {});
                       cancelCallReminder(active.id);
+                      await appendActivity(active.id, buildActivity("call", t.activityCallDone));
                     }}
                     className="btn-press text-xs font-bold"
                     style={{ color: PRIMARY_MID }}
@@ -1275,6 +1694,57 @@ export default function App() {
                 <p className="text-sm" style={{ color: MUTED, lineHeight: 1.7 }}>{active.notes}</p>
               </div>
             )}
+
+            <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 12, paddingTop: 12 }}>
+              <span className="flex items-center gap-2 text-sm font-bold mb-2"><Clock size={15} /> {t.activityLabel}</span>
+
+              {canEdit && (
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    value={newActivityText}
+                    onChange={(e) => setNewActivityText(e.target.value)}
+                    placeholder={t.addActivityPlaceholder}
+                  />
+                  <button
+                    onClick={submitActivity}
+                    className="btn-press font-bold text-xs flex-shrink-0"
+                    style={{ background: PRIMARY_MID, color: "#fff", borderRadius: 10, padding: "10px 14px" }}
+                  >
+                    {t.addActivityBtn}
+                  </button>
+                </div>
+              )}
+
+              {activityLog.length === 0 ? (
+                <p className="text-sm text-center py-3" style={{ color: MUTED }}>{t.noActivity}</p>
+              ) : (
+                <div
+                  className="flex flex-col gap-3"
+                  style={{ [t.dir === "rtl" ? "borderRight" : "borderLeft"]: `2px solid ${LINE}`, [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 14 }}
+                >
+                  {activityLog.map((entry) => {
+                    const color = ACTIVITY_COLORS[entry.type] || MUTED;
+                    return (
+                      <div key={entry.id} style={{ position: "relative" }}>
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: 3,
+                            [t.dir === "rtl" ? "right" : "left"]: -19,
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: color,
+                          }}
+                        />
+                        <p className="text-sm" style={{ margin: 0, color: TEXT }}>{entry.text}</p>
+                        <span className="text-xs" style={{ color: MUTED }}>{fmtActivityDate(entry.at, t.locale)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {canEdit && (
