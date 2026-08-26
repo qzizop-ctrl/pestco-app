@@ -264,7 +264,7 @@ export default function App() {
 
   const [visits, setVisits] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [screen, setScreen] = useState("dashboard"); // dashboard | list | form | detail | settings
+  const [screen, setScreen] = useState("list"); // dashboard | list | form | detail | settings
   const [query, setQuery] = useState("");
   const [sectorFilter, setSectorFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
@@ -495,6 +495,7 @@ export default function App() {
     setForm({
       ...emptyForm,
       ...visit,
+      stage: visit.stage || "",
       visitDate: toISODate(visit.visitDate),
       tagsInput: (visit.tags || []).join(", "),
     });
@@ -804,6 +805,12 @@ export default function App() {
 
   const allTags = Array.from(new Set(visits.flatMap((v) => v.tags || []))).sort();
 
+  const sectorCounts = SECTOR_IDS.reduce((acc, id) => {
+    acc[id] = visits.filter((v) => v.sector === id).length;
+    return acc;
+  }, {});
+  const totalCustomers = visits.length;
+
   const filtered = visits
     .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
     .filter((v) => stageFilter === "all" || v.stage === stageFilter)
@@ -1019,10 +1026,26 @@ export default function App() {
             />
           </div>
 
+          <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-bold" style={{ color: TEXT }}>{t.totalCustomersLabel}</span>
+              <span className="text-sm font-extrabold" style={{ color: PRIMARY }}>{totalCustomers}</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              {SECTOR_IDS.map((id) => (
+                <div key={id} className="flex items-center justify-between">
+                  <span className="text-xs font-bold" style={{ color: MUTED }}>{t.sectors[id]}</span>
+                  <span className="text-xs font-extrabold" style={{ color: sectorColor(id) }}>{sectorCounts[id]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 mb-2" style={{ overflowX: "auto" }}>
             {["all", ...SECTOR_IDS].map((id) => {
               const isActive = sectorFilter === id;
               const label = id === "all" ? t.sectorAll : t.sectors[id];
+              const count = id === "all" ? totalCustomers : sectorCounts[id];
               return (
                 <button
                   key={id}
@@ -1037,7 +1060,7 @@ export default function App() {
                     color: isActive ? "#fff" : MUTED,
                   }}
                 >
-                  {label}
+                  {label} ({count})
                 </button>
               );
             })}
@@ -1171,6 +1194,7 @@ export default function App() {
           <div>
             <label>{t.pipelineLabel}</label>
             <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
+              <option value="">{t.stageNone}</option>
               {STAGE_IDS.map((id) => (
                 <option key={id} value={id}>{t.stages[id]}</option>
               ))}
