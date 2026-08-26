@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings, MessageCircle,
-  Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote,
+  Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote, LayoutDashboard, Users as UsersIcon, Wallet,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -12,420 +12,22 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
+import Dashboard from "./Dashboard";
 import {
   requestNotificationPermission, scheduleCallReminder, cancelCallReminder,
 } from "./notifications";
+import {
+  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, STATUS_COLORS,
+  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS,
+  sectorColor, stageColor, offerStatusColor,
+  findSectorId, findRoleId, findStageId, parseTagsCell,
+  parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
+  buildActivity, buildOffer, ACTIVITY_COLORS,
+  visitStatus, fmtReminder, fmtActivityDate, fmtMoney, corePhoneDigits,
+  emptyForm,
+} from "./constants";
 
-const PRIMARY = "#12332B";
-const PRIMARY_MID = "#1E5245";
-const BG = "#E4E0D5";
-const CARD_BG = "#F6F3EC";
-const TEXT = "#1B241F";
-const MUTED = "#6B7168";
-const DANGER = "#B3401F";
-const GOLD = "#C08A3E";
-const GOLD_SOFT = "#F3E6D0";
-const LINE = "#E7E2D6";
-
-const STATUS_COLORS = {
-  overdue: "#C4443A",
-  today: "#DB9A2C",
-  upcoming: "#2E6B8F",
-  none: "#9AA39B",
-};
-
-const STRINGS = {
-  ar: {
-    dir: "rtl",
-    locale: "ar-EG",
-    appTitle: "Pest.Co — بيانات العملاء",
-    titleEdit: "تعديل الزيارة",
-    titleNew: "عميل جديد",
-    titleDetail: "تفاصيل الزيارة",
-    back: "رجوع",
-    langToggle: "English",
-    dueCalls: (n) => `عندك ${n} متابعة مستحقة`,
-    searchPlaceholder: "ابحث بالشركة أو المسؤول أو الرقم أو الملاحظات أو التاريخ",
-    loading: "جارِ التحميل...",
-    noVisits: "لا توجد زيارات بعد",
-    noVisitsHint: 'اضغط على "عميل جديد" لإضافة أول عميل',
-    newVisit: "عميل جديد",
-    noCompanyName: "بدون اسم شركة",
-    noContactName: "بدون اسم",
-    companyLabel: "اسم الشركة *",
-    companyPlaceholder: "مثال: شركة النور للصناعات",
-    companyError: "اكتب اسم الشركة",
-    contactLabel: "اسم الشخص المسؤول *",
-    contactPlaceholder: "مثال: أحمد محمد",
-    contactError: "اكتب اسم الشخص المسؤول",
-    roleLabel: "الجهة / المسمى الوظيفي",
-    phoneLabel: "رقم الهاتف",
-    phonePlaceholder: "01xxxxxxxxx",
-    emailLabel: "البريد الإلكتروني",
-    emailPlaceholder: "name@company.com",
-    visitDateLabel: "تاريخ الزيارة",
-    callDateLabel: "موعد المتابعة القادم (اختياري)",
-    callDateHint: "في نسخة الأندرويد: التطبيق هيبعتلك تنبيه حقيقي في المعاد ده حتى لو التطبيق مقفول. في نسخة المتصفح: لازم التطبيق يكون شغال.",
-    notesLabel: "ملاحظات الزيارة",
-    notesPlaceholder: "تفاصيل الزيارة، المطلوب متابعته، إلخ",
-    save: "حفظ العميل",
-    phoneRow: "رقم الهاتف",
-    emailRow: "البريد الإلكتروني",
-    visitDateRow: "تاريخ الزيارة",
-    callDueLabel: "موعد المتابعة:",
-    callDone: "تم الاتصال ✓",
-    notesRow: "ملاحظات",
-    edit: "تعديل",
-    delete: "حذف",
-    roles: {
-      purchasing: "مسؤول المشتريات",
-      it: "تقنية المعلومات",
-      technical: "المكتب الفني",
-      other: "أخرى",
-    },
-    sectorLabel: "القطاع",
-    sectorAll: "الكل",
-    sectors: {
-      construction: "قطاع المقاولات",
-      education: "قطاع التعليم",
-      consultants: "قطاع الاستشاريين",
-      private: "شركات خاصة",
-    },
-    signOut: "تسجيل الخروج",
-    reminderTitle: "تذكير متابعة:",
-    reminderBody: (contact) => `موعد متابعة ${contact} حان الآن`,
-    settingsTitle: "الإعدادات",
-    manageAccess: "إدارة المشاركة",
-    membersTitle: "الأشخاص الذين لديهم صلاحية الوصول",
-    addMemberEmail: "البريد الإلكتروني",
-    addMemberRole: "الصلاحية",
-    roleEditor: "يشوف ويعدل",
-    roleViewer: "يشوف فقط",
-    addMemberBtn: "إضافة",
-    noMembers: "لا يوجد أشخاص مضافين بعد",
-    removeConfirm: "هل تريد إلغاء صلاحية هذا الشخص؟",
-    statusOverdue: "متأخرة",
-    statusToday: "اليوم",
-    statusUpcoming: "قادمة",
-    statusNone: "بدون موعد",
-    whatsapp: "واتساب",
-    excelTitle: "استيراد / تصدير إكسيل",
-    exportBtn: "تصدير كل الزيارات (إكسيل)",
-    importBtn: "استيراد من ملف إكسيل",
-    importHint: "الملف لازم يكون بنفس أعمدة ملف التصدير (اسم الشركة، الشخص المسؤول، إلخ). الصفوف هتتضاف كزيارات جديدة.",
-    importSuccess: (n) => `تم استيراد ${n} زيارة بنجاح`,
-    importError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
-    importing: "جارِ الاستيراد...",
-    duplicatePhoneWarning: (company) => `رقم الهاتف ده مسجل بالفعل عند "${company}". هل تريد الإضافة برضو؟`,
-    pipelineLabel: "مرحلة المشروع",
-    pipelineAll: "كل المراحل",
-    stages: {
-      survey: "معاينة",
-      quote: "عرض سعر",
-      install: "تركيب",
-      maintenance: "صيانة",
-    },
-    tagsLabel: "الوسوم (Tags)",
-    tagsPlaceholder: "افصل بينهم بفاصلة، مثال: VIP, يحتاج عرض سعر",
-    tagsAll: "كل الوسوم",
-    noTags: "بدون وسوم",
-    activityLabel: "سجل النشاط",
-    addActivityPlaceholder: "أضف ملاحظة أو نشاط جديد...",
-    addActivityBtn: "إضافة",
-    noActivity: "لا يوجد نشاط مسجل بعد",
-    activityCreated: "تم إنشاء العميل",
-    activityStageChanged: (stage) => `تم تغيير مرحلة المشروع إلى: ${stage}`,
-    activityStageCleared: "تم إلغاء مرحلة المشروع",
-    activityCallSet: (date) => `تم تحديد موعد متابعة: ${date}`,
-    activityCallDone: "تم الاتصال ✓",
-    offlineBanner: "غير متصل بالإنترنت - لازم يكون فيه نت عشان تقدر تحفظ أي تعديل",
-    requireOnlineMsg: "لازم يكون فيه اتصال بالإنترنت عشان تقدر تحفظ",
-    deleteActivityConfirm: "هل تريد حذف هذا النشاط؟",
-  },
-  en: {
-    dir: "ltr",
-    locale: "en-US",
-    appTitle: "Pest.Co — Client Data",
-    titleEdit: "Edit Visit",
-    titleNew: "New Customer",
-    titleDetail: "Visit Details",
-    back: "Back",
-    langToggle: "عربي",
-    dueCalls: (n) => `You have ${n} follow-up${n === 1 ? "" : "s"} due`,
-    searchPlaceholder: "Search by company, contact, phone, notes or date",
-    loading: "Loading...",
-    noVisits: "No visits yet",
-    noVisitsHint: 'Tap "New Customer" to add your first client',
-    newVisit: "New Customer",
-    noCompanyName: "No company name",
-    noContactName: "No name",
-    companyLabel: "Company Name *",
-    companyPlaceholder: "e.g. Al Nour Industries",
-    companyError: "Enter the company name",
-    contactLabel: "Contact Person *",
-    contactPlaceholder: "e.g. Ahmed Mohamed",
-    contactError: "Enter the contact person's name",
-    roleLabel: "Department / Job Title",
-    phoneLabel: "Phone Number",
-    phonePlaceholder: "01xxxxxxxxx",
-    emailLabel: "Email",
-    emailPlaceholder: "name@company.com",
-    visitDateLabel: "Visit Date",
-    callDateLabel: "Next Follow-up Date (optional)",
-    callDateHint: "On the Android app: you'll get a real alert at this time even if the app is closed. On the web version: the app needs to be open.",
-    notesLabel: "Visit Notes",
-    notesPlaceholder: "Visit details, follow-ups needed, etc.",
-    save: "Save Customer",
-    phoneRow: "Phone Number",
-    emailRow: "Email",
-    visitDateRow: "Visit Date",
-    callDueLabel: "Follow-up due:",
-    callDone: "Called ✓",
-    notesRow: "Notes",
-    edit: "Edit",
-    delete: "Delete",
-    roles: {
-      purchasing: "Purchasing Manager",
-      it: "IT",
-      technical: "Technical Office",
-      other: "Other",
-    },
-    sectorLabel: "Sector",
-    sectorAll: "All",
-    sectors: {
-      construction: "Construction Sector",
-      education: "Education",
-      consultants: "Consultants",
-      private: "Private Companies",
-    },
-    signOut: "Sign Out",
-    reminderTitle: "Follow-up reminder:",
-    reminderBody: (contact) => `It's time to follow up with ${contact}`,
-    settingsTitle: "Settings",
-    manageAccess: "Manage Access",
-    membersTitle: "People with access",
-    addMemberEmail: "Email",
-    addMemberRole: "Role",
-    roleEditor: "Can view & edit",
-    roleViewer: "View only",
-    addMemberBtn: "Add",
-    noMembers: "No one added yet",
-    removeConfirm: "Remove this person's access?",
-    statusOverdue: "Overdue",
-    statusToday: "Today",
-    statusUpcoming: "Upcoming",
-    statusNone: "No call set",
-    whatsapp: "WhatsApp",
-    excelTitle: "Excel Import / Export",
-    exportBtn: "Export all visits (Excel)",
-    importBtn: "Import from Excel file",
-    importHint: "The file must use the same columns as the exported file (Company Name, Contact Person, etc). Rows will be added as new visits.",
-    importSuccess: (n) => `Successfully imported ${n} visit${n === 1 ? "" : "s"}`,
-    importError: "Something went wrong reading the file, please check the file format",
-    importing: "Importing...",
-    duplicatePhoneWarning: (company) => `This phone number is already saved for "${company}". Add anyway?`,
-    pipelineLabel: "Project Stage",
-    pipelineAll: "All Stages",
-    stages: {
-      survey: "Survey",
-      quote: "Quote",
-      install: "Installation",
-      maintenance: "Maintenance",
-    },
-    tagsLabel: "Tags",
-    tagsPlaceholder: "Comma separated, e.g. VIP, Needs quote",
-    tagsAll: "All Tags",
-    noTags: "No tags",
-    activityLabel: "Activity Log",
-    addActivityPlaceholder: "Add a note or new activity...",
-    addActivityBtn: "Add",
-    noActivity: "No activity logged yet",
-    activityCreated: "Customer created",
-    activityStageChanged: (stage) => `Project stage changed to: ${stage}`,
-    activityStageCleared: "Project stage cleared",
-    activityCallSet: (date) => `Follow-up scheduled: ${date}`,
-    activityCallDone: "Called ✓",
-    offlineBanner: "You're offline - you need a connection to save any changes",
-    requireOnlineMsg: "You need an internet connection to save changes",
-    deleteActivityConfirm: "Delete this activity entry?",
-  },
-};
-
-const ROLE_IDS = ["purchasing", "it", "technical", "other"];
-const ROLE_COLORS = {
-  purchasing: "#B9832A",
-  it: "#2C6E8C",
-  technical: "#0F5132",
-  other: "#6B7168",
-};
-
-const roleColor = (id) => ROLE_COLORS[id] || ROLE_COLORS.other;
-
-const SECTOR_IDS = ["construction", "education", "consultants", "private"];
-const SECTOR_COLORS = {
-  construction: "#8C5A2C",
-  education: "#2C6E8C",
-  consultants: "#3D8C6C",
-  private: "#6B4C8C",
-};
-
-const sectorColor = (id) => SECTOR_COLORS[id] || SECTOR_COLORS.private;
-
-const STAGE_IDS = ["survey", "quote", "install", "maintenance"];
-const STAGE_COLORS = {
-  survey: "#6B7168",
-  quote: "#B9832A",
-  install: "#0F6E56",
-  maintenance: "#534AB7",
-};
-const stageColor = (id) => STAGE_COLORS[id] || STAGE_COLORS.survey;
-
-// Matches an imported Excel cell value (Arabic or English label, or raw id) to a sector id
-function findSectorId(value) {
-  const v = (value || "").toString().trim();
-  if (SECTOR_IDS.includes(v)) return v;
-  for (const langKey of Object.keys(STRINGS)) {
-    const map = STRINGS[langKey].sectors;
-    const found = Object.entries(map).find(([, label]) => label === v);
-    if (found) return found[0];
-  }
-  return "private";
-}
-
-// Matches an imported Excel cell value (Arabic or English label, or raw id) to a role id
-function findRoleId(value) {
-  const v = (value || "").toString().trim();
-  if (ROLE_IDS.includes(v)) return v;
-  for (const langKey of Object.keys(STRINGS)) {
-    const map = STRINGS[langKey].roles;
-    const found = Object.entries(map).find(([, label]) => label === v);
-    if (found) return found[0];
-  }
-  return "other";
-}
-
-// Matches an imported Excel cell value (Arabic or English label, or raw id) to a pipeline stage id
-function findStageId(value) {
-  const v = (value || "").toString().trim();
-  if (STAGE_IDS.includes(v)) return v;
-  for (const langKey of Object.keys(STRINGS)) {
-    const map = STRINGS[langKey].stages;
-    const found = Object.entries(map).find(([, label]) => label === v);
-    if (found) return found[0];
-  }
-  return "survey";
-}
-
-// Splits a comma separated Excel cell into a clean tag array
-function parseTagsCell(value) {
-  return String(value || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-// Parses a visitDate value that might be stored as ISO (yyyy-mm-dd, from the
-// date input) or as raw text like "d-m-yyyy" / "dd-mm-yyyy" (from older Excel
-// imports), returning a real Date object so sorting/comparisons are correct
-// regardless of which format is stored.
-function parseVisitDate(str) {
-  if (!str) return null;
-  const s = String(str).trim();
-  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (iso) {
-    const d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-    return isNaN(d) ? null : d;
-  }
-  const dmy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
-  if (dmy) {
-    const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
-    return isNaN(d) ? null : d;
-  }
-  const d = new Date(s);
-  return isNaN(d) ? null : d;
-}
-
-// Normalizes any supported visitDate format back to ISO yyyy-mm-dd, the
-// format the <input type="date"> control expects.
-function toISODate(str) {
-  const d = parseVisitDate(str);
-  if (!d) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-// Normalizes an Excel cell (Date object or string) into a yyyy-mm-dd date string
-function normalizeExcelDate(val) {
-  if (!val) return "";
-  if (val instanceof Date) {
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}`;
-  }
-  return toISODate(val) || String(val).trim();
-}
-
-// Normalizes an Excel cell (Date object or string) into a yyyy-mm-ddThh:mm datetime-local string
-function normalizeExcelDateTime(val) {
-  if (!val) return "";
-  if (val instanceof Date) {
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}T${pad(val.getHours())}:${pad(val.getMinutes())}`;
-  }
-  return String(val).trim();
-}
-
-// Builds a unique activity-log entry for a visit's timeline
-function buildActivity(type, text) {
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    type,
-    text,
-    at: new Date().toISOString(),
-  };
-}
-
-const ACTIVITY_ICONS = {
-  created: Plus,
-  stage: Workflow,
-  call: Bell,
-  note: StickyNote,
-};
-const ACTIVITY_COLORS = {
-  created: "#0F6E56",
-  stage: "#534AB7",
-  call: "#2E6B8F",
-  note: "#B9832A",
-};
-
-const emptyForm = {
-  id: null,
-  companyName: "",
-  contactName: "",
-  sector: "construction",
-  role: "purchasing",
-  stage: "survey",
-  tagsInput: "",
-  phone: "",
-  email: "",
-  visitDate: new Date().toISOString().slice(0, 10),
-  notes: "",
-  callDateTime: "",
-  notified: false,
-  activityLog: [],
-};
-
-function visitStatus(visit) {
-  if (!visit.callDateTime) return "none";
-  const call = new Date(visit.callDateTime);
-  const now = new Date();
-  if (call.getTime() < now.getTime()) return "overdue";
-  const sameDay =
-    call.getFullYear() === now.getFullYear() &&
-    call.getMonth() === now.getMonth() &&
-    call.getDate() === now.getDate();
-  if (sameDay) return "today";
-  return "upcoming";
-}
+const ROOT_SCREENS = ["dashboard", "list", "settings"];
 
 function beep() {
   try {
@@ -444,24 +46,6 @@ function beep() {
     });
   } catch (e) {
     /* الجهاز لا يدعم تشغيل صوت / device doesn't support audio */
-  }
-}
-
-function fmtReminder(dt, locale) {
-  try {
-    const d = new Date(dt);
-    return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch (e) {
-    return dt;
-  }
-}
-
-function fmtActivityDate(dt, locale) {
-  try {
-    const d = new Date(dt);
-    return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch (e) {
-    return dt;
   }
 }
 
@@ -636,13 +220,51 @@ function VisitCard({ visit, onOpen, t }) {
   );
 }
 
+function BottomNav({ screen, setScreen, t }) {
+  const items = [
+    { id: "dashboard", label: t.navDashboard, icon: LayoutDashboard },
+    { id: "list", label: t.navCustomers, icon: UsersIcon },
+    { id: "settings", label: t.navSettings, icon: Settings },
+  ];
+  return (
+    <div
+      className="flex items-center"
+      style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: "#fff",
+        borderTop: `1px solid ${LINE}`,
+        zIndex: 15,
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
+    >
+      {items.map(({ id, label, icon: Icon }) => {
+        const isActive = screen === id;
+        return (
+          <button
+            key={id}
+            onClick={() => setScreen(id)}
+            className="btn-press flex-1 flex flex-col items-center gap-1"
+            style={{ padding: "10px 0 8px", color: isActive ? PRIMARY : MUTED }}
+          >
+            <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
+            <span className="text-xs font-bold">{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
 
   const [visits, setVisits] = useState([]);
   const [loaded, setLoaded] = useState(false);
-  const [screen, setScreen] = useState("list"); // list | form | detail
+  const [screen, setScreen] = useState("dashboard"); // dashboard | list | form | detail | settings
   const [query, setQuery] = useState("");
   const [sectorFilter, setSectorFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
@@ -657,6 +279,9 @@ export default function App() {
   const [myRole, setMyRole] = useState("owner");
   const [importing, setImporting] = useState(false);
   const [newActivityText, setNewActivityText] = useState("");
+  const [newOffer, setNewOffer] = useState({
+    name: "", offerNumber: "", amount: "", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
+  });
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
   const fileInputRef = useRef(null);
 
@@ -671,16 +296,11 @@ export default function App() {
 
   const t = STRINGS[lang];
   const active = visits.find((v) => v.id === activeId) || null;
+  const isRootScreen = ROOT_SCREENS.includes(screen);
 
   // Permission flags derived from myRole (set from the access_by_email lookup).
-  // canEdit: can create/update/delete visits, import/export Excel.
-  // isOwnerAccount: can manage who has access to this account's data.
   const canEdit = myRole === "owner" || myRole === "editor";
   const isOwnerAccount = myRole === "owner";
-
-  // No offline persistence / write queue on purpose: writes are only ever
-  // attempted while online (see requireOnline below), so there's nothing
-  // to cache locally or replay later.
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -823,6 +443,46 @@ export default function App() {
     } catch (e) {}
   };
 
+  // ---- Offers CRUD (stored as an array field on the customer document, same
+  // pattern as activityLog, so a customer's offers always stay attached to
+  // their own record and inherit the customer's sector automatically). ----
+
+  const addOffer = async (visit) => {
+    if (!canEdit || !visit || !ownerUid) return;
+    if (!requireOnline()) return;
+    if (!newOffer.name.trim()) return;
+    const offer = buildOffer(newOffer);
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
+        offers: arrayUnion(offer),
+      });
+      await appendActivity(visit.id, buildActivity("offer", t.activityOfferAdded(offer.name)));
+      setNewOffer({ name: "", offerNumber: "", amount: "", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
+    } catch (e) {}
+  };
+
+  const updateOfferStatus = async (visit, offer, newStatus) => {
+    if (!canEdit || !visit || !ownerUid) return;
+    if (!requireOnline()) return;
+    if (newStatus === offer.status) return;
+    const updated = (visit.offers || []).map((o) => (o.id === offer.id ? { ...o, status: newStatus } : o));
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { offers: updated });
+      await appendActivity(visit.id, buildActivity("offer", t.activityOfferStatus(offer.name, t.offerStatuses[newStatus] || newStatus)));
+    } catch (e) {}
+  };
+
+  const deleteOffer = async (visit, offer) => {
+    if (!canEdit || !visit || !ownerUid) return;
+    if (!requireOnline()) return;
+    if (!window.confirm(t.deleteOfferConfirm)) return;
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
+        offers: arrayRemove(offer),
+      });
+    } catch (e) {}
+  };
+
   const openNew = () => {
     if (!canEdit) return;
     setForm(emptyForm);
@@ -845,6 +505,7 @@ export default function App() {
   const openDetail = (visit) => {
     setActiveId(visit.id);
     setNewActivityText("");
+    setNewOffer({ name: "", offerNumber: "", amount: "", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
     setScreen("detail");
   };
 
@@ -854,16 +515,6 @@ export default function App() {
     if (!form.contactName.trim()) e.contactName = t.contactError;
     setErrors(e);
     return Object.keys(e).length === 0;
-  };
-
-  // Normalizes a phone number to its core digits, ignoring +2 / 0020 / leading 0 variations
-  const corePhoneDigits = (phone) => {
-    let d = (phone || "").replace(/[^0-9]/g, "");
-    if (!d) return "";
-    if (d.startsWith("00")) d = d.slice(2);
-    if (d.startsWith("20") && d.length > 10) d = d.slice(2);
-    if (d.startsWith("0")) d = d.slice(1);
-    return d;
   };
 
   const findDuplicatePhone = (phone, excludeId) => {
@@ -897,7 +548,7 @@ export default function App() {
       if (!proceed) return;
     }
 
-    const { id, tagsInput, activityLog, ...rest } = form;
+    const { id, tagsInput, activityLog, offers, ...rest } = form;
     const data = { ...rest, tags: parseTagsCell(tagsInput) };
     const original = id ? visits.find((v) => v.id === id) : null;
 
@@ -909,6 +560,7 @@ export default function App() {
         const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
           ...data,
           activityLog: [],
+          offers: [],
           createdAt: serverTimestamp(),
         });
         savedId = ref.id;
@@ -1116,11 +768,12 @@ export default function App() {
           tags: parseTagsCell(getField(row, "tags")),
           phone: String(getField(row, "phone") || "").trim(),
           email: String(getField(row, "email") || "").trim(),
-          visitDate: normalizeExcelDate(getField(row, "visitDate")) || new Date().toISOString().slice(0, 10),
+          visitDate: normalizeExcelDate(getField(row, "visitDate")),
           notes: String(getField(row, "notes") || "").trim(),
           callDateTime,
           notified: false,
           activityLog: [],
+          offers: [],
           createdAt: serverTimestamp(),
         };
 
@@ -1185,6 +838,15 @@ export default function App() {
 
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
   const activityLog = active ? [...(active.activityLog || [])].sort((a, b) => (a.at < b.at ? 1 : -1)) : [];
+  const activeOffers = active ? [...(active.offers || [])].sort((a, b) => {
+    const da = parseVisitDate(a.offerDate);
+    const db = parseVisitDate(b.offerDate);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return db - da;
+  }) : [];
+  const activeOffersValue = activeOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
   if (!authChecked) {
     return (
@@ -1194,7 +856,7 @@ export default function App() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: BG,
+          background: "#E4E0D5",
           fontFamily: "'Tajawal', sans-serif",
         }}
       >
@@ -1212,7 +874,7 @@ export default function App() {
       className="w-full min-h-full"
       style={{
         fontFamily: "'Tajawal', sans-serif",
-        background: BG,
+        background: "#E4E0D5",
         minHeight: "100vh",
         direction: t.dir,
         color: TEXT,
@@ -1244,9 +906,9 @@ export default function App() {
         className="flex items-center gap-2 px-4 py-3"
         style={{ background: PRIMARY, position: "sticky", top: 0, zIndex: 10 }}
       >
-        {screen !== "list" ? (
+        {!isRootScreen ? (
           <button
-            onClick={() => setScreen("list")}
+            onClick={() => setScreen(screen === "form" && form.id ? "detail" : screen === "detail" ? "list" : "list")}
             className="btn-press"
             style={{ color: "#fff" }}
             aria-label={t.back}
@@ -1257,12 +919,13 @@ export default function App() {
           <Logo size={30} />
         )}
         <span className="font-bold text-lg flex-1" style={{ color: "#fff" }}>
+          {screen === "dashboard" && t.titleDashboard}
           {screen === "list" && t.appTitle}
           {screen === "form" && (form.id ? t.titleEdit : t.titleNew)}
           {screen === "detail" && t.titleDetail}
           {screen === "settings" && t.settingsTitle}
         </span>
-        {screen === "list" && (
+        {isRootScreen && (
           <span
             className="flex items-center"
             style={{ color: "#fff", opacity: 0.9 }}
@@ -1271,16 +934,6 @@ export default function App() {
           >
             {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
           </span>
-        )}
-        {screen === "list" && (
-          <button
-            onClick={() => setScreen("settings")}
-            className="btn-press flex items-center"
-            style={{ color: "#fff", background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "6px 8px" }}
-            aria-label={t.settingsTitle}
-          >
-            <Settings size={14} />
-          </button>
         )}
         <button
           onClick={() => setLang(lang === "ar" ? "en" : "ar")}
@@ -1299,6 +952,10 @@ export default function App() {
           <LogOut size={14} />
         </button>
       </div>
+
+      {screen === "dashboard" && (
+        <Dashboard visits={visits} lang={lang} onOpenCustomer={openDetail} />
+      )}
 
       {screen === "list" && (
         <div className="px-4 pt-4 pb-24">
@@ -1470,7 +1127,7 @@ export default function App() {
               className="btn-press flex items-center justify-center"
               style={{
                 position: "fixed",
-                bottom: 20,
+                bottom: 84,
                 left: 20,
                 width: 56,
                 height: 56,
@@ -1713,7 +1370,7 @@ export default function App() {
               </a>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><Calendar size={15} /> {t.visitDateRow}</span>
-                <span className="text-sm font-bold">{active.visitDate}</span>
+                <span className="text-sm font-bold">{active.visitDate || "—"}</span>
               </div>
             </div>
 
@@ -1759,6 +1416,117 @@ export default function App() {
                 <p className="text-sm" style={{ color: MUTED, lineHeight: 1.7 }}>{active.notes}</p>
               </div>
             )}
+
+            {/* Offers */}
+            <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 12, paddingTop: 12 }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="flex items-center gap-2 text-sm font-bold"><Wallet size={15} /> {t.offersLabel}</span>
+                {activeOffers.length > 0 && (
+                  <span className="text-xs font-bold" style={{ color: PRIMARY_MID }}>
+                    {fmtMoney(activeOffersValue, t.locale)} {t.dashCurrency}
+                  </span>
+                )}
+              </div>
+
+              {activeOffers.length === 0 ? (
+                <p className="text-sm text-center py-2" style={{ color: MUTED }}>{t.noOffers}</p>
+              ) : (
+                <div className="flex flex-col gap-2 mb-3">
+                  {activeOffers.map((offer) => (
+                    <div key={offer.id} style={{ background: "#F8F6F0", borderRadius: 12, padding: 10 }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-bold" style={{ color: TEXT }}>
+                          {offer.name}{offer.offerNumber ? ` — ${offer.offerNumber}` : ""}
+                        </span>
+                        {canEdit && (
+                          <button
+                            onClick={() => deleteOffer(active, offer)}
+                            className="btn-press flex-shrink-0"
+                            style={{ color: DANGER }}
+                            aria-label={t.delete}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs" style={{ color: MUTED }}>{offer.offerDate}</span>
+                        <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID }}>
+                          {fmtMoney(offer.amount, t.locale)} {t.dashCurrency}
+                        </span>
+                      </div>
+                      <div className="flex items-center flex-wrap gap-1 mt-2">
+                        {OFFER_STATUS_IDS.map((sid) => {
+                          const isActive = offer.status === sid;
+                          return (
+                            <button
+                              key={sid}
+                              onClick={() => updateOfferStatus(active, offer, sid)}
+                              disabled={!canEdit}
+                              className="btn-press text-xs font-bold"
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: 999,
+                                border: `1.2px solid ${isActive ? offerStatusColor(sid) : LINE}`,
+                                background: isActive ? offerStatusColor(sid) : "#fff",
+                                color: isActive ? "#fff" : MUTED,
+                              }}
+                            >
+                              {t.offerStatuses[sid]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {canEdit && (
+                <div className="flex flex-col gap-2" style={{ background: "#F8F6F0", borderRadius: 12, padding: 10 }}>
+                  <input
+                    value={newOffer.name}
+                    onChange={(e) => setNewOffer({ ...newOffer, name: e.target.value })}
+                    placeholder={t.offerNamePlaceholder}
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={newOffer.offerNumber}
+                      onChange={(e) => setNewOffer({ ...newOffer, offerNumber: e.target.value })}
+                      placeholder={t.offerNumberLabel}
+                    />
+                    <input
+                      type="number"
+                      value={newOffer.amount}
+                      onChange={(e) => setNewOffer({ ...newOffer, amount: e.target.value })}
+                      placeholder={t.offerAmountLabel}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={newOffer.offerDate}
+                      onChange={(e) => setNewOffer({ ...newOffer, offerDate: e.target.value })}
+                    />
+                    <select
+                      value={newOffer.status}
+                      onChange={(e) => setNewOffer({ ...newOffer, status: e.target.value })}
+                    >
+                      {OFFER_STATUS_IDS.map((sid) => (
+                        <option key={sid} value={sid}>{t.offerStatuses[sid]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => addOffer(active)}
+                    className="btn-press font-bold text-sm"
+                    style={{ background: PRIMARY_MID, color: "#fff", borderRadius: 10, padding: "10px 0" }}
+                  >
+                    {t.addOfferBtn}
+                  </button>
+                </div>
+              )}
+            </div>
 
             <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 12, paddingTop: 12 }}>
               <span className="flex items-center gap-2 text-sm font-bold mb-2"><Clock size={15} /> {t.activityLabel}</span>
@@ -1848,7 +1616,7 @@ export default function App() {
       )}
 
       {screen === "settings" && (
-        <div className="px-4 pt-4 pb-10">
+        <div className="px-4 pt-4 pb-24">
           {isOwnerAccount && (
             <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
               <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
@@ -1960,6 +1728,8 @@ export default function App() {
           )}
         </div>
       )}
+
+      {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} />}
     </div>
   );
 }
