@@ -131,6 +131,7 @@ export const STRINGS = {
     offlineBanner: "غير متصل بالإنترنت - لازم يكون فيه نت عشان تقدر تحفظ أي تعديل",
     requireOnlineMsg: "لازم يكون فيه اتصال بالإنترنت عشان تقدر تحفظ",
     deleteActivityConfirm: "هل تريد حذف هذا النشاط؟",
+    totalCustomersLabel: "إجمالي العملاء",
 
     // Bottom navigation
     navDashboard: "Dashboard",
@@ -292,6 +293,7 @@ export const STRINGS = {
     offlineBanner: "You're offline - you need a connection to save any changes",
     requireOnlineMsg: "You need an internet connection to save changes",
     deleteActivityConfirm: "Delete this activity entry?",
+    totalCustomersLabel: "Total Customers",
 
     // Bottom navigation
     navDashboard: "Dashboard",
