@@ -6,8 +6,8 @@ import {
 import {
   STRINGS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS,
   stageColor, offerStatusColor,
-  parseVisitDate, fmtMoney,
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT,
+  parseVisitDate, fmtMoney, getVisitEvents,
+  PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE,
 } from "./constants";
 
 // Builds the [start, end] Date range for a given year + month filter.
@@ -36,21 +36,27 @@ function pctChange(current, previous) {
 
 function computePeriodStats(visits, year, month, sector) {
   const [start, end] = getRange(year, month);
-
-  const filteredVisits = visits.filter((v) => {
-    if (sector !== "all" && v.sector !== sector) return false;
-    const d = parseVisitDate(v.visitDate);
+  const inSector = (v) => sector === "all" || v.sector === sector;
+  const inRange = (dateStr) => {
+    const d = parseVisitDate(dateStr);
     return d && d >= start && d <= end;
-  });
+  };
+
+  // Every individual logged visit event within the period (a customer
+  // visited 3 times in the period contributes 3 here).
+  const visitEventsInRange = visits
+    .filter(inSector)
+    .flatMap((v) => getVisitEvents(v).filter((e) => inRange(e.date)).map((e) => ({ ...e, customer: v })));
+
+  // Distinct customers who had at least one visit event in the period.
+  const customerIdsInRange = new Set(visitEventsInRange.map((e) => e.customer.id));
+  const filteredVisits = visits.filter((v) => customerIdsInRange.has(v.id));
 
   const offersInRange = visits
-    .filter((v) => sector === "all" || v.sector === sector)
+    .filter(inSector)
     .flatMap((v) =>
       (v.offers || [])
-        .filter((o) => {
-          const d = parseVisitDate(o.offerDate);
-          return d && d >= start && d <= end;
-        })
+        .filter((o) => inRange(o.offerDate))
         .map((o) => ({
           ...o,
           customerId: v.id,
@@ -59,7 +65,6 @@ function computePeriodStats(visits, year, month, sector) {
         }))
     );
 
-  const customersCount = new Set(filteredVisits.map((v) => v.id)).size;
   const offersValue = offersInRange.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
   const pipeline = {};
@@ -74,9 +79,10 @@ function computePeriodStats(visits, year, month, sector) {
     start,
     end,
     filteredVisits,
+    visitEventsInRange,
     offersInRange,
-    visitsCount: filteredVisits.length,
-    customersCount,
+    visitsCount: visitEventsInRange.length,
+    customersCount: customerIdsInRange.size,
     offersCount: offersInRange.length,
     offersValue,
     pipeline,
@@ -87,7 +93,7 @@ function SummaryCard({ icon: Icon, label, value, delta, t }) {
   return (
     <div
       style={{
-        background: "#fff",
+        background: SURFACE,
         border: `1px solid ${LINE}`,
         borderRadius: 16,
         padding: 14,
@@ -154,16 +160,16 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
   const chartData = useMemo(() => {
     if (month === "all") {
       const buckets = Array.from({ length: 12 }, (_, i) => ({ label: t.months[i].slice(0, 3), count: 0 }));
-      stats.filteredVisits.forEach((v) => {
-        const d = parseVisitDate(v.visitDate);
+      stats.visitEventsInRange.forEach((e) => {
+        const d = parseVisitDate(e.date);
         if (d) buckets[d.getMonth()].count += 1;
       });
       return buckets;
     }
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), count: 0 }));
-    stats.filteredVisits.forEach((v) => {
-      const d = parseVisitDate(v.visitDate);
+    stats.visitEventsInRange.forEach((e) => {
+      const d = parseVisitDate(e.date);
       if (d) buckets[d.getDate() - 1].count += 1;
     });
     return buckets;
@@ -234,7 +240,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
           className="btn-press flex items-center justify-center gap-2 font-bold text-xs"
           style={{
             border: `1.4px solid ${compare ? PRIMARY : LINE}`,
-            background: compare ? PRIMARY : "#fff",
+            background: compare ? PRIMARY : SURFACE,
             color: compare ? "#fff" : MUTED,
             borderRadius: 12,
             padding: "9px 0",
@@ -247,7 +253,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
       {stats.visitsCount === 0 && (
         <div
           className="text-center"
-          style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 14, padding: 18, marginBottom: 14 }}
+          style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 18, marginBottom: 14 }}
         >
           <p className="text-sm font-bold" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
         </div>
@@ -286,7 +292,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
       </div>
 
       {/* Visits performance chart */}
-      <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
+      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
         <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashVisitsPerformance}</p>
         <div style={{ width: "100%", height: 180 }}>
           <ResponsiveContainer>
@@ -305,7 +311,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
       </div>
 
       {/* Sales pipeline */}
-      <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
+      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
         <p className="font-bold text-sm mb-3" style={{ color: TEXT }}>{t.dashPipeline}</p>
         <div className="flex items-center" style={{ gap: 4, overflowX: "auto" }}>
           {[...STAGE_IDS, "none"].map((id, idx, arr) => {
@@ -336,55 +342,8 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         </div>
       </div>
 
-      {/* Customers visited */}
-      <div style={{ marginBottom: 20 }}>
-        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashCustomersSection}</p>
-        {customersList.length === 0 ? (
-          <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
-        ) : (
-          customersList.map((v) => {
-            const stageId = v.stage || "";
-            return (
-              <button
-                key={v.id}
-                onClick={() => onOpenCustomer(v)}
-                className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                style={{
-                  display: "block",
-                  background: "#fff",
-                  border: `1px solid ${LINE}`,
-                  borderRadius: 14,
-                  padding: 12,
-                  marginBottom: 8,
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-sm" style={{ color: TEXT }}>{v.companyName || t.noCompanyName}</span>
-                  {stageId && (
-                    <span
-                      className="text-xs font-bold"
-                      style={{ background: stageColor(stageId), color: "#fff", borderRadius: 999, padding: "3px 9px" }}
-                    >
-                      {t.stages[stageId]}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs font-bold" style={{ color: GOLD }}>
-                    {t.sectors[v.sector] || t.sectors.private}
-                  </span>
-                  <span className="text-xs" style={{ color: MUTED }}>
-                    {t.dashLastVisit} {v.visitDate}
-                  </span>
-                </div>
-              </button>
-            );
-          })
-        )}
-      </div>
-
       {/* Offers */}
-      <div>
+      <div style={{ marginBottom: 20 }}>
         <div className="flex items-center justify-between mb-2">
           <p className="font-bold text-sm" style={{ color: TEXT }}>{t.dashOffersSection}</p>
         </div>
@@ -403,7 +362,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
                   padding: "7px 14px",
                   borderRadius: 999,
                   border: `1.4px solid ${isActive ? bg : LINE}`,
-                  background: isActive ? bg : "#fff",
+                  background: isActive ? bg : SURFACE,
                   color: isActive ? "#fff" : MUTED,
                 }}
               >
@@ -427,7 +386,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
                 className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
                 style={{
                   display: "block",
-                  background: "#fff",
+                  background: SURFACE,
                   border: `1px solid ${LINE}`,
                   borderRadius: 14,
                   padding: 12,
@@ -466,6 +425,53 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
               </span>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Customers visited */}
+      <div>
+        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashCustomersSection}</p>
+        {customersList.length === 0 ? (
+          <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
+        ) : (
+          customersList.map((v) => {
+            const stageId = v.stage || "";
+            return (
+              <button
+                key={v.id}
+                onClick={() => onOpenCustomer(v)}
+                className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+                style={{
+                  display: "block",
+                  background: SURFACE,
+                  border: `1px solid ${LINE}`,
+                  borderRadius: 14,
+                  padding: 12,
+                  marginBottom: 8,
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-sm" style={{ color: TEXT }}>{v.companyName || t.noCompanyName}</span>
+                  {stageId && (
+                    <span
+                      className="text-xs font-bold"
+                      style={{ background: stageColor(stageId), color: "#fff", borderRadius: 999, padding: "3px 9px" }}
+                    >
+                      {t.stages[stageId]}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs font-bold" style={{ color: GOLD }}>
+                    {t.sectors[v.sector] || t.sectors.private}
+                  </span>
+                  <span className="text-xs" style={{ color: MUTED }}>
+                    {t.dashLastVisit} {v.visitDate}
+                  </span>
+                </div>
+              </button>
+            );
+          })
         )}
       </div>
     </div>
