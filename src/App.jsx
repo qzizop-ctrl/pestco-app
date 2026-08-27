@@ -3,12 +3,13 @@ import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings, MessageCircle,
   Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote, LayoutDashboard, Users as UsersIcon, Wallet,
+  Moon, Sun, ChevronDown, History, AlertTriangle, Hash,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, arrayUnion, arrayRemove,
+  getDoc, setDoc, arrayUnion, arrayRemove, query, orderBy, limit, getDocs,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -17,12 +18,12 @@ import {
   requestNotificationPermission, scheduleCallReminder, cancelCallReminder,
 } from "./notifications";
 import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, STATUS_COLORS,
-  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS,
+  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE, SURFACE_SUBTLE, STATUS_COLORS,
+  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS, THEME_VARS, PAGE_SIZE, STALE_OFFER_DAYS,
   sectorColor, stageColor, offerStatusColor,
   findSectorId, findRoleId, findStageId, parseTagsCell,
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
-  buildActivity, buildOffer, ACTIVITY_COLORS,
+  buildActivity, buildOffer, buildVisitEntry, getVisitEvents, customerCode, ACTIVITY_COLORS,
   visitStatus, fmtReminder, fmtActivityDate, fmtMoney, corePhoneDigits,
   emptyForm,
 } from "./constants";
@@ -104,7 +105,7 @@ function VisitCard({ visit, onOpen, t }) {
     <div
       className="w-full"
       style={{
-        background: "#fff",
+        background: SURFACE,
         borderRadius: 16,
         border: `1px solid ${LINE}`,
         overflow: "hidden",
@@ -234,7 +235,7 @@ function BottomNav({ screen, setScreen, t }) {
         bottom: 0,
         left: 0,
         right: 0,
-        background: "#fff",
+        background: SURFACE,
         borderTop: `1px solid ${LINE}`,
         zIndex: 15,
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -283,6 +284,16 @@ export default function App() {
     name: "", offerNumber: "", amount: "", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
   });
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem("pestco_dark") === "1";
+    } catch (e) {
+      return false;
+    }
+  });
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
   const fileInputRef = useRef(null);
 
   const [lang, setLang] = useState(() => {
@@ -363,24 +374,31 @@ export default function App() {
   }, [lang]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem("pestco_dark", darkMode ? "1" : "0");
+    } catch (e) {}
+  }, [darkMode]);
+
+  useEffect(() => {
     if (!user || !ownerUid) {
       setVisits([]);
       setLoaded(false);
       return;
     }
     setLoaded(false);
-    const ref = collection(db, "users", ownerUid, "visits");
+    const ref = query(collection(db, "users", ownerUid, "visits"), orderBy("createdAt", "desc"), limit(pageSize));
     const unsub = onSnapshot(
       ref,
       (snap) => {
         const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setVisits(next);
+        setHasMore(next.length >= pageSize);
         setLoaded(true);
       },
       () => setLoaded(true)
     );
     return () => unsub();
-  }, [user, ownerUid]);
+  }, [user, ownerUid, pageSize]);
 
   useEffect(() => {
     try {
@@ -465,7 +483,13 @@ export default function App() {
     if (!canEdit || !visit || !ownerUid) return;
     if (!requireOnline()) return;
     if (newStatus === offer.status) return;
-    const updated = (visit.offers || []).map((o) => (o.id === offer.id ? { ...o, status: newStatus } : o));
+    let rejectionReason = offer.rejectionReason || "";
+    if (newStatus === "rejected") {
+      rejectionReason = window.prompt(t.offerRejectionReasonPrompt, rejectionReason) || "";
+    }
+    const updated = (visit.offers || []).map((o) =>
+      o.id === offer.id ? { ...o, status: newStatus, rejectionReason: newStatus === "rejected" ? rejectionReason : "" } : o
+    );
     try {
       await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { offers: updated });
       await appendActivity(visit.id, buildActivity("offer", t.activityOfferStatus(offer.name, t.offerStatuses[newStatus] || newStatus)));
@@ -543,25 +567,34 @@ export default function App() {
     if (!requireOnline()) return;
     if (!validate() || !user || !ownerUid) return;
 
+    if (!form.phone.trim()) {
+      if (!window.confirm(t.phoneMissingWarning)) return;
+    }
+
     const duplicate = form.phone ? findDuplicatePhone(form.phone, form.id) : null;
     if (duplicate) {
       const proceed = window.confirm(t.duplicatePhoneWarning(duplicate.companyName));
       if (!proceed) return;
     }
 
-    const { id, tagsInput, activityLog, offers, ...rest } = form;
+    const { id, tagsInput, activityLog, offers, visitHistory, ...rest } = form;
     const data = { ...rest, tags: parseTagsCell(tagsInput) };
     const original = id ? visits.find((v) => v.id === id) : null;
 
     try {
       let savedId = id;
       if (id) {
-        await updateDoc(doc(db, "users", ownerUid, "visits", id), data);
+        const updatePayload = { ...data };
+        if (original && original.visitDate !== data.visitDate && data.visitDate) {
+          updatePayload.visitHistory = arrayUnion(buildVisitEntry(data.visitDate));
+        }
+        await updateDoc(doc(db, "users", ownerUid, "visits", id), updatePayload);
       } else {
         const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
           ...data,
           activityLog: [],
           offers: [],
+          visitHistory: data.visitDate ? [buildVisitEntry(data.visitDate)] : [],
           createdAt: serverTimestamp(),
         });
         savedId = ref.id;
@@ -606,11 +639,27 @@ export default function App() {
       ? "هل أنت متأكد من حذف هذا العميل؟"
       : "Are you sure you want to delete this customer?";
     if (!window.confirm(confirmMsg)) return;
-    try {
-      await deleteDoc(doc(db, "users", ownerUid, "visits", id));
-      await cancelCallReminder(id);
-    } catch (e) {}
+
+    const visit = visits.find((v) => v.id === id);
     setScreen("list");
+
+    // Soft delete: hide immediately from the UI, but only actually delete
+    // from Firestore after a few seconds, giving the user a chance to undo.
+    const timeoutId = setTimeout(async () => {
+      try {
+        await deleteDoc(doc(db, "users", ownerUid, "visits", id));
+        await cancelCallReminder(id);
+      } catch (e) {}
+      setPendingDelete((cur) => (cur && cur.id === id ? null : cur));
+    }, 5000);
+
+    setPendingDelete({ id, companyName: visit ? visit.companyName : "", timeoutId });
+  };
+
+  const undoDelete = () => {
+    if (!pendingDelete) return;
+    clearTimeout(pendingDelete.timeoutId);
+    setPendingDelete(null);
   };
 
   // Quick stage change from the detail screen, without opening the full edit form.
@@ -630,6 +679,22 @@ export default function App() {
           target ? t.activityStageChanged(t.stages[target] || target) : t.activityStageCleared
         )
       );
+    } catch (e) {}
+  };
+
+  // Records that an actual visit happened today: pushes a new visit-history
+  // entry (so the Dashboard's visit count reflects real repeat visits) and
+  // bumps the customer's visitDate to today.
+  const logVisitToday = async (visit) => {
+    if (!canEdit || !visit || !ownerUid) return;
+    if (!requireOnline()) return;
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
+        visitDate: today,
+        visitHistory: arrayUnion(buildVisitEntry(today)),
+      });
+      await appendActivity(visit.id, buildActivity("visit", t.activityVisitLogged(today)));
     } catch (e) {}
   };
 
@@ -685,9 +750,8 @@ export default function App() {
     } catch (e) {}
   };
 
-  const exportToExcel = () => {
-    if (!canEdit) return;
-    const rows = visits.map((v) => ({
+  const visitsToRows = (rows) =>
+    rows.map((v) => ({
       [t.companyLabel.replace(" *", "")]: v.companyName || "",
       [t.contactLabel.replace(" *", "")]: v.contactName || "",
       [t.sectorLabel]: t.sectors[v.sector] || v.sector || "",
@@ -700,10 +764,30 @@ export default function App() {
       [t.callDateLabel]: v.callDateTime || "",
       [t.notesLabel]: v.notes || "",
     }));
-    const ws = XLSX.utils.json_to_sheet(rows);
+
+  const writeExcel = (rows, filenameSuffix) => {
+    const ws = XLSX.utils.json_to_sheet(visitsToRows(rows));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Visits");
-    XLSX.writeFile(wb, `pestco_visits_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `pestco_visits_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // Exports every customer, not just the currently-loaded page: the live
+  // list is paginated (see PAGE_SIZE), so this does a one-off unlimited read.
+  const exportAllToExcel = async () => {
+    if (!canEdit || !ownerUid) return;
+    try {
+      const snap = await getDocs(collection(db, "users", ownerUid, "visits"));
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      writeExcel(rows, "all");
+    } catch (e) {}
+  };
+
+  // Exports only what's currently loaded and passing the active filters on
+  // the customers list screen.
+  const exportFilteredToExcel = () => {
+    if (!canEdit) return;
+    writeExcel(filtered, "filtered");
   };
 
   const triggerImportPicker = () => {
@@ -799,19 +883,32 @@ export default function App() {
   };
 
   const now = Date.now();
-  const dueReminders = visits
+  const visibleVisits = pendingDelete ? visits.filter((v) => v.id !== pendingDelete.id) : visits;
+
+  const dueReminders = visibleVisits
     .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
     .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime));
 
-  const allTags = Array.from(new Set(visits.flatMap((v) => v.tags || []))).sort();
+  const staleOffers = visibleVisits.flatMap((v) =>
+    (v.offers || [])
+      .filter((o) => {
+        if (o.status !== "pending") return false;
+        const d = parseVisitDate(o.offerDate);
+        if (!d) return false;
+        return (now - d.getTime()) / (1000 * 3600 * 24) > STALE_OFFER_DAYS;
+      })
+      .map((o) => ({ ...o, customer: v }))
+  );
+
+  const allTags = Array.from(new Set(visibleVisits.flatMap((v) => v.tags || []))).sort();
 
   const sectorCounts = SECTOR_IDS.reduce((acc, id) => {
-    acc[id] = visits.filter((v) => v.sector === id).length;
+    acc[id] = visibleVisits.filter((v) => v.sector === id).length;
     return acc;
   }, {});
-  const totalCustomers = visits.length;
+  const totalCustomers = visibleVisits.length;
 
-  const filtered = visits
+  const filtered = visibleVisits
     .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
     .filter((v) => stageFilter === "all" || v.stage === stageFilter)
     .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
@@ -855,15 +952,18 @@ export default function App() {
   }) : [];
   const activeOffersValue = activeOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
+  const themeVars = darkMode ? THEME_VARS.dark : THEME_VARS.light;
+
   if (!authChecked) {
     return (
       <div
         style={{
+          ...themeVars,
           minHeight: "100vh",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#E4E0D5",
+          background: "var(--bg)",
           fontFamily: "'Tajawal', sans-serif",
         }}
       >
@@ -880,8 +980,9 @@ export default function App() {
     <div
       className="w-full min-h-full"
       style={{
+        ...themeVars,
         fontFamily: "'Tajawal', sans-serif",
-        background: "#E4E0D5",
+        background: "var(--bg)",
         minHeight: "100vh",
         direction: t.dir,
         color: TEXT,
@@ -893,8 +994,8 @@ export default function App() {
         input, textarea, select {
           font-family: 'Tajawal', sans-serif;
           width: 100%;
-          background: #fff;
-          border: 0.5px solid #D8D5C8;
+          background: var(--surface);
+          border: 0.5px solid var(--line);
           border-radius: 10px;
           padding: 10px 12px;
           font-size: 14px;
@@ -943,6 +1044,15 @@ export default function App() {
           </span>
         )}
         <button
+          onClick={() => setDarkMode((d) => !d)}
+          className="btn-press flex items-center"
+          style={{ color: "#fff", background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "6px 8px" }}
+          aria-label={darkMode ? t.lightModeToggle : t.darkModeToggle}
+          title={darkMode ? t.lightModeToggle : t.darkModeToggle}
+        >
+          {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
+        <button
           onClick={() => setLang(lang === "ar" ? "en" : "ar")}
           className="btn-press flex items-center gap-1 font-bold text-xs"
           style={{ color: "#fff", background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "6px 10px" }}
@@ -961,7 +1071,7 @@ export default function App() {
       </div>
 
       {screen === "dashboard" && (
-        <Dashboard visits={visits} lang={lang} onOpenCustomer={openDetail} />
+        <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} />
       )}
 
       {screen === "list" && (
@@ -1012,6 +1122,36 @@ export default function App() {
             </div>
           )}
 
+          {staleOffers.length > 0 && (
+            <div
+              style={{
+                background: "rgba(219,154,44,.1)",
+                border: "1px solid rgba(219,154,44,.35)",
+                borderRadius: 14,
+                padding: 12,
+                marginBottom: 14,
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle size={16} color={STATUS_COLORS.today} />
+                <span className="text-sm font-bold" style={{ color: "#8C6110" }}>
+                  {t.staleOffersBanner(staleOffers.length)}
+                </span>
+              </div>
+              {staleOffers.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => openDetail(o.customer)}
+                  className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+                  style={{ padding: "6px 0" }}
+                >
+                  <span className="text-sm font-bold" style={{ color: TEXT }}>{o.customer.companyName}</span>
+                  <span className="text-xs" style={{ color: MUTED }}>{o.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="relative mb-4">
             <Search
               size={16}
@@ -1026,7 +1166,7 @@ export default function App() {
             />
           </div>
 
-          <div style={{ background: "#fff", border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
+          <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-bold" style={{ color: TEXT }}>{t.totalCustomersLabel}</span>
               <span className="text-sm font-extrabold" style={{ color: PRIMARY }}>{totalCustomers}</span>
@@ -1056,7 +1196,7 @@ export default function App() {
                     padding: "8px 16px",
                     borderRadius: 999,
                     border: `1.4px solid ${isActive ? PRIMARY : LINE}`,
-                    background: isActive ? PRIMARY : "#fff",
+                    background: isActive ? PRIMARY : SURFACE,
                     color: isActive ? "#fff" : MUTED,
                   }}
                 >
@@ -1070,7 +1210,7 @@ export default function App() {
             {["all", ...STAGE_IDS].map((id) => {
               const isActive = stageFilter === id;
               const label = id === "all" ? t.pipelineAll : t.stages[id];
-              const bg = id === "all" ? (isActive ? PRIMARY : "#fff") : (isActive ? stageColor(id) : "#fff");
+              const bg = id === "all" ? (isActive ? PRIMARY : SURFACE) : (isActive ? stageColor(id) : SURFACE);
               return (
                 <button
                   key={id}
@@ -1101,7 +1241,7 @@ export default function App() {
                   padding: "8px 16px",
                   borderRadius: 999,
                   border: `1.4px solid ${tagFilter === "all" ? PRIMARY : LINE}`,
-                  background: tagFilter === "all" ? PRIMARY : "#fff",
+                  background: tagFilter === "all" ? PRIMARY : SURFACE,
                   color: tagFilter === "all" ? "#fff" : MUTED,
                 }}
               >
@@ -1119,7 +1259,7 @@ export default function App() {
                       padding: "8px 16px",
                       borderRadius: 999,
                       border: `1.4px solid ${isActive ? GOLD : LINE}`,
-                      background: isActive ? GOLD : "#fff",
+                      background: isActive ? GOLD : SURFACE,
                       color: isActive ? "#fff" : MUTED,
                     }}
                   >
@@ -1143,6 +1283,23 @@ export default function App() {
           {filtered.map((v) => (
             <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
           ))}
+
+          {loaded && hasMore && (
+            <button
+              onClick={() => setPageSize((p) => p + PAGE_SIZE)}
+              className="btn-press w-full font-bold text-sm"
+              style={{
+                background: SURFACE,
+                border: `1px solid ${LINE}`,
+                color: PRIMARY_MID,
+                borderRadius: 14,
+                padding: "12px 0",
+                marginBottom: 12,
+              }}
+            >
+              {t.loadMoreBtn}
+            </button>
+          )}
 
           {canEdit && (
             <button
@@ -1298,9 +1455,15 @@ export default function App() {
 
       {screen === "detail" && active && (
         <div className="px-4 pt-4 pb-10">
-          <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
+          <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
             <div className="flex items-center justify-between mb-1">
-              <span className="font-bold text-lg">{active.companyName}</span>
+              <div>
+                <span className="font-bold text-lg">{active.companyName}</span>
+                <div className="flex items-center gap-1" style={{ color: MUTED }}>
+                  <Hash size={11} />
+                  <span className="text-xs font-bold">{t.customerCodeLabel}: {customerCode(active.id)}</span>
+                </div>
+              </div>
               <span
                 className="text-xs font-extrabold px-2 py-0.5 rounded-full"
                 style={{ background: STATUS_COLORS[visitStatus(active)], color: "#fff" }}
@@ -1396,6 +1559,18 @@ export default function App() {
                 <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><Calendar size={15} /> {t.visitDateRow}</span>
                 <span className="text-sm font-bold">{active.visitDate || "—"}</span>
               </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><History size={15} /> {t.visitCountLabel(getVisitEvents(active).length)}</span>
+                {canEdit && (
+                  <button
+                    onClick={() => logVisitToday(active)}
+                    className="btn-press text-xs font-bold"
+                    style={{ color: PRIMARY_MID }}
+                  >
+                    {t.logVisitBtn}
+                  </button>
+                )}
+              </div>
             </div>
 
             {active.callDateTime && (
@@ -1457,7 +1632,7 @@ export default function App() {
               ) : (
                 <div className="flex flex-col gap-2 mb-3">
                   {activeOffers.map((offer) => (
-                    <div key={offer.id} style={{ background: "#F8F6F0", borderRadius: 12, padding: 10 }}>
+                    <div key={offer.id} style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10 }}>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-bold" style={{ color: TEXT }}>
                           {offer.name}{offer.offerNumber ? ` — ${offer.offerNumber}` : ""}
@@ -1479,6 +1654,11 @@ export default function App() {
                           {fmtMoney(offer.amount, t.locale)} {t.dashCurrency}
                         </span>
                       </div>
+                      {offer.status === "rejected" && offer.rejectionReason && (
+                        <p className="text-xs mt-1" style={{ color: DANGER, margin: "4px 0 0" }}>
+                          {t.rejectionReasonRow} {offer.rejectionReason}
+                        </p>
+                      )}
                       <div className="flex items-center flex-wrap gap-1 mt-2">
                         {OFFER_STATUS_IDS.map((sid) => {
                           const isActive = offer.status === sid;
@@ -1492,7 +1672,7 @@ export default function App() {
                                 padding: "4px 10px",
                                 borderRadius: 999,
                                 border: `1.2px solid ${isActive ? offerStatusColor(sid) : LINE}`,
-                                background: isActive ? offerStatusColor(sid) : "#fff",
+                                background: isActive ? offerStatusColor(sid) : SURFACE,
                                 color: isActive ? "#fff" : MUTED,
                               }}
                             >
@@ -1507,7 +1687,7 @@ export default function App() {
               )}
 
               {canEdit && (
-                <div className="flex flex-col gap-2" style={{ background: "#F8F6F0", borderRadius: 12, padding: 10 }}>
+                <div className="flex flex-col gap-2" style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10 }}>
                   <input
                     value={newOffer.name}
                     onChange={(e) => setNewOffer({ ...newOffer, name: e.target.value })}
@@ -1623,14 +1803,14 @@ export default function App() {
               <button
                 onClick={() => openEdit(active)}
                 className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
-                style={{ background: "#fff", border: `1px solid ${PRIMARY_MID}`, color: PRIMARY_MID, borderRadius: 14, padding: "12px 0" }}
+                style={{ background: SURFACE, border: `1px solid ${PRIMARY_MID}`, color: PRIMARY_MID, borderRadius: 14, padding: "12px 0" }}
               >
                 <Pencil size={16} /> {t.edit}
               </button>
               <button
                 onClick={() => deleteVisit(active.id)}
                 className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{ background: "#fff", border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 14, padding: "12px 20px" }}
+                style={{ background: SURFACE, border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 14, padding: "12px 20px" }}
               >
                 <Trash2 size={16} /> {t.delete}
               </button>
@@ -1642,7 +1822,7 @@ export default function App() {
       {screen === "settings" && (
         <div className="px-4 pt-4 pb-24">
           {isOwnerAccount && (
-            <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
               <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
               <p className="text-xs mb-3" style={{ color: MUTED }}>{t.membersTitle}</p>
 
@@ -1676,11 +1856,11 @@ export default function App() {
           )}
 
           {canEdit && (
-            <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
               <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
 
               <button
-                onClick={exportToExcel}
+                onClick={exportAllToExcel}
                 className="btn-press flex items-center justify-center gap-2 font-bold"
                 style={{
                   background: PRIMARY_MID,
@@ -1691,7 +1871,23 @@ export default function App() {
                   marginBottom: 10,
                 }}
               >
-                <Download size={16} /> {t.exportBtn}
+                <Download size={16} /> {t.exportAllBtn}
+              </button>
+
+              <button
+                onClick={exportFilteredToExcel}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: SURFACE,
+                  border: `1px solid ${PRIMARY_MID}`,
+                  color: PRIMARY_MID,
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  marginBottom: 10,
+                }}
+              >
+                <Download size={16} /> {t.exportFilteredBtn(filtered.length)}
               </button>
 
               <button
@@ -1699,7 +1895,7 @@ export default function App() {
                 disabled={importing}
                 className="btn-press flex items-center justify-center gap-2 font-bold"
                 style={{
-                  background: "#fff",
+                  background: SURFACE,
                   border: `1px solid ${PRIMARY_MID}`,
                   color: PRIMARY_MID,
                   borderRadius: 14,
@@ -1722,7 +1918,7 @@ export default function App() {
           )}
 
           {isOwnerAccount && (
-            <div style={{ background: "#fff", borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
+            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
               <label>{t.addMemberEmail}</label>
               <input
                 type="email"
@@ -1748,8 +1944,36 @@ export default function App() {
               >
                 {t.addMemberBtn}
               </button>
+              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.memberInviteHint}</p>
             </div>
           )}
+        </div>
+      )}
+
+      {pendingDelete && (
+        <div
+          className="flex items-center justify-between gap-3"
+          style={{
+            position: "fixed",
+            left: 16,
+            right: 16,
+            bottom: isRootScreen ? 78 : 16,
+            background: PRIMARY,
+            color: "#fff",
+            borderRadius: 14,
+            padding: "12px 16px",
+            boxShadow: "0 8px 20px rgba(0,0,0,.25)",
+            zIndex: 30,
+          }}
+        >
+          <span className="text-sm font-bold">{t.deletedUndoMsg(pendingDelete.companyName || "")}</span>
+          <button
+            onClick={undoDelete}
+            className="btn-press font-extrabold text-sm flex-shrink-0"
+            style={{ color: GOLD }}
+          >
+            {t.undoBtn}
+          </button>
         </div>
       )}
 
