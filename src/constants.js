@@ -63,6 +63,9 @@ export const STRINGS = {
     emailLabel: "البريد الإلكتروني",
     emailPlaceholder: "name@company.com",
     visitDateLabel: "تاريخ الزيارة",
+    visitDateHint: "اسيبه فاضي لو لسه ما حصلتش الزيارة، وحددّه بس لما تكون فعلاً زرت العميل.",
+    noVisitYet: "لسه ما حصلتش زيارة",
+    dateAddedRow: "تاريخ إضافة العميل",
     callDateLabel: "موعد المتابعة القادم (اختياري)",
     callDateHint: "في نسخة الأندرويد: التطبيق هيبعتلك تنبيه حقيقي في المعاد ده حتى لو التطبيق مقفول. في نسخة المتصفح: لازم التطبيق يكون شغال.",
     notesLabel: "ملاحظات الزيارة",
@@ -259,6 +262,9 @@ export const STRINGS = {
     emailLabel: "Email",
     emailPlaceholder: "name@company.com",
     visitDateLabel: "Visit Date",
+    visitDateHint: "Leave this empty if the visit hasn't happened yet — only set it once you've actually visited the customer.",
+    noVisitYet: "No visit yet",
+    dateAddedRow: "Date Added",
     callDateLabel: "Next Follow-up Date (optional)",
     callDateHint: "On the Android app: you'll get a real alert at this time even if the app is closed. On the web version: the app needs to be open.",
     notesLabel: "Visit Notes",
@@ -631,6 +637,18 @@ export function fmtReminder(dt, locale) {
   }
 }
 
+// Formats a Firestore createdAt timestamp (or a plain Date/string) into a
+// locale-aware "date added" display string.
+export function fmtCreatedAt(ts, locale) {
+  try {
+    const d = ts && typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
+    if (isNaN(d)) return "";
+    return d.toLocaleString(locale, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return "";
+  }
+}
+
 export function fmtActivityDate(dt, locale) {
   try {
     const d = new Date(dt);
@@ -668,7 +686,7 @@ export const emptyForm = {
   tagsInput: "",
   phone: "",
   email: "",
-  visitDate: new Date().toISOString().slice(0, 10),
+  visitDate: "",
   notes: "",
   callDateTime: "",
   notified: false,
