@@ -24,7 +24,7 @@ import {
   findSectorId, findRoleId, findStageId, parseTagsCell,
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
   buildActivity, buildOffer, buildVisitEntry, getVisitEvents, ACTIVITY_COLORS,
-  visitStatus, fmtReminder, fmtActivityDate, fmtMoney, corePhoneDigits,
+  visitStatus, fmtReminder, fmtActivityDate, fmtCreatedAt, fmtMoney, corePhoneDigits,
   emptyForm,
 } from "./constants";
 
@@ -184,7 +184,7 @@ function VisitCard({ visit, onOpen, t }) {
           <div className="flex items-center gap-1" style={{ color: MUTED, fontSize: 12 }}>
             <Calendar size={13} />
             {status === "none" ? (
-              <span>{visit.visitDate}</span>
+              <span>{visit.visitDate || t.noVisitYet}</span>
             ) : (
               <span>{fmtReminder(visit.callDateTime, t.locale)}</span>
             )}
@@ -1444,6 +1444,9 @@ export default function App() {
               value={form.visitDate}
               onChange={(e) => setForm({ ...form, visitDate: e.target.value })}
             />
+            <p className="text-xs mt-1" style={{ color: MUTED }}>
+              {t.visitDateHint}
+            </p>
           </div>
 
           <div>
@@ -1580,6 +1583,12 @@ export default function App() {
                 <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><Calendar size={15} /> {t.visitDateRow}</span>
                 <span className="text-sm font-bold">{active.visitDate || "—"}</span>
               </div>
+              {active.createdAt && (
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><Clock size={15} /> {t.dateAddedRow}</span>
+                  <span className="text-sm font-bold">{fmtCreatedAt(active.createdAt, t.locale)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><History size={15} /> {t.visitCountLabel(getVisitEvents(active).length)}</span>
                 {canEdit && (
