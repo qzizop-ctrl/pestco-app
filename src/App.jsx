@@ -293,6 +293,8 @@ export default function App() {
   });
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
+  const [allVisits, setAllVisits] = useState([]);
+  const [allVisitsLoaded, setAllVisitsLoaded] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
   const fileInputRef = useRef(null);
 
@@ -399,6 +401,27 @@ export default function App() {
     );
     return () => unsub();
   }, [user, ownerUid, pageSize]);
+
+  // Unlimited listener used only by the Dashboard, so "Load More" pagination
+  // on the customers list never affects dashboard stats/charts.
+  useEffect(() => {
+    if (!user || !ownerUid) {
+      setAllVisits([]);
+      setAllVisitsLoaded(false);
+      return;
+    }
+    setAllVisitsLoaded(false);
+    const ref = collection(db, "users", ownerUid, "visits");
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        setAllVisits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setAllVisitsLoaded(true);
+      },
+      () => setAllVisitsLoaded(true)
+    );
+    return () => unsub();
+  }, [user, ownerUid]);
 
   useEffect(() => {
     try {
@@ -884,6 +907,8 @@ export default function App() {
 
   const now = Date.now();
   const visibleVisits = pendingDelete ? visits.filter((v) => v.id !== pendingDelete.id) : visits;
+  // Unfiltered by pagination — always the full customer set, used by the Dashboard.
+  const visibleAllVisits = pendingDelete ? allVisits.filter((v) => v.id !== pendingDelete.id) : allVisits;
 
   const dueReminders = visibleVisits
     .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
@@ -1071,7 +1096,7 @@ export default function App() {
       </div>
 
       {screen === "dashboard" && (
-        <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} />
+        <Dashboard visits={visibleAllVisits} lang={lang} onOpenCustomer={openDetail} />
       )}
 
       {screen === "list" && (
@@ -1567,6 +1592,24 @@ export default function App() {
                   </button>
                 )}
               </div>
+
+              {getVisitEvents(active).length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div className="flex items-center flex-wrap gap-1">
+                    {[...getVisitEvents(active)]
+                      .sort((a, b) => (a.date < b.date ? 1 : -1))
+                      .map((ev) => (
+                        <span
+                          key={ev.id}
+                          className="text-xs font-bold"
+                          style={{ background: SURFACE_SUBTLE, color: MUTED, borderRadius: 999, padding: "4px 10px" }}
+                        >
+                          {ev.date}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {active.callDateTime && (
