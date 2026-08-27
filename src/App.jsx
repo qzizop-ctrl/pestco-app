@@ -9,7 +9,7 @@ import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, arrayUnion, arrayRemove, query, orderBy, limit, getDocs,
+  getDoc, setDoc, arrayUnion, arrayRemove, query as fsQuery, orderBy, limit, getDocs,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -386,7 +386,7 @@ export default function App() {
       return;
     }
     setLoaded(false);
-    const ref = query(collection(db, "users", ownerUid, "visits"), orderBy("createdAt", "desc"), limit(pageSize));
+    const ref = fsQuery(collection(db, "users", ownerUid, "visits"), orderBy("createdAt", "desc"), limit(pageSize));
     const unsub = onSnapshot(
       ref,
       (snap) => {
