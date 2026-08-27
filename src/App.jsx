@@ -3,7 +3,7 @@ import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings, MessageCircle,
   Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote, LayoutDashboard, Users as UsersIcon, Wallet,
-  Moon, Sun, ChevronDown, History, AlertTriangle, Hash,
+  Moon, Sun, ChevronDown, History, AlertTriangle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -23,7 +23,7 @@ import {
   sectorColor, stageColor, offerStatusColor,
   findSectorId, findRoleId, findStageId, parseTagsCell,
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
-  buildActivity, buildOffer, buildVisitEntry, getVisitEvents, customerCode, ACTIVITY_COLORS,
+  buildActivity, buildOffer, buildVisitEntry, getVisitEvents, ACTIVITY_COLORS,
   visitStatus, fmtReminder, fmtActivityDate, fmtMoney, corePhoneDigits,
   emptyForm,
 } from "./constants";
@@ -1459,10 +1459,6 @@ export default function App() {
             <div className="flex items-center justify-between mb-1">
               <div>
                 <span className="font-bold text-lg">{active.companyName}</span>
-                <div className="flex items-center gap-1" style={{ color: MUTED }}>
-                  <Hash size={11} />
-                  <span className="text-xs font-bold">{t.customerCodeLabel}: {customerCode(active.id)}</span>
-                </div>
               </div>
               <span
                 className="text-xs font-extrabold px-2 py-0.5 rounded-full"
