@@ -6,14 +6,24 @@
 
 export const PRIMARY = "#12332B";
 export const PRIMARY_MID = "#1E5245";
-export const BG = "#E4E0D5";
-export const CARD_BG = "#F6F3EC";
-export const TEXT = "#1B241F";
-export const MUTED = "#6B7168";
+export const BG = "var(--bg)";
+export const SURFACE = "var(--surface)";
+export const SURFACE_SUBTLE = "var(--surface-subtle)";
+export const CARD_BG = "var(--surface)";
+export const TEXT = "var(--text)";
+export const MUTED = "var(--muted)";
 export const DANGER = "#B3401F";
 export const GOLD = "#C08A3E";
 export const GOLD_SOFT = "#F3E6D0";
-export const LINE = "#E7E2D6";
+export const LINE = "var(--line)";
+
+export const THEME_VARS = {
+  light: { "--bg": "#E4E0D5", "--surface": "#FFFFFF", "--surface-subtle": "#F8F6F0", "--text": "#1B241F", "--muted": "#6B7168", "--line": "#E7E2D6" },
+  dark: { "--bg": "#121815", "--surface": "#1D2521", "--surface-subtle": "#242E28", "--text": "#ECEAE2", "--muted": "#9AA39B", "--line": "#33403A" },
+};
+
+export const PAGE_SIZE = 60;
+export const STALE_OFFER_DAYS = 30;
 
 export const STATUS_COLORS = {
   overdue: "#C4443A",
@@ -132,6 +142,43 @@ export const STRINGS = {
     requireOnlineMsg: "لازم يكون فيه اتصال بالإنترنت عشان تقدر تحفظ",
     deleteActivityConfirm: "هل تريد حذف هذا النشاط؟",
     totalCustomersLabel: "إجمالي العملاء",
+
+    // Dark mode
+    darkModeToggle: "الوضع الليلي",
+    lightModeToggle: "الوضع النهاري",
+
+    // Pagination
+    loadMoreBtn: "تحميل المزيد",
+
+    // Undo delete
+    deletedUndoMsg: (name) => `تم حذف ${name}`,
+    undoBtn: "تراجع",
+
+    // Phone warning
+    phoneMissingWarning: "العميل ده متسجلش له رقم تليفون. هل تريد الحفظ برضو؟",
+
+    // Export
+    exportAllBtn: "تصدير كل العملاء (إكسيل)",
+    exportFilteredBtn: (n) => `تصدير النتائج المفلترة حاليًا (${n})`,
+
+    // Member invite hint
+    memberInviteHint: "لو الشخص ده لسه معملش حساب على التطبيق بنفس الإيميل ده، الصلاحية هتتفعل تلقائيًا أول ما يعمل تسجيل.",
+
+    // Customer reference code
+    customerCodeLabel: "كود العميل",
+
+    // Visit history / logging a new visit
+    visitCountLabel: (n) => `عدد الزيارات: ${n}`,
+    logVisitBtn: "تسجيل زيارة اليوم",
+    activityVisitLogged: (date) => `تم تسجيل زيارة جديدة بتاريخ: ${date}`,
+
+    // Stale offers follow-up
+    staleOffersBanner: (n) => `عندك ${n} أوفر "قيد المتابعة" من غير رد من أكتر من ${STALE_OFFER_DAYS} يوم`,
+
+    // Offer rejection reason
+    offerRejectionReasonLabel: "سبب الرفض (اختياري)",
+    offerRejectionReasonPrompt: "اكتب سبب رفض الأوفر (اختياري):",
+    rejectionReasonRow: "سبب الرفض:",
 
     // Bottom navigation
     navDashboard: "Dashboard",
@@ -294,6 +341,43 @@ export const STRINGS = {
     requireOnlineMsg: "You need an internet connection to save changes",
     deleteActivityConfirm: "Delete this activity entry?",
     totalCustomersLabel: "Total Customers",
+
+    // Dark mode
+    darkModeToggle: "Dark Mode",
+    lightModeToggle: "Light Mode",
+
+    // Pagination
+    loadMoreBtn: "Load More",
+
+    // Undo delete
+    deletedUndoMsg: (name) => `Deleted ${name}`,
+    undoBtn: "Undo",
+
+    // Phone warning
+    phoneMissingWarning: "This customer has no phone number saved. Save anyway?",
+
+    // Export
+    exportAllBtn: "Export all customers (Excel)",
+    exportFilteredBtn: (n) => `Export current filtered results (${n})`,
+
+    // Member invite hint
+    memberInviteHint: "If this person hasn't signed up with this email yet, their access will activate automatically as soon as they do.",
+
+    // Customer reference code
+    customerCodeLabel: "Customer Code",
+
+    // Visit history / logging a new visit
+    visitCountLabel: (n) => `Visits: ${n}`,
+    logVisitBtn: "Log a visit today",
+    activityVisitLogged: (date) => `New visit logged: ${date}`,
+
+    // Stale offers follow-up
+    staleOffersBanner: (n) => `You have ${n} offer${n === 1 ? "" : "s"} "in progress" with no update for over ${STALE_OFFER_DAYS} days`,
+
+    // Offer rejection reason
+    offerRejectionReasonLabel: "Rejection reason (optional)",
+    offerRejectionReasonPrompt: "Enter the reason the offer was rejected (optional):",
+    rejectionReasonRow: "Rejection reason:",
 
     // Bottom navigation
     navDashboard: "Dashboard",
@@ -489,6 +573,26 @@ export function buildActivity(type, text) {
   };
 }
 
+// Builds a unique visit-history entry, used to track that an actual visit
+// happened on a given date (as opposed to just "the current visitDate"),
+// so the Dashboard can count real visit events per customer over time.
+export function buildVisitEntry(date) {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    date: date || new Date().toISOString().slice(0, 10),
+    at: new Date().toISOString(),
+  };
+}
+
+// Returns the list of visit events for a customer. Falls back to a single
+// event built from visitDate for customers that predate visit-history
+// tracking, so old data still counts correctly.
+export function getVisitEvents(visit) {
+  if (visit.visitHistory && visit.visitHistory.length) return visit.visitHistory;
+  if (visit.visitDate) return [{ id: "legacy", date: visit.visitDate, at: null }];
+  return [];
+}
+
 // Builds a unique offer entry for a customer's offers list
 export function buildOffer({ name, offerNumber, amount, offerDate, status }) {
   return {
@@ -498,8 +602,15 @@ export function buildOffer({ name, offerNumber, amount, offerDate, status }) {
     amount: Number(amount) || 0,
     offerDate: offerDate || "",
     status: status || "pending",
+    rejectionReason: "",
     createdAt: new Date().toISOString(),
   };
+}
+
+// Short, stable, human-readable reference code derived from the Firestore
+// document id — no schema change needed, purely a display convenience.
+export function customerCode(id) {
+  return (id || "").slice(-6).toUpperCase();
 }
 
 export const ACTIVITY_COLORS = {
@@ -508,6 +619,7 @@ export const ACTIVITY_COLORS = {
   call: "#2E6B8F",
   note: "#B9832A",
   offer: "#C08A3E",
+  visit: "#2F9E58",
 };
 
 export function visitStatus(visit) {
@@ -575,4 +687,5 @@ export const emptyForm = {
   notified: false,
   activityLog: [],
   offers: [],
+  visitHistory: [],
 };
