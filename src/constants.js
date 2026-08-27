@@ -164,9 +164,6 @@ export const STRINGS = {
     // Member invite hint
     memberInviteHint: "لو الشخص ده لسه معملش حساب على التطبيق بنفس الإيميل ده، الصلاحية هتتفعل تلقائيًا أول ما يعمل تسجيل.",
 
-    // Customer reference code
-    customerCodeLabel: "كود العميل",
-
     // Visit history / logging a new visit
     visitCountLabel: (n) => `عدد الزيارات: ${n}`,
     logVisitBtn: "تسجيل زيارة اليوم",
@@ -362,9 +359,6 @@ export const STRINGS = {
 
     // Member invite hint
     memberInviteHint: "If this person hasn't signed up with this email yet, their access will activate automatically as soon as they do.",
-
-    // Customer reference code
-    customerCodeLabel: "Customer Code",
 
     // Visit history / logging a new visit
     visitCountLabel: (n) => `Visits: ${n}`,
@@ -604,12 +598,6 @@ export function buildOffer({ name, offerNumber, amount, offerDate, status }) {
     rejectionReason: "",
     createdAt: new Date().toISOString(),
   };
-}
-
-// Short, stable, human-readable reference code derived from the Firestore
-// document id — no schema change needed, purely a display convenience.
-export function customerCode(id) {
-  return (id || "").slice(-6).toUpperCase();
 }
 
 export const ACTIVITY_COLORS = {
