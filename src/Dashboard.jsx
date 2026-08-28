@@ -55,10 +55,13 @@ function computePeriodStats(visits, year, month, sector) {
   // Customers added during the period (by createdAt), regardless of whether
   // a visit has been logged for them yet — this is what "Total Customers"
   // on the dashboard reflects, not just customers who were visited.
+  // Records with no createdAt (legacy/imported data missing the field) are
+  // always counted rather than silently dropped from every period.
   const customersAddedInRange = visits.filter((v) => {
     if (!inSector(v)) return false;
     const d = toJsDate(v.createdAt);
-    return d && d >= start && d <= end;
+    if (!d) return true;
+    return d >= start && d <= end;
   });
 
   const offersInRange = visits
