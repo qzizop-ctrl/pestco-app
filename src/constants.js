@@ -675,7 +675,7 @@ export const emptyForm = {
   contactName: "",
   sector: "construction",
   role: "purchasing",
-  stage: "survey",
+  stage: "",
   tagsInput: "",
   phone: "",
   email: "",
