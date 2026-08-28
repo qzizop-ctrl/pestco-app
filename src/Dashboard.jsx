@@ -6,7 +6,7 @@ import {
 import {
   STRINGS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS,
   stageColor, offerStatusColor,
-  parseVisitDate, fmtMoney, getVisitEvents,
+  parseVisitDate, fmtMoney, getVisitEvents, toJsDate,
   PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE,
 } from "./constants";
 
@@ -52,6 +52,15 @@ function computePeriodStats(visits, year, month, sector) {
   const customerIdsInRange = new Set(visitEventsInRange.map((e) => e.customer.id));
   const filteredVisits = visits.filter((v) => customerIdsInRange.has(v.id));
 
+  // Customers added during the period (by createdAt), regardless of whether
+  // a visit has been logged for them yet — this is what "Total Customers"
+  // on the dashboard reflects, not just customers who were visited.
+  const customersAddedInRange = visits.filter((v) => {
+    if (!inSector(v)) return false;
+    const d = toJsDate(v.createdAt);
+    return d && d >= start && d <= end;
+  });
+
   const offersInRange = visits
     .filter(inSector)
     .flatMap((v) =>
@@ -83,6 +92,7 @@ function computePeriodStats(visits, year, month, sector) {
     offersInRange,
     visitsCount: visitEventsInRange.length,
     customersCount: customerIdsInRange.size,
+    customersAddedCount: customersAddedInRange.length,
     offersCount: offersInRange.length,
     offersValue,
     pipeline,
@@ -275,7 +285,8 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         <SummaryCard
           icon={Users}
           label={t.totalCustomersLabel}
-          value={allCustomersList.length}
+          value={stats.customersAddedCount}
+          delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
           t={t}
         />
         <SummaryCard
