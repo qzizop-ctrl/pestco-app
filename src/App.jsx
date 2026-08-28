@@ -9,7 +9,7 @@ import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, arrayUnion, arrayRemove, query as fsQuery, orderBy, limit, getDocs,
+  getDoc, setDoc, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -19,7 +19,7 @@ import {
 } from "./notifications";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE, SURFACE_SUBTLE, STATUS_COLORS,
-  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS, THEME_VARS, PAGE_SIZE, STALE_OFFER_DAYS,
+  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS, THEME_VARS, STALE_OFFER_DAYS,
   sectorColor, stageColor, offerStatusColor,
   findSectorId, findRoleId, findStageId, parseTagsCell,
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
@@ -291,10 +291,6 @@ export default function App() {
       return false;
     }
   });
-  const [pageSize, setPageSize] = useState(PAGE_SIZE);
-  const [hasMore, setHasMore] = useState(false);
-  const [allVisits, setAllVisits] = useState([]);
-  const [allVisitsLoaded, setAllVisitsLoaded] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
   const fileInputRef = useRef(null);
 
@@ -381,6 +377,10 @@ export default function App() {
     } catch (e) {}
   }, [darkMode]);
 
+  // Single unlimited listener: the customer count (~900) is small enough
+  // that loading everything up front is simpler and safer than pagination —
+  // it also guarantees search/filters always see every customer, and the
+  // Dashboard's stats are never skewed by how much of the list is "loaded".
   useEffect(() => {
     if (!user || !ownerUid) {
       setVisits([]);
@@ -388,37 +388,14 @@ export default function App() {
       return;
     }
     setLoaded(false);
-    const ref = fsQuery(collection(db, "users", ownerUid, "visits"), orderBy("createdAt", "desc"), limit(pageSize));
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        const next = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setVisits(next);
-        setHasMore(next.length >= pageSize);
-        setLoaded(true);
-      },
-      () => setLoaded(true)
-    );
-    return () => unsub();
-  }, [user, ownerUid, pageSize]);
-
-  // Unlimited listener used only by the Dashboard, so "Load More" pagination
-  // on the customers list never affects dashboard stats/charts.
-  useEffect(() => {
-    if (!user || !ownerUid) {
-      setAllVisits([]);
-      setAllVisitsLoaded(false);
-      return;
-    }
-    setAllVisitsLoaded(false);
     const ref = collection(db, "users", ownerUid, "visits");
     const unsub = onSnapshot(
       ref,
       (snap) => {
-        setAllVisits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setAllVisitsLoaded(true);
+        setVisits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoaded(true);
       },
-      () => setAllVisitsLoaded(true)
+      () => setLoaded(true)
     );
     return () => unsub();
   }, [user, ownerUid]);
@@ -795,15 +772,11 @@ export default function App() {
     XLSX.writeFile(wb, `pestco_visits_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  // Exports every customer, not just the currently-loaded page: the live
-  // list is paginated (see PAGE_SIZE), so this does a one-off unlimited read.
-  const exportAllToExcel = async () => {
-    if (!canEdit || !ownerUid) return;
-    try {
-      const snap = await getDocs(collection(db, "users", ownerUid, "visits"));
-      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      writeExcel(rows, "all");
-    } catch (e) {}
+  // The live listener already holds every customer (no pagination limit),
+  // so exporting "all" is just exporting the current in-memory list.
+  const exportAllToExcel = () => {
+    if (!canEdit) return;
+    writeExcel(visibleVisits, "all");
   };
 
   // Exports only what's currently loaded and passing the active filters on
@@ -907,8 +880,6 @@ export default function App() {
 
   const now = Date.now();
   const visibleVisits = pendingDelete ? visits.filter((v) => v.id !== pendingDelete.id) : visits;
-  // Unfiltered by pagination — always the full customer set, used by the Dashboard.
-  const visibleAllVisits = pendingDelete ? allVisits.filter((v) => v.id !== pendingDelete.id) : allVisits;
 
   const dueReminders = visibleVisits
     .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
@@ -1096,7 +1067,7 @@ export default function App() {
       </div>
 
       {screen === "dashboard" && (
-        <Dashboard visits={visibleAllVisits} lang={lang} onOpenCustomer={openDetail} />
+        <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} />
       )}
 
       {screen === "list" && (
@@ -1308,23 +1279,6 @@ export default function App() {
           {filtered.map((v) => (
             <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
           ))}
-
-          {loaded && hasMore && (
-            <button
-              onClick={() => setPageSize((p) => p + PAGE_SIZE)}
-              className="btn-press w-full font-bold text-sm"
-              style={{
-                background: SURFACE,
-                border: `1px solid ${LINE}`,
-                color: PRIMARY_MID,
-                borderRadius: 14,
-                padding: "12px 0",
-                marginBottom: 12,
-              }}
-            >
-              {t.loadMoreBtn}
-            </button>
-          )}
 
           {canEdit && (
             <button
