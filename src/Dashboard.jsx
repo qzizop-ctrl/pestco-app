@@ -175,16 +175,20 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
     return buckets;
   }, [stats, month, year, t]);
 
-  const customersList = useMemo(() => {
-    return [...stats.filteredVisits].sort((a, b) => {
-      const da = parseVisitDate(a.visitDate);
-      const db = parseVisitDate(b.visitDate);
-      if (!da && !db) return 0;
-      if (!da) return 1;
-      if (!db) return -1;
-      return db - da;
-    });
-  }, [stats]);
+  // All customers (not scoped to the selected period), filtered by sector
+  // only, sorted by most recent visit — used by the "Total Customers" list.
+  const allCustomersList = useMemo(() => {
+    return visits
+      .filter((v) => sector === "all" || v.sector === sector)
+      .sort((a, b) => {
+        const da = parseVisitDate(a.visitDate);
+        const db = parseVisitDate(b.visitDate);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return db - da;
+      });
+  }, [visits, sector]);
 
   const offersList = useMemo(() => {
     return stats.offersInRange
@@ -428,13 +432,13 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         )}
       </div>
 
-      {/* Customers visited */}
+      {/* Total customers (independent of the selected period) */}
       <div>
-        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashCustomersSection}</p>
-        {customersList.length === 0 ? (
-          <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
+        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.totalCustomersLabel}</p>
+        {allCustomersList.length === 0 ? (
+          <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noVisits}</p>
         ) : (
-          customersList.map((v) => {
+          allCustomersList.map((v) => {
             const stageId = v.stage || "";
             return (
               <button
@@ -466,7 +470,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
                     {t.sectors[v.sector] || t.sectors.private}
                   </span>
                   <span className="text-xs" style={{ color: MUTED }}>
-                    {t.dashLastVisit} {v.visitDate}
+                    {v.visitDate ? `${t.dashLastVisit} ${v.visitDate}` : t.noVisitYet}
                   </span>
                 </div>
               </button>
