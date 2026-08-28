@@ -628,10 +628,19 @@ export function fmtReminder(dt, locale) {
 
 // Formats a Firestore createdAt timestamp (or a plain Date/string) into a
 // locale-aware "date added" display string.
+// Converts a Firestore createdAt timestamp (or a plain Date/string) into a
+// JS Date, or null if it's missing/invalid. Shared by fmtCreatedAt and any
+// code that needs to filter/compare by creation date.
+export function toJsDate(ts) {
+  if (!ts) return null;
+  const d = typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
+  return isNaN(d) ? null : d;
+}
+
 export function fmtCreatedAt(ts, locale) {
+  const d = toJsDate(ts);
+  if (!d) return "";
   try {
-    const d = ts && typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
-    if (isNaN(d)) return "";
     return d.toLocaleString(locale, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   } catch (e) {
     return "";
