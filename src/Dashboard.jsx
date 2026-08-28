@@ -144,7 +144,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
   }, [visits]);
 
   const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth()); // number 0-11, or "all"
+  const [month, setMonth] = useState("all"); // number 0-11, or "all"
   const [sector, setSector] = useState("all");
   const [compare, setCompare] = useState(false);
   const [offerStatusFilter, setOfferStatusFilter] = useState("all");
