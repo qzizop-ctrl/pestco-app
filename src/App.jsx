@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
-  FileText, Building2, User, Pencil, ChevronRight, ShieldCheck, Bell, Languages, LogOut, Settings, MessageCircle,
+  FileText, Building2, User, Pencil, ChevronRight, Shield, Bell, Languages, LogOut, Settings, MessageCircle,
   Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote, LayoutDashboard, Users as UsersIcon, Wallet,
   Moon, Sun, ChevronDown, History, AlertTriangle,
 } from "lucide-react";
@@ -56,7 +56,7 @@ function Logo({ size = 36 }) {
       className="flex items-center justify-center"
       style={{ width: size, height: size, background: "rgba(255,255,255,0.12)", borderRadius: 12 }}
     >
-      <ShieldCheck size={size * 0.6} color="#F6F3EC" />
+      <Shield size={size * 0.6} color="#F6F3EC" />
     </div>
   );
 }
