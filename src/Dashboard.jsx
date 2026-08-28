@@ -188,11 +188,18 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
     return buckets;
   }, [stats, month, year, t]);
 
-  // All customers (not scoped to the selected period), filtered by sector
-  // only, sorted by most recent visit — used by the "Total Customers" list.
-  const allCustomersList = useMemo(() => {
+  // Customers filtered by the selected period (their visitDate must fall in
+  // range) and sector. Customers with no visitDate yet are always kept —
+  // there's no date to match against, and dropping them would hide "still
+  // needs a first visit" customers from every period.
+  const periodCustomersList = useMemo(() => {
     return visits
       .filter((v) => sector === "all" || v.sector === sector)
+      .filter((v) => {
+        const d = parseVisitDate(v.visitDate);
+        if (!d) return true;
+        return d >= stats.start && d <= stats.end;
+      })
       .sort((a, b) => {
         const da = parseVisitDate(a.visitDate);
         const db = parseVisitDate(b.visitDate);
@@ -201,7 +208,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         if (!db) return -1;
         return db - da;
       });
-  }, [visits, sector]);
+  }, [visits, sector, stats]);
 
   const offersList = useMemo(() => {
     return stats.offersInRange
@@ -448,10 +455,10 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
       {/* Total customers (independent of the selected period) */}
       <div>
         <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.totalCustomersLabel}</p>
-        {allCustomersList.length === 0 ? (
+        {periodCustomersList.length === 0 ? (
           <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noVisits}</p>
         ) : (
-          allCustomersList.map((v) => {
+          periodCustomersList.map((v) => {
             const stageId = v.stage || "";
             return (
               <button
