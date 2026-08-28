@@ -22,7 +22,6 @@ export const THEME_VARS = {
   dark: { "--bg": "#121815", "--surface": "#1D2521", "--surface-subtle": "#242E28", "--text": "#ECEAE2", "--muted": "#9AA39B", "--line": "#33403A" },
 };
 
-export const PAGE_SIZE = 60;
 export const STALE_OFFER_DAYS = 30;
 
 export const STATUS_COLORS = {
@@ -149,9 +148,6 @@ export const STRINGS = {
     // Dark mode
     darkModeToggle: "الوضع الليلي",
     lightModeToggle: "الوضع النهاري",
-
-    // Pagination
-    loadMoreBtn: "تحميل المزيد",
 
     // Undo delete
     deletedUndoMsg: (name) => `تم حذف ${name}`,
@@ -348,9 +344,6 @@ export const STRINGS = {
     // Dark mode
     darkModeToggle: "Dark Mode",
     lightModeToggle: "Light Mode",
-
-    // Pagination
-    loadMoreBtn: "Load More",
 
     // Undo delete
     deletedUndoMsg: (name) => `Deleted ${name}`,
