@@ -4,8 +4,8 @@
 // truth for colors, labels, and data-shape helpers without duplicating them.
 // ============================================================================
 
-export const PRIMARY = "#12332B";
-export const PRIMARY_MID = "#1E5245";
+export const PRIMARY = "#0F2E5E";
+export const PRIMARY_MID = "#2A5FA8";
 export const BG = "var(--bg)";
 export const SURFACE = "var(--surface)";
 export const SURFACE_SUBTLE = "var(--surface-subtle)";
@@ -19,7 +19,7 @@ export const LINE = "var(--line)";
 
 export const THEME_VARS = {
   light: { "--bg": "#E4E0D5", "--surface": "#FFFFFF", "--surface-subtle": "#F8F6F0", "--text": "#1B241F", "--muted": "#6B7168", "--line": "#E7E2D6" },
-  dark: { "--bg": "#121815", "--surface": "#1D2521", "--surface-subtle": "#242E28", "--text": "#ECEAE2", "--muted": "#9AA39B", "--line": "#33403A" },
+  dark: { "--bg": "#0F1720", "--surface": "#182430", "--surface-subtle": "#1F2E3B", "--text": "#ECEAE2", "--muted": "#93A0AC", "--line": "#2C3B48" },
 };
 
 export const STALE_OFFER_DAYS = 30;
