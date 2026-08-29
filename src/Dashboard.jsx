@@ -296,7 +296,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         />
         <SummaryCard
           icon={Users}
-          label={t.totalCustomersLabel}
+          label={t.dashNewCustomersLabel}
           value={stats.customersAddedCount}
           delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
           t={t}
