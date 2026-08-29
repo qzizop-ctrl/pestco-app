@@ -56,11 +56,13 @@ function computePeriodStats(visits, year, month, sector) {
   // a visit has been logged for them yet — this is what "Total Customers"
   // on the dashboard reflects, not just customers who were visited.
   // Records with no createdAt (legacy/imported data missing the field) are
-  // always counted rather than silently dropped from every period.
+  // only counted in the "all months" view, so the total matches the full
+  // customer list — but they're excluded from any specific month, since we
+  // can't confirm they actually belong to that month.
   const customersAddedInRange = visits.filter((v) => {
     if (!inSector(v)) return false;
     const d = toJsDate(v.createdAt);
-    if (!d) return true;
+    if (!d) return month === "all";
     return d >= start && d <= end;
   });
 
