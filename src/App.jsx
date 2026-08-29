@@ -3,7 +3,7 @@ import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, Shield, Bell, Languages, LogOut, Settings, MessageCircle,
   Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote, LayoutDashboard, Users as UsersIcon, Wallet,
-  Moon, Sun, ChevronDown, History, AlertTriangle,
+  Moon, Sun, ChevronDown, History, AlertTriangle, Star, Copy, ListFilter,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -19,12 +19,13 @@ import {
 } from "./notifications";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE, SURFACE_SUBTLE, STATUS_COLORS,
-  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS, THEME_VARS, STALE_OFFER_DAYS,
+  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
   sectorColor, stageColor, offerStatusColor,
   findSectorId, findRoleId, findStageId, parseTagsCell,
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
   buildActivity, buildOffer, buildVisitEntry, getVisitEvents, ACTIVITY_COLORS,
   visitStatus, fmtReminder, fmtActivityDate, fmtCreatedAt, fmtMoney, corePhoneDigits,
+  findDuplicateGroups, isStaleCustomer,
   emptyForm,
 } from "./constants";
 
@@ -82,7 +83,7 @@ function TagChip({ label, onRemove }) {
   );
 }
 
-function VisitCard({ visit, onOpen, t }) {
+function VisitCard({ visit, onOpen, onTogglePin, canEdit, t }) {
   const status = visitStatus(visit);
   const statusColor = STATUS_COLORS[status];
   const statusLabel = {
@@ -95,6 +96,7 @@ function VisitCard({ visit, onOpen, t }) {
   const stageId = visit.stage || "";
   const stageLabel = stageId ? (t.stages[stageId] || "") : "";
   const tags = visit.tags || [];
+  const stale = isStaleCustomer(visit, STALE_ACTIVITY_DAYS);
 
   const stop = (fn) => (e) => {
     e.stopPropagation();
@@ -124,6 +126,24 @@ function VisitCard({ visit, onOpen, t }) {
           background: statusColor,
         }}
       />
+      {canEdit && (
+        <button
+          onClick={stop(() => onTogglePin(visit))}
+          className="btn-press flex items-center justify-center"
+          style={{
+            position: "absolute",
+            top: 10,
+            [t.dir === "rtl" ? "left" : "right"]: 10,
+            width: 28,
+            height: 28,
+            zIndex: 2,
+            color: visit.isPinned ? GOLD : "#C7C4B6",
+          }}
+          aria-label={visit.isPinned ? t.unpinBtn : t.pinBtn}
+        >
+          <Star size={17} fill={visit.isPinned ? GOLD : "none"} />
+        </button>
+      )}
       <button
         onClick={() => onOpen(visit)}
         className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
@@ -132,7 +152,7 @@ function VisitCard({ visit, onOpen, t }) {
         }}
       >
         <div className="flex items-start justify-between gap-2">
-          <div>
+          <div style={{ [t.dir === "rtl" ? "paddingLeft" : "paddingRight"]: 32 }}>
             <p className="font-extrabold text-base" style={{ margin: 0, color: TEXT }}>
               {visit.companyName || t.noCompanyName}
             </p>
@@ -162,6 +182,31 @@ function VisitCard({ visit, onOpen, t }) {
               style={{ background: stageColor(stageId), color: "#fff", borderRadius: 999, padding: "3px 9px" }}
             >
               {stageLabel}
+            </span>
+          )}
+          {!visit.phone && (
+            <span
+              className="text-xs font-bold"
+              style={{ background: "rgba(196,68,58,.12)", color: DANGER, borderRadius: 999, padding: "3px 9px" }}
+            >
+              {t.missingPhoneBadge}
+            </span>
+          )}
+          {!visit.email && (
+            <span
+              className="text-xs font-bold"
+              style={{ background: "rgba(196,68,58,.12)", color: DANGER, borderRadius: 999, padding: "3px 9px" }}
+            >
+              {t.missingEmailBadge}
+            </span>
+          )}
+          {stale && (
+            <span
+              className="text-xs font-bold"
+              style={{ background: "rgba(219,154,44,.15)", color: "#8C6110", borderRadius: 999, padding: "3px 9px" }}
+              title={t.staleHint(STALE_ACTIVITY_DAYS)}
+            >
+              {t.staleBadge}
             </span>
           )}
           {tags.slice(0, 3).map((tag) => (
@@ -270,6 +315,7 @@ export default function App() {
   const [sectorFilter, setSectorFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
+  const [missingDataOnly, setMissingDataOnly] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [activeId, setActiveId] = useState(null);
   const [errors, setErrors] = useState({});
@@ -292,6 +338,7 @@ export default function App() {
     }
   });
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const fileInputRef = useRef(null);
 
   const [lang, setLang] = useState(() => {
@@ -682,6 +729,15 @@ export default function App() {
     } catch (e) {}
   };
 
+  // Pins/unpins a customer so it stays sorted to the top of the list.
+  const togglePin = async (visit) => {
+    if (!canEdit || !ownerUid) return;
+    if (!requireOnline()) return;
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { isPinned: !visit.isPinned });
+    } catch (e) {}
+  };
+
   // Records that an actual visit happened today: pushes a new visit-history
   // entry (so the Dashboard's visit count reflects real repeat visits) and
   // bumps the customer's visitDate to today.
@@ -896,6 +952,29 @@ export default function App() {
       .map((o) => ({ ...o, customer: v }))
   );
 
+  // Customers with a follow-up call scheduled for today specifically (same
+  // calendar day), used for the always-visible "Today's Customers" panel.
+  const todaysCustomers = visibleVisits
+    .filter((v) => {
+      if (!v.callDateTime) return false;
+      const d = new Date(v.callDateTime);
+      const n = new Date();
+      return (
+        d.getFullYear() === n.getFullYear() &&
+        d.getMonth() === n.getMonth() &&
+        d.getDate() === n.getDate()
+      );
+    })
+    .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime));
+
+  // Customers with no recent activity (visit, call, or note) — a nudge to
+  // follow up before they go completely cold.
+  const staleCustomers = visibleVisits.filter((v) => isStaleCustomer(v, STALE_ACTIVITY_DAYS));
+
+  // Possible duplicate customers (same phone or a near-identical company
+  // name), reviewed from the Settings screen.
+  const duplicateGroups = findDuplicateGroups(visibleVisits);
+
   const allTags = Array.from(new Set(visibleVisits.flatMap((v) => v.tags || []))).sort();
 
   const sectorCounts = SECTOR_IDS.reduce((acc, id) => {
@@ -908,6 +987,7 @@ export default function App() {
     .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
     .filter((v) => stageFilter === "all" || v.stage === stageFilter)
     .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
+    .filter((v) => !missingDataOnly || !v.phone || !v.email)
     .filter((v) => {
       const q = query.trim().toLowerCase();
       if (!q) return true;
@@ -924,6 +1004,7 @@ export default function App() {
       );
     })
     .sort((a, b) => {
+      if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
       const sa = visitStatus(a);
       const sb = visitStatus(b);
       const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
@@ -1148,6 +1229,36 @@ export default function App() {
             </div>
           )}
 
+          {staleCustomers.length > 0 && (
+            <div
+              style={{
+                background: "rgba(219,154,44,.1)",
+                border: "1px solid rgba(219,154,44,.35)",
+                borderRadius: 14,
+                padding: 12,
+                marginBottom: 14,
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle size={16} color={STATUS_COLORS.today} />
+                <span className="text-sm font-bold" style={{ color: "#8C6110" }}>
+                  {t.staleBadge} ({staleCustomers.length})
+                </span>
+              </div>
+              {staleCustomers.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => openDetail(v)}
+                  className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+                  style={{ padding: "6px 0" }}
+                >
+                  <span className="text-sm font-bold" style={{ color: TEXT }}>{v.companyName}</span>
+                  <span className="text-xs" style={{ color: MUTED }}>{t.staleHint(STALE_ACTIVITY_DAYS)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="relative mb-4">
             <Search
               size={16}
@@ -1160,6 +1271,56 @@ export default function App() {
               placeholder={t.searchPlaceholder}
               style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
             />
+          </div>
+
+          <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Clock size={15} color={PRIMARY_MID} />
+              <span className="text-sm font-bold" style={{ color: TEXT }}>{t.todaysCustomersTitle}</span>
+            </div>
+            {todaysCustomers.length === 0 ? (
+              <p className="text-xs text-center py-2" style={{ color: MUTED }}>{t.noTodaysCustomers}</p>
+            ) : (
+              todaysCustomers.map((v) => (
+                <div
+                  key={v.id}
+                  className="flex items-center justify-between"
+                  style={{ padding: "8px 0", borderTop: `1px dashed ${LINE}` }}
+                >
+                  <button
+                    onClick={() => openDetail(v)}
+                    className={`btn-press flex-1 ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+                  >
+                    <p className="text-sm font-bold" style={{ margin: 0, color: TEXT }}>{v.companyName}</p>
+                    <p className="text-xs" style={{ margin: 0, color: MUTED }}>{fmtReminder(v.callDateTime, t.locale)}</p>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {v.phone && (
+                      <a
+                        href={`tel:${v.phone}`}
+                        className="btn-press flex items-center justify-center"
+                        style={{ width: 30, height: 30, borderRadius: 9, background: "#E5F1EA", color: "#2F9E58" }}
+                        aria-label={t.phoneRow}
+                      >
+                        <Phone size={13} />
+                      </a>
+                    )}
+                    {v.phone && (
+                      <a
+                        href={`https://wa.me/${v.phone.replace(/[^0-9]/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-press flex items-center justify-center"
+                        style={{ width: 30, height: 30, borderRadius: 9, background: "#E4F5EA", color: "#25A245" }}
+                        aria-label={t.whatsapp}
+                      >
+                        <MessageCircle size={13} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
@@ -1266,6 +1427,23 @@ export default function App() {
             </div>
           )}
 
+          <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
+            <button
+              onClick={() => setMissingDataOnly((m) => !m)}
+              className="btn-press font-bold text-xs flex items-center gap-1"
+              style={{
+                flexShrink: 0,
+                padding: "8px 16px",
+                borderRadius: 999,
+                border: `1.4px solid ${missingDataOnly ? DANGER : LINE}`,
+                background: missingDataOnly ? DANGER : SURFACE,
+                color: missingDataOnly ? "#fff" : MUTED,
+              }}
+            >
+              <ListFilter size={12} /> {t.missingDataFilter}
+            </button>
+          </div>
+
           {!loaded && <p className="text-sm text-center py-8" style={{ color: MUTED }}>{t.loading}</p>}
 
           {loaded && filtered.length === 0 && (
@@ -1277,7 +1455,7 @@ export default function App() {
           )}
 
           {filtered.map((v) => (
-            <VisitCard key={v.id} visit={v} onOpen={openDetail} t={t} />
+            <VisitCard key={v.id} visit={v} onOpen={openDetail} onTogglePin={togglePin} canEdit={canEdit} t={t} />
           ))}
 
           {canEdit && (
@@ -1439,8 +1617,18 @@ export default function App() {
         <div className="px-4 pt-4 pb-10">
           <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
             <div className="flex items-center justify-between mb-1">
-              <div>
+              <div className="flex items-center gap-2">
                 <span className="font-bold text-lg">{active.companyName}</span>
+                {canEdit && (
+                  <button
+                    onClick={() => togglePin(active)}
+                    className="btn-press flex items-center justify-center"
+                    style={{ color: active.isPinned ? GOLD : "#C7C4B6" }}
+                    aria-label={active.isPinned ? t.unpinBtn : t.pinBtn}
+                  >
+                    <Star size={18} fill={active.isPinned ? GOLD : "none"} />
+                  </button>
+                )}
               </div>
               <span
                 className="text-xs font-extrabold px-2 py-0.5 rounded-full"
@@ -1823,6 +2011,58 @@ export default function App() {
 
       {screen === "settings" && (
         <div className="px-4 pt-4 pb-24">
+          {canEdit && (
+            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.duplicatesTitle}</p>
+              <p className="text-xs mb-3" style={{ color: MUTED }}>{t.duplicatesHint}</p>
+
+              <button
+                onClick={() => setShowDuplicates((s) => !s)}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: showDuplicates ? SURFACE : PRIMARY_MID,
+                  border: showDuplicates ? `1px solid ${PRIMARY_MID}` : "none",
+                  color: showDuplicates ? PRIMARY_MID : "#fff",
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                }}
+              >
+                <Copy size={16} /> {t.duplicatesBtn}
+              </button>
+
+              {showDuplicates && (
+                <div style={{ marginTop: 12 }}>
+                  {duplicateGroups.length === 0 ? (
+                    <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noDuplicatesFound}</p>
+                  ) : (
+                    duplicateGroups.map((group, idx) => (
+                      <div
+                        key={idx}
+                        style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10, marginBottom: 8 }}
+                      >
+                        <span className="text-xs font-bold" style={{ color: GOLD }}>
+                          {group.reason === "phone" ? t.samePhoneReason : t.similarNameReason}
+                        </span>
+                        {group.customers.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => openDetail(c)}
+                            className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+                            style={{ padding: "6px 0" }}
+                          >
+                            <span className="text-sm font-bold" style={{ color: TEXT }}>{c.companyName || t.noCompanyName}</span>
+                            <span className="text-xs" style={{ color: MUTED }}>{c.phone || "—"}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {isOwnerAccount && (
             <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
               <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
