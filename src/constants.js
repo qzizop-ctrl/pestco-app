@@ -23,6 +23,7 @@ export const THEME_VARS = {
 };
 
 export const STALE_OFFER_DAYS = 30;
+export const STALE_ACTIVITY_DAYS = 90;
 
 export const STATUS_COLORS = {
   overdue: "#C4443A",
@@ -65,6 +66,32 @@ export const STRINGS = {
     visitDateHint: "اسيبه فاضي لو لسه ما حصلتش الزيارة، وحددّه بس لما تكون فعلاً زرت العميل.",
     noVisitYet: "لسه ما حصلتش زيارة",
     dateAddedRow: "تاريخ إضافة العميل",
+
+    // Missing-data filter
+    missingDataFilter: "بيانات ناقصة",
+    missingPhoneBadge: "بدون رقم",
+    missingEmailBadge: "بدون إيميل",
+
+    // Duplicate detection
+    duplicatesTitle: "عملاء محتمل تكرارهم",
+    duplicatesHint: "عملاء بنفس رقم الهاتف أو اسم شركة متشابه جدًا",
+    noDuplicatesFound: "مفيش أي تكرار محتمل حاليًا",
+    duplicatesBtn: "فحص التكرارات",
+    samePhoneReason: "نفس رقم الهاتف",
+    similarNameReason: "اسم شركة متشابه",
+
+    // Stale / inactive customer indicator
+    staleBadge: "محتاج مراجعة",
+    staleHint: (days) => `مفيش أي نشاط من ${days} يوم`,
+
+    // Today's customers
+    todaysCustomersTitle: "عملاء اليوم",
+    noTodaysCustomers: "مفيش عملاء مجدولين النهاردة",
+
+    // Pin / favorite
+    pinBtn: "تثبيت",
+    unpinBtn: "إلغاء التثبيت",
+    pinnedLabel: "مثبّت",
     callDateLabel: "موعد المتابعة القادم (اختياري)",
     callDateHint: "في نسخة الأندرويد: التطبيق هيبعتلك تنبيه حقيقي في المعاد ده حتى لو التطبيق مقفول. في نسخة المتصفح: لازم التطبيق يكون شغال.",
     notesLabel: "ملاحظات الزيارة",
@@ -260,6 +287,32 @@ export const STRINGS = {
     visitDateHint: "Leave this empty if the visit hasn't happened yet — only set it once you've actually visited the customer.",
     noVisitYet: "No visit yet",
     dateAddedRow: "Date Added",
+
+    // Missing-data filter
+    missingDataFilter: "Missing Data",
+    missingPhoneBadge: "No phone",
+    missingEmailBadge: "No email",
+
+    // Duplicate detection
+    duplicatesTitle: "Possible Duplicate Customers",
+    duplicatesHint: "Customers sharing a phone number or a very similar company name",
+    noDuplicatesFound: "No possible duplicates right now",
+    duplicatesBtn: "Check Duplicates",
+    samePhoneReason: "Same phone number",
+    similarNameReason: "Similar company name",
+
+    // Stale / inactive customer indicator
+    staleBadge: "Needs review",
+    staleHint: (days) => `No activity in ${days} days`,
+
+    // Today's customers
+    todaysCustomersTitle: "Today's Customers",
+    noTodaysCustomers: "No customers scheduled today",
+
+    // Pin / favorite
+    pinBtn: "Pin",
+    unpinBtn: "Unpin",
+    pinnedLabel: "Pinned",
     callDateLabel: "Next Follow-up Date (optional)",
     callDateHint: "On the Android app: you'll get a real alert at this time even if the app is closed. On the web version: the app needs to be open.",
     notesLabel: "Visit Notes",
@@ -676,6 +729,75 @@ export function corePhoneDigits(phone) {
   return d;
 }
 
+// Normalizes a company name for duplicate-matching (trim, lowercase, collapse spaces)
+export function normalizeCompanyName(name) {
+  return (name || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+// Groups customers that share a phone number or a near-identical company
+// name, so they can be reviewed and merged/cleaned up in one place.
+export function findDuplicateGroups(visits) {
+  const phoneGroups = {};
+  const nameGroups = {};
+
+  visits.forEach((v) => {
+    const phone = corePhoneDigits(v.phone);
+    if (phone) {
+      if (!phoneGroups[phone]) phoneGroups[phone] = [];
+      phoneGroups[phone].push(v);
+    }
+    const name = normalizeCompanyName(v.companyName);
+    if (name) {
+      if (!nameGroups[name]) nameGroups[name] = [];
+      nameGroups[name].push(v);
+    }
+  });
+
+  const groups = [];
+  Object.values(phoneGroups).forEach((g) => {
+    if (g.length > 1) groups.push({ reason: "phone", customers: g });
+  });
+  Object.values(nameGroups).forEach((g) => {
+    if (g.length > 1) groups.push({ reason: "name", customers: g });
+  });
+  return groups;
+}
+
+// The most recent moment of any recorded activity on a customer: a visit,
+// a scheduled call, a logged activity entry, or the record's creation.
+export function lastActivityDate(visit) {
+  const dates = [];
+  const vd = parseVisitDate(visit.visitDate);
+  if (vd) dates.push(vd);
+  if (visit.callDateTime) {
+    const cd = new Date(visit.callDateTime);
+    if (!isNaN(cd)) dates.push(cd);
+  }
+  (visit.activityLog || []).forEach((entry) => {
+    if (entry.at) {
+      const d = new Date(entry.at);
+      if (!isNaN(d)) dates.push(d);
+    }
+  });
+  const created = toJsDate(visit.createdAt);
+  if (created) dates.push(created);
+  if (dates.length === 0) return null;
+  return new Date(Math.max(...dates.map((d) => d.getTime())));
+}
+
+// True if a customer has had no recorded activity in over `days` days
+// (or never had any activity at all).
+export function isStaleCustomer(visit, days) {
+  const last = lastActivityDate(visit);
+  if (!last) return true;
+  const diffDays = (Date.now() - last.getTime()) / (1000 * 3600 * 24);
+  return diffDays > days;
+}
+
 export const emptyForm = {
   id: null,
   companyName: "",
@@ -693,4 +815,5 @@ export const emptyForm = {
   activityLog: [],
   offers: [],
   visitHistory: [],
+  isPinned: false,
 };
