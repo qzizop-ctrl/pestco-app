@@ -144,6 +144,7 @@ export const STRINGS = {
     requireOnlineMsg: "لازم يكون فيه اتصال بالإنترنت عشان تقدر تحفظ",
     deleteActivityConfirm: "هل تريد حذف هذا النشاط؟",
     totalCustomersLabel: "إجمالي العملاء",
+    dashNewCustomersLabel: "عملاء جداد",
 
     // Dark mode
     darkModeToggle: "الوضع الليلي",
@@ -338,6 +339,7 @@ export const STRINGS = {
     requireOnlineMsg: "You need an internet connection to save changes",
     deleteActivityConfirm: "Delete this activity entry?",
     totalCustomersLabel: "Total Customers",
+    dashNewCustomersLabel: "New Customers",
 
     // Dark mode
     darkModeToggle: "Dark Mode",
