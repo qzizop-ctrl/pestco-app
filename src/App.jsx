@@ -982,6 +982,7 @@ export default function App() {
     return acc;
   }, {});
   const totalCustomers = visibleVisits.length;
+  const missingDataCount = visibleVisits.filter((v) => !v.phone || !v.email).length;
 
   const filtered = visibleVisits
     .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
@@ -1440,7 +1441,7 @@ export default function App() {
                 color: missingDataOnly ? "#fff" : MUTED,
               }}
             >
-              <ListFilter size={12} /> {t.missingDataFilter}
+              <ListFilter size={12} /> {t.missingDataFilter} ({missingDataCount})
             </button>
           </div>
 
