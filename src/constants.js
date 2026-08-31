@@ -77,6 +77,8 @@ export const STRINGS = {
     duplicatesHint: "عملاء بنفس رقم الهاتف أو اسم شركة متشابه جدًا",
     noDuplicatesFound: "مفيش أي تكرار محتمل حاليًا",
     duplicatesBtn: "فحص التكرارات",
+    appUsersCountLabel: "عدد مستخدمي التطبيق",
+    refreshBtn: "تحديث",
     samePhoneReason: "نفس رقم الهاتف",
     similarNameReason: "اسم شركة متشابه",
 
@@ -249,6 +251,8 @@ export const STRINGS = {
     dashOfferFilterAll: "الكل",
     dashLastVisit: "آخر زيارة:",
     dashCurrency: "جنيه",
+    currencies: { EGP: "جنيه", USD: "دولار" },
+    currencyLabel: "العملة",
     months: [
       "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
       "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
@@ -298,6 +302,8 @@ export const STRINGS = {
     duplicatesHint: "Customers sharing a phone number or a very similar company name",
     noDuplicatesFound: "No possible duplicates right now",
     duplicatesBtn: "Check Duplicates",
+    appUsersCountLabel: "App Users Count",
+    refreshBtn: "Refresh",
     samePhoneReason: "Same phone number",
     similarNameReason: "Similar company name",
 
@@ -470,6 +476,8 @@ export const STRINGS = {
     dashOfferFilterAll: "All",
     dashLastVisit: "Last visit:",
     dashCurrency: "EGP",
+    currencies: { EGP: "EGP", USD: "USD" },
+    currencyLabel: "Currency",
     months: [
       "January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December",
@@ -505,6 +513,7 @@ export const STAGE_COLORS = {
 export const stageColor = (id) => STAGE_COLORS[id] || STAGE_COLORS.survey;
 
 export const OFFER_STATUS_IDS = ["pending", "purchased", "rejected", "installed"];
+export const CURRENCY_IDS = ["EGP", "USD"];
 export const OFFER_STATUS_COLORS = {
   pending: "#DB9A2C",
   purchased: "#2F9E58",
@@ -637,17 +646,41 @@ export function getVisitEvents(visit) {
 }
 
 // Builds a unique offer entry for a customer's offers list
-export function buildOffer({ name, offerNumber, amount, offerDate, status }) {
+export function buildOffer({ name, offerNumber, amount, offerDate, status, currency }) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: name || "",
     offerNumber: offerNumber || "",
     amount: Number(amount) || 0,
+    currency: CURRENCY_IDS.includes(currency) ? currency : "EGP",
     offerDate: offerDate || "",
     status: status || "pending",
     rejectionReason: "",
     createdAt: new Date().toISOString(),
   };
+}
+
+// Sums a list of offers per currency, e.g. { EGP: 12000, USD: 500 }.
+// Offers with no currency field (created before multi-currency support)
+// are treated as EGP.
+export function sumOffersByCurrency(offers) {
+  const totals = {};
+  CURRENCY_IDS.forEach((id) => (totals[id] = 0));
+  (offers || []).forEach((o) => {
+    const cur = CURRENCY_IDS.includes(o.currency) ? o.currency : "EGP";
+    totals[cur] += Number(o.amount) || 0;
+  });
+  return totals;
+}
+
+// Formats a per-currency totals map (from sumOffersByCurrency) into a
+// human-readable string, e.g. "12,000 جنيه + 500 دولار". Omits currencies
+// with a zero total; returns "" if everything is zero.
+export function fmtOffersTotals(totals, t) {
+  return CURRENCY_IDS
+    .filter((id) => totals[id])
+    .map((id) => `${fmtMoney(totals[id], t.locale)} ${t.currencies[id]}`)
+    .join(" + ");
 }
 
 export const ACTIVITY_COLORS = {
