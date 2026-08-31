@@ -205,6 +205,7 @@ export const STRINGS = {
     offerRejectionReasonLabel: "سبب الرفض (اختياري)",
     offerRejectionReasonPrompt: "اكتب سبب رفض الأوفر (اختياري):",
     rejectionReasonRow: "سبب الرفض:",
+    changeStatusLabel: "تغيير حالة الأوفر:",
 
     // Bottom navigation
     navDashboard: "Dashboard",
@@ -430,6 +431,7 @@ export const STRINGS = {
     offerRejectionReasonLabel: "Rejection reason (optional)",
     offerRejectionReasonPrompt: "Enter the reason the offer was rejected (optional):",
     rejectionReasonRow: "Rejection reason:",
+    changeStatusLabel: "Change offer status:",
 
     // Bottom navigation
     navDashboard: "Dashboard",
