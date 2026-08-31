@@ -6,7 +6,7 @@ import {
 import {
   STRINGS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS,
   stageColor, offerStatusColor,
-  parseVisitDate, fmtMoney, getVisitEvents, toJsDate,
+  parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, getVisitEvents, toJsDate,
   PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE,
 } from "./constants";
 
@@ -79,7 +79,7 @@ function computePeriodStats(visits, year, month, sector) {
         }))
     );
 
-  const offersValue = offersInRange.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+  const offersValueTotals = sumOffersByCurrency(offersInRange);
 
   const pipeline = {};
   STAGE_IDS.forEach((id) => (pipeline[id] = 0));
@@ -99,7 +99,7 @@ function computePeriodStats(visits, year, month, sector) {
     customersCount: customerIdsInRange.size,
     customersAddedCount: customersAddedInRange.length,
     offersCount: offersInRange.length,
-    offersValue,
+    offersValueTotals,
     pipeline,
   };
 }
@@ -225,7 +225,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
       });
   }, [stats, offerStatusFilter]);
 
-  const offersListValue = offersList.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+  const offersListValueTotals = sumOffersByCurrency(offersList);
   const maxChartCount = Math.max(1, ...chartData.map((b) => b.count));
 
   return (
@@ -311,8 +311,8 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         <SummaryCard
           icon={Wallet}
           label={t.dashCardOffersValue}
-          value={`${fmtMoney(stats.offersValue, t.locale)} ${t.dashCurrency}`}
-          delta={compare ? (prevStats ? pctChange(stats.offersValue, prevStats.offersValue) : null) : undefined}
+          value={fmtOffersTotals(stats.offersValueTotals, t) || `0 ${t.dashCurrency}`}
+          delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
           t={t}
         />
       </div>
@@ -434,7 +434,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-xs" style={{ color: MUTED }}>{o.offerDate}</span>
                   <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID }}>
-                    {fmtMoney(o.amount, t.locale)} {t.dashCurrency}
+                    {fmtMoney(o.amount, t.locale)} {t.currencies[o.currency] || t.currencies.EGP}
                   </span>
                 </div>
               </button>
@@ -447,7 +447,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
                 {t.dashOffersTotalLabel}: {offersList.length}
               </span>
               <span className="text-sm font-extrabold" style={{ color: TEXT }}>
-                {t.dashOffersTotalValueLabel}: {fmtMoney(offersListValue, t.locale)} {t.dashCurrency}
+                {t.dashOffersTotalValueLabel}: {fmtOffersTotals(offersListValueTotals, t) || `0 ${t.dashCurrency}`}
               </span>
             </div>
           </>
