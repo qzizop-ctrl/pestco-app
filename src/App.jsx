@@ -3,13 +3,13 @@ import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, Shield, Bell, Languages, LogOut, Settings, MessageCircle,
   Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote, LayoutDashboard, Users as UsersIcon, Wallet,
-  Moon, Sun, ChevronDown, History, AlertTriangle, Star, Copy, ListFilter,
+  Moon, Sun, ChevronDown, History, AlertTriangle, Star, Copy, ListFilter, RefreshCw,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, arrayUnion, arrayRemove,
+  getDoc, setDoc, arrayUnion, arrayRemove, getCountFromServer,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -19,12 +19,12 @@ import {
 } from "./notifications";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE, SURFACE_SUBTLE, STATUS_COLORS,
-  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
+  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS, CURRENCY_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
   sectorColor, stageColor, offerStatusColor,
   findSectorId, findRoleId, findStageId, parseTagsCell,
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
   buildActivity, buildOffer, buildVisitEntry, getVisitEvents, ACTIVITY_COLORS,
-  visitStatus, fmtReminder, fmtActivityDate, fmtCreatedAt, fmtMoney, corePhoneDigits,
+  visitStatus, fmtReminder, fmtActivityDate, fmtCreatedAt, fmtMoney, fmtOffersTotals, sumOffersByCurrency, corePhoneDigits,
   findDuplicateGroups, isStaleCustomer,
   emptyForm,
 } from "./constants";
@@ -327,7 +327,7 @@ export default function App() {
   const [importing, setImporting] = useState(false);
   const [newActivityText, setNewActivityText] = useState("");
   const [newOffer, setNewOffer] = useState({
-    name: "", offerNumber: "", amount: "", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
+    name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
   });
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
   const [darkMode, setDarkMode] = useState(() => {
@@ -339,6 +339,8 @@ export default function App() {
   });
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [appUserCount, setAppUserCount] = useState(null);
+  const [appUserCountLoading, setAppUserCountLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   const [lang, setLang] = useState(() => {
@@ -357,6 +359,10 @@ export default function App() {
   // Permission flags derived from myRole (set from the access_by_email lookup).
   const canEdit = myRole === "owner" || myRole === "editor";
   const isOwnerAccount = myRole === "owner";
+  // The one account allowed to see how many distinct people have opened the
+  // app — a hardcoded personal check, not a role, since it's unrelated to
+  // any single owner's customer data.
+  const isAppAnalyticsAdmin = (user?.email || "").toLowerCase() === "azizmostafamohamed@gmail.com";
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -376,6 +382,23 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  // Records that this account opened the app — purely a usage counter for
+  // the analytics admin, unrelated to any owner's customer data.
+  useEffect(() => {
+    if (!user) return;
+    setDoc(
+      doc(db, "app_users", user.uid),
+      { email: (user.email || "").toLowerCase(), lastSeen: serverTimestamp() },
+      { merge: true }
+    ).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!isAppAnalyticsAdmin) return;
+    fetchAppUserCount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAppAnalyticsAdmin]);
 
   useEffect(() => {
     if (!user) {
@@ -522,7 +545,7 @@ export default function App() {
         offers: arrayUnion(offer),
       });
       await appendActivity(visit.id, buildActivity("offer", t.activityOfferAdded(offer.name)));
-      setNewOffer({ name: "", offerNumber: "", amount: "", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
+      setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
     } catch (e) {}
   };
 
@@ -577,7 +600,7 @@ export default function App() {
   const openDetail = (visit) => {
     setActiveId(visit.id);
     setNewActivityText("");
-    setNewOffer({ name: "", offerNumber: "", amount: "", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
+    setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
     setScreen("detail");
   };
 
@@ -842,6 +865,22 @@ export default function App() {
     writeExcel(filtered, "filtered");
   };
 
+  // Fetches the total count of distinct accounts that have ever opened the
+  // app. Only callable meaningfully by the analytics admin — Firestore rules
+  // reject the read for anyone else anyway, this is just a UI convenience.
+  const fetchAppUserCount = async () => {
+    if (!isAppAnalyticsAdmin) return;
+    setAppUserCountLoading(true);
+    try {
+      const snap = await getCountFromServer(collection(db, "app_users"));
+      setAppUserCount(snap.data().count);
+    } catch (e) {
+      setAppUserCount(null);
+    } finally {
+      setAppUserCountLoading(false);
+    }
+  };
+
   const triggerImportPicker = () => {
     if (!canEdit) return;
     if (!requireOnline()) return;
@@ -1028,7 +1067,8 @@ export default function App() {
     if (!db) return -1;
     return db - da;
   }) : [];
-  const activeOffersValue = activeOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+  const activeOffersTotals = sumOffersByCurrency(activeOffers);
+  const activeOffersValueText = fmtOffersTotals(activeOffersTotals, t);
 
   const themeVars = darkMode ? THEME_VARS.dark : THEME_VARS.light;
 
@@ -1811,9 +1851,9 @@ export default function App() {
             <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 12, paddingTop: 12 }}>
               <div className="flex items-center justify-between mb-2">
                 <span className="flex items-center gap-2 text-sm font-bold"><Wallet size={15} /> {t.offersLabel}</span>
-                {activeOffers.length > 0 && (
+                {activeOffersValueText && (
                   <span className="text-xs font-bold" style={{ color: PRIMARY_MID }}>
-                    {fmtMoney(activeOffersValue, t.locale)} {t.dashCurrency}
+                    {activeOffersValueText}
                   </span>
                 )}
               </div>
@@ -1842,7 +1882,7 @@ export default function App() {
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-xs" style={{ color: MUTED }}>{offer.offerDate}</span>
                         <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID }}>
-                          {fmtMoney(offer.amount, t.locale)} {t.dashCurrency}
+                          {fmtMoney(offer.amount, t.locale)} {t.currencies[offer.currency] || t.currencies.EGP}
                         </span>
                       </div>
                       {offer.status === "rejected" && offer.rejectionReason && (
@@ -1896,6 +1936,14 @@ export default function App() {
                       onChange={(e) => setNewOffer({ ...newOffer, amount: e.target.value })}
                       placeholder={t.offerAmountLabel}
                     />
+                    <select
+                      value={newOffer.currency}
+                      onChange={(e) => setNewOffer({ ...newOffer, currency: e.target.value })}
+                    >
+                      {CURRENCY_IDS.map((cid) => (
+                        <option key={cid} value={cid}>{t.currencies[cid]}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="flex items-center gap-2">
                     <input
@@ -2012,6 +2060,26 @@ export default function App() {
 
       {screen === "settings" && (
         <div className="px-4 pt-4 pb-24">
+          {isAppAnalyticsAdmin && (
+            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+              <div className="flex items-center justify-between mb-1">
+                <p className="font-bold text-base" style={{ color: TEXT }}>{t.appUsersCountLabel}</p>
+                <button
+                  onClick={fetchAppUserCount}
+                  disabled={appUserCountLoading}
+                  className="btn-press"
+                  style={{ color: PRIMARY_MID, opacity: appUserCountLoading ? 0.5 : 1 }}
+                  aria-label={t.refreshBtn}
+                >
+                  <RefreshCw size={16} />
+                </button>
+              </div>
+              <p className="font-extrabold" style={{ fontSize: 28, color: PRIMARY, margin: 0 }}>
+                {appUserCountLoading ? "…" : appUserCount === null ? "—" : appUserCount}
+              </p>
+            </div>
+          )}
+
           {canEdit && (
             <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
               <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.duplicatesTitle}</p>
