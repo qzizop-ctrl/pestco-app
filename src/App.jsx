@@ -339,6 +339,7 @@ export default function App() {
   });
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [expandedOfferId, setExpandedOfferId] = useState(null);
   const [appUserCount, setAppUserCount] = useState(null);
   const [appUserCountLoading, setAppUserCountLoading] = useState(false);
   const fileInputRef = useRef(null);
@@ -601,6 +602,7 @@ export default function App() {
     setActiveId(visit.id);
     setNewActivityText("");
     setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
+    setExpandedOfferId(null);
     setScreen("detail");
   };
 
@@ -1862,58 +1864,79 @@ export default function App() {
                 <p className="text-sm text-center py-2" style={{ color: MUTED }}>{t.noOffers}</p>
               ) : (
                 <div className="flex flex-col gap-2 mb-3">
-                  {activeOffers.map((offer) => (
-                    <div key={offer.id} style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10 }}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-bold" style={{ color: TEXT }}>
-                          {offer.name}{offer.offerNumber ? ` — ${offer.offerNumber}` : ""}
-                        </span>
-                        {canEdit && (
-                          <button
-                            onClick={() => deleteOffer(active, offer)}
-                            className="btn-press flex-shrink-0"
-                            style={{ color: DANGER }}
-                            aria-label={t.delete}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs" style={{ color: MUTED }}>{offer.offerDate}</span>
-                        <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID }}>
-                          {fmtMoney(offer.amount, t.locale)} {t.currencies[offer.currency] || t.currencies.EGP}
-                        </span>
-                      </div>
-                      {offer.status === "rejected" && offer.rejectionReason && (
-                        <p className="text-xs mt-1" style={{ color: DANGER, margin: "4px 0 0" }}>
-                          {t.rejectionReasonRow} {offer.rejectionReason}
-                        </p>
-                      )}
-                      <div className="flex items-center flex-wrap gap-1 mt-2">
-                        {OFFER_STATUS_IDS.map((sid) => {
-                          const isActive = offer.status === sid;
-                          return (
-                            <button
-                              key={sid}
-                              onClick={() => updateOfferStatus(active, offer, sid)}
-                              disabled={!canEdit}
-                              className="btn-press text-xs font-bold"
+                  {activeOffers.map((offer) => {
+                    const isExpanded = expandedOfferId === offer.id;
+                    return (
+                      <div key={offer.id} style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10 }}>
+                        <button
+                          onClick={() => setExpandedOfferId(isExpanded ? null : offer.id)}
+                          className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-bold" style={{ color: TEXT }}>
+                              {offer.name}{offer.offerNumber ? ` — ${offer.offerNumber}` : ""}
+                            </span>
+                            <span
+                              className="text-xs font-bold flex-shrink-0"
                               style={{
-                                padding: "4px 10px",
+                                background: offerStatusColor(offer.status),
+                                color: "#fff",
                                 borderRadius: 999,
-                                border: `1.2px solid ${isActive ? offerStatusColor(sid) : LINE}`,
-                                background: isActive ? offerStatusColor(sid) : SURFACE,
-                                color: isActive ? "#fff" : MUTED,
+                                padding: "3px 9px",
                               }}
                             >
-                              {t.offerStatuses[sid]}
+                              {t.offerStatuses[offer.status] || offer.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-xs" style={{ color: MUTED }}>{offer.offerDate}</span>
+                            <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID }}>
+                              {fmtMoney(offer.amount, t.locale)} {t.currencies[offer.currency] || t.currencies.EGP}
+                            </span>
+                          </div>
+                          {offer.status === "rejected" && offer.rejectionReason && (
+                            <p className="text-xs mt-1" style={{ color: DANGER, margin: "4px 0 0" }}>
+                              {t.rejectionReasonRow} {offer.rejectionReason}
+                            </p>
+                          )}
+                        </button>
+
+                        {isExpanded && canEdit && (
+                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}>
+                            <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>{t.changeStatusLabel}</p>
+                            <div className="flex items-center flex-wrap gap-1">
+                              {OFFER_STATUS_IDS.map((sid) => {
+                                const isActive = offer.status === sid;
+                                return (
+                                  <button
+                                    key={sid}
+                                    onClick={() => updateOfferStatus(active, offer, sid)}
+                                    className="btn-press text-xs font-bold"
+                                    style={{
+                                      padding: "4px 10px",
+                                      borderRadius: 999,
+                                      border: `1.2px solid ${isActive ? offerStatusColor(sid) : LINE}`,
+                                      background: isActive ? offerStatusColor(sid) : SURFACE,
+                                      color: isActive ? "#fff" : MUTED,
+                                    }}
+                                  >
+                                    {t.offerStatuses[sid]}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <button
+                              onClick={() => deleteOffer(active, offer)}
+                              className="btn-press flex items-center gap-1 text-xs font-bold"
+                              style={{ color: DANGER, marginTop: 10 }}
+                            >
+                              <Trash2 size={13} /> {t.delete}
                             </button>
-                          );
-                        })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
