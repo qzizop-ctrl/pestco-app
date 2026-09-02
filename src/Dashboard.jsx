@@ -7,7 +7,7 @@ import {
   STRINGS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS,
   stageColor, offerStatusColor,
   parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, getVisitEvents, toJsDate,
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE,
+  PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE, SURFACE_SUBTLE,
 } from "./constants";
 
 // Builds the [start, end] Date range for a given year + month filter.
@@ -81,6 +81,14 @@ function computePeriodStats(visits, year, month, sector) {
 
   const offersValueTotals = sumOffersByCurrency(offersInRange);
 
+  // Sales performance: how many offers landed in each outcome, and their
+  // value per currency, within the selected period.
+  const offersByStatus = {};
+  OFFER_STATUS_IDS.forEach((id) => {
+    const group = offersInRange.filter((o) => o.status === id);
+    offersByStatus[id] = { count: group.length, totals: sumOffersByCurrency(group) };
+  });
+
   const pipeline = {};
   STAGE_IDS.forEach((id) => (pipeline[id] = 0));
   pipeline.none = 0;
@@ -100,6 +108,7 @@ function computePeriodStats(visits, year, month, sector) {
     customersAddedCount: customersAddedInRange.length,
     offersCount: offersInRange.length,
     offersValueTotals,
+    offersByStatus,
     pipeline,
   };
 }
@@ -363,6 +372,38 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
                   />
                 )}
               </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Sales performance: what got purchased, rejected, or is still pending */}
+      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
+        <p className="font-bold text-sm mb-3" style={{ color: TEXT }}>{t.dashSalesPerformance}</p>
+        <div className="flex flex-wrap" style={{ gap: 10 }}>
+          {OFFER_STATUS_IDS.map((id) => {
+            const info = stats.offersByStatus[id] || { count: 0, totals: {} };
+            const valueText = fmtOffersTotals(info.totals, t);
+            return (
+              <div
+                key={id}
+                style={{
+                  flex: "1 1 45%",
+                  minWidth: 140,
+                  background: SURFACE_SUBTLE,
+                  borderRadius: 12,
+                  padding: 10,
+                  borderTop: `3px solid ${offerStatusColor(id)}`,
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold" style={{ color: MUTED }}>{t.offerStatuses[id]}</span>
+                  <span className="font-extrabold" style={{ fontSize: 20, color: offerStatusColor(id) }}>{info.count}</span>
+                </div>
+                {valueText && (
+                  <p className="text-xs font-bold mt-1" style={{ color: TEXT, margin: "4px 0 0" }}>{valueText}</p>
+                )}
+              </div>
             );
           })}
         </div>
