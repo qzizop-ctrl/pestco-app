@@ -384,6 +384,8 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
           {OFFER_STATUS_IDS.map((id) => {
             const info = stats.offersByStatus[id] || { count: 0, totals: {} };
             const valueText = fmtOffersTotals(info.totals, t);
+            const prevCount = prevStats ? (prevStats.offersByStatus[id] || { count: 0 }).count : null;
+            const delta = compare ? (prevStats ? pctChange(info.count, prevCount) : null) : undefined;
             return (
               <div
                 key={id}
@@ -402,6 +404,21 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
                 </div>
                 {valueText && (
                   <p className="text-xs font-bold mt-1" style={{ color: TEXT, margin: "4px 0 0" }}>{valueText}</p>
+                )}
+                {delta !== undefined && (
+                  <div className="flex items-center gap-1 mt-1">
+                    {delta === null ? (
+                      <span className="text-xs" style={{ color: MUTED }}>{t.dashNoComparisonData}</span>
+                    ) : (
+                      <span
+                        className="flex items-center gap-1 text-xs font-bold"
+                        style={{ color: delta >= 0 ? "#2F9E58" : "#C4443A" }}
+                      >
+                        {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                        {Math.abs(delta).toFixed(0)}%
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             );
