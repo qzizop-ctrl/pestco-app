@@ -9,7 +9,7 @@ import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, arrayUnion, arrayRemove,
+  getDoc, setDoc, writeBatch, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -387,30 +387,55 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  // Live permission listener: role changes in Firestore are reflected
+  // immediately without requiring the user to log out and back in.
   useEffect(() => {
     if (!user) {
       setOwnerUid(null);
       setMyRole("owner");
       return;
     }
-    const emailKey = (user.email || "").toLowerCase();
+
+    const emailKey = (user.email || "").trim().toLowerCase();
+
+    // If the signed-in account has no email, treat it as its own owner
+    // account rather than attempting an invalid access_by_email lookup.
+    if (!emailKey) {
+      setOwnerUid(user.uid);
+      setMyRole("owner");
+      return;
+    }
+
     const lookupRef = doc(db, "access_by_email", emailKey);
-    getDoc(lookupRef)
-      .then((snap) => {
+
+    const unsub = onSnapshot(
+      lookupRef,
+      (snap) => {
         const owners = snap.exists() ? snap.data().owners || {} : {};
         const ownerIds = Object.keys(owners);
+
         if (ownerIds.length > 0) {
-          setOwnerUid(ownerIds[0]);
-          setMyRole(owners[ownerIds[0]]);
+          // Keep the existing ownership model: use the first owner entry.
+          const firstOwnerUid = ownerIds[0];
+          const role = owners[firstOwnerUid];
+
+          setOwnerUid(firstOwnerUid);
+          setMyRole(role === "editor" || role === "viewer" ? role : "viewer");
         } else {
           setOwnerUid(user.uid);
           setMyRole("owner");
         }
-      })
-      .catch(() => {
+      },
+      () => {
+        // Do not silently grant owner permissions when the lookup fails.
+        // This keeps the UI conservative while Firestore Rules remain the
+        // actual security boundary.
         setOwnerUid(user.uid);
         setMyRole("owner");
-      });
+      }
+    );
+
+    return () => unsub();
   }, [user]);
 
   useEffect(() => {
@@ -853,43 +878,78 @@ export default function App() {
     if (!isOwnerAccount) return;
     if (!requireOnline()) return;
     if (!user) return;
+
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
-    const ref = doc(db, "access", user.uid);
-    try {
-      const snap = await getDoc(ref);
-      const existing = snap.exists() ? snap.data().members || {} : {};
-      await setDoc(ref, { members: { ...existing, [cleanEmail]: role } }, { merge: true });
+    if (!["editor", "viewer"].includes(role)) return;
 
-      const lookupRef = doc(db, "access_by_email", cleanEmail);
-      const lookupSnap = await getDoc(lookupRef);
-      const existingOwners = lookupSnap.exists() ? lookupSnap.data().owners || {} : {};
-      await setDoc(lookupRef, { owners: { ...existingOwners, [user.uid]: role } }, { merge: true });
-    } catch (e) {}
+    const accessRef = doc(db, "access", user.uid);
+    const lookupRef = doc(db, "access_by_email", cleanEmail);
+
+    try {
+      // Read both current documents first so we preserve grants belonging
+      // to other users/owners. Then commit both changes together.
+      const [accessSnap, lookupSnap] = await Promise.all([
+        getDoc(accessRef),
+        getDoc(lookupRef),
+      ]);
+
+      const members = accessSnap.exists()
+        ? { ...(accessSnap.data().members || {}) }
+        : {};
+      members[cleanEmail] = role;
+
+      const owners = lookupSnap.exists()
+        ? { ...(lookupSnap.data().owners || {}) }
+        : {};
+      owners[user.uid] = role;
+
+      const batch = writeBatch(db);
+      batch.set(accessRef, { members }, { merge: true });
+      batch.set(lookupRef, { owners }, { merge: true });
+      await batch.commit();
+    } catch (e) {
+      console.error("grantAccess failed:", e);
+    }
   };
 
   const revokeAccess = async (email) => {
     if (!isOwnerAccount) return;
     if (!requireOnline()) return;
     if (!user) return;
-    const cleanEmail = email.trim().toLowerCase();
-    const ref = doc(db, "access", user.uid);
-    try {
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const existing = { ...(snap.data().members || {}) };
-        delete existing[cleanEmail];
-        await setDoc(ref, { members: existing }, { merge: false });
-      }
 
-      const lookupRef = doc(db, "access_by_email", cleanEmail);
-      const lookupSnap = await getDoc(lookupRef);
-      if (lookupSnap.exists()) {
-        const existingOwners = { ...(lookupSnap.data().owners || {}) };
-        delete existingOwners[user.uid];
-        await setDoc(lookupRef, { owners: existingOwners }, { merge: false });
-      }
-    } catch (e) {}
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
+
+    const accessRef = doc(db, "access", user.uid);
+    const lookupRef = doc(db, "access_by_email", cleanEmail);
+
+    try {
+      const [accessSnap, lookupSnap] = await Promise.all([
+        getDoc(accessRef),
+        getDoc(lookupRef),
+      ]);
+
+      const members = accessSnap.exists()
+        ? { ...(accessSnap.data().members || {}) }
+        : {};
+      delete members[cleanEmail];
+
+      const owners = lookupSnap.exists()
+        ? { ...(lookupSnap.data().owners || {}) }
+        : {};
+      delete owners[user.uid];
+
+      const batch = writeBatch(db);
+      batch.set(accessRef, { members }, { merge: false });
+
+      // Keep the reverse-index document valid. Do not delete the whole
+      // document because it may contain grants from other owners.
+      batch.set(lookupRef, { owners }, { merge: false });
+      await batch.commit();
+    } catch (e) {
+      console.error("revokeAccess failed:", e);
+    }
   };
 
   const visitsToRows = (rows) =>
