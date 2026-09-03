@@ -9,7 +9,7 @@ import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, writeBatch, arrayUnion, arrayRemove,
+  getDoc, setDoc, runTransaction, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -324,7 +324,10 @@ export default function App() {
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("viewer");
   const [ownerUid, setOwnerUid] = useState(null);
-  const [myRole, setMyRole] = useState("owner");
+  const [myRole, setMyRole] = useState(null);
+  const [availableOwners, setAvailableOwners] = useState([]);
+  const [permissionLoading, setPermissionLoading] = useState(true);
+  const previousResolvedOwnerRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [newActivityText, setNewActivityText] = useState("");
   const [newOffer, setNewOffer] = useState({
@@ -365,8 +368,8 @@ export default function App() {
   const isRootScreen = ROOT_SCREENS.includes(screen);
 
   // Permission flags derived from myRole (set from the access_by_email lookup).
-  const canEdit = myRole === "owner" || myRole === "editor";
-  const isOwnerAccount = myRole === "owner";
+  const canEdit = !permissionLoading && (myRole === "owner" || myRole === "editor");
+  const isOwnerAccount = !permissionLoading && myRole === "owner";
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -387,22 +390,27 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Live permission listener: role changes in Firestore are reflected
-  // immediately without requiring the user to log out and back in.
+  // Live permission/workspace listener. A user may belong to more than one
+  // owner/workspace, so we keep all valid owners and remember the last choice.
   useEffect(() => {
     if (!user) {
       setOwnerUid(null);
-      setMyRole("owner");
+      setMyRole(null);
+      setAvailableOwners([]);
+      setPermissionLoading(false);
+      previousResolvedOwnerRef.current = null;
       return;
     }
 
+    setPermissionLoading(true);
     const emailKey = (user.email || "").trim().toLowerCase();
 
-    // If the signed-in account has no email, treat it as its own owner
-    // account rather than attempting an invalid access_by_email lookup.
     if (!emailKey) {
       setOwnerUid(user.uid);
       setMyRole("owner");
+      setAvailableOwners([{ uid: user.uid, role: "owner" }]);
+      setPermissionLoading(false);
+      previousResolvedOwnerRef.current = user.uid;
       return;
     }
 
@@ -411,32 +419,97 @@ export default function App() {
     const unsub = onSnapshot(
       lookupRef,
       (snap) => {
-        const owners = snap.exists() ? snap.data().owners || {} : {};
-        const ownerIds = Object.keys(owners);
+        const ownersMap = snap.exists() ? snap.data().owners || {} : {};
+        const externalOwners = Object.entries(ownersMap)
+          .filter(([, role]) => role === "editor" || role === "viewer")
+          .map(([uid, role]) => ({ uid, role }));
 
-        if (ownerIds.length > 0) {
-          // Keep the existing ownership model: use the first owner entry.
-          const firstOwnerUid = ownerIds[0];
-          const role = owners[firstOwnerUid];
+        // The signed-in account is always an owner of its own workspace on
+        // initial login, but a revoked external user must NOT be converted
+        // into a new owner workspace.
+        const previousOwner = previousResolvedOwnerRef.current;
+        const hasKnownExternalAccess = Boolean(previousOwner && previousOwner !== user.uid);
 
-          setOwnerUid(firstOwnerUid);
-          setMyRole(role === "editor" || role === "viewer" ? role : "viewer");
-        } else {
-          setOwnerUid(user.uid);
-          setMyRole("owner");
+        let nextOwners = externalOwners;
+        if (externalOwners.some((x) => x.uid === user.uid)) {
+          nextOwners = externalOwners.map((x) => x.uid === user.uid ? { ...x, role: "owner" } : x);
+        } else if (!hasKnownExternalAccess) {
+          nextOwners = [{ uid: user.uid, role: "owner" }, ...externalOwners];
         }
+
+        // Remove duplicates and keep a stable order.
+        const seen = new Set();
+        nextOwners = nextOwners.filter((x) => {
+          if (seen.has(x.uid)) return false;
+          seen.add(x.uid);
+          return true;
+        });
+
+        if (nextOwners.length === 0) {
+          setOwnerUid(null);
+          setMyRole(null);
+          setAvailableOwners([]);
+          previousResolvedOwnerRef.current = null;
+          setScreen("list");
+          setActiveId(null);
+          setPermissionLoading(false);
+          return;
+        }
+
+        setAvailableOwners(nextOwners);
+
+        let savedOwner = null;
+        try {
+          savedOwner = localStorage.getItem("pestco_selected_owner");
+        } catch (e) {}
+
+        const currentOwner = previousResolvedOwnerRef.current;
+        const currentStillValid = nextOwners.some((x) => x.uid === currentOwner);
+        const savedStillValid = nextOwners.some((x) => x.uid === savedOwner);
+        const selected = currentStillValid
+          ? ownerUid
+          : savedStillValid
+            ? savedOwner
+            : nextOwners[0].uid;
+
+        const selectedEntry = nextOwners.find((x) => x.uid === selected);
+        setOwnerUid(selected);
+        setMyRole(selectedEntry?.role || null);
+        previousResolvedOwnerRef.current = selected;
+        try {
+          localStorage.setItem("pestco_selected_owner", selected);
+        } catch (e) {}
+        setPermissionLoading(false);
       },
-      () => {
-        // Do not silently grant owner permissions when the lookup fails.
-        // This keeps the UI conservative while Firestore Rules remain the
-        // actual security boundary.
-        setOwnerUid(user.uid);
-        setMyRole("owner");
+      (error) => {
+        console.error("Permission listener failed:", error);
+        setOwnerUid(null);
+        setMyRole(null);
+        setAvailableOwners([]);
+        previousResolvedOwnerRef.current = null;
+        setPermissionLoading(false);
+        setScreen("list");
+        setActiveId(null);
       }
     );
 
     return () => unsub();
   }, [user]);
+
+  // Keep the selected workspace and role synchronized when the user changes
+  // workspace from Settings.
+  const switchOwnerWorkspace = (nextOwnerUid) => {
+    const selected = availableOwners.find((x) => x.uid === nextOwnerUid);
+    if (!selected) return;
+    setOwnerUid(selected.uid);
+    setMyRole(selected.role);
+    previousResolvedOwnerRef.current = selected.uid;
+    setActiveId(null);
+    setScreen("list");
+    try {
+      localStorage.setItem("pestco_selected_owner", selected.uid);
+    } catch (e) {}
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -525,7 +598,9 @@ export default function App() {
               });
             }
           } catch (e) {}
-          updateDoc(doc(db, "users", ownerUid, "visits", v.id), { notified: true }).catch(() => {});
+          if (canEdit) {
+            updateDoc(doc(db, "users", ownerUid, "visits", v.id), { notified: true }).catch(() => {});
+          }
         }
       });
     }, 15000);
@@ -875,48 +950,45 @@ export default function App() {
   };
 
   const grantAccess = async (email, role) => {
-    if (!isOwnerAccount) return;
+    if (!isOwnerAccount || !user) return;
     if (!requireOnline()) return;
-    if (!user) return;
 
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) return;
-    if (!["editor", "viewer"].includes(role)) return;
+    if (!cleanEmail || !["editor", "viewer"].includes(role)) return;
 
     const accessRef = doc(db, "access", user.uid);
     const lookupRef = doc(db, "access_by_email", cleanEmail);
 
     try {
-      // Read both current documents first so we preserve grants belonging
-      // to other users/owners. Then commit both changes together.
-      const [accessSnap, lookupSnap] = await Promise.all([
-        getDoc(accessRef),
-        getDoc(lookupRef),
-      ]);
+      // Transaction prevents concurrent owner changes from overwriting each
+      // other when multiple clients edit the same members/owners maps.
+      await runTransaction(db, async (tx) => {
+        const [accessSnap, lookupSnap] = await Promise.all([
+          tx.get(accessRef),
+          tx.get(lookupRef),
+        ]);
 
-      const members = accessSnap.exists()
-        ? { ...(accessSnap.data().members || {}) }
-        : {};
-      members[cleanEmail] = role;
+        const members = accessSnap.exists()
+          ? { ...(accessSnap.data().members || {}) }
+          : {};
+        const owners = lookupSnap.exists()
+          ? { ...(lookupSnap.data().owners || {}) }
+          : {};
 
-      const owners = lookupSnap.exists()
-        ? { ...(lookupSnap.data().owners || {}) }
-        : {};
-      owners[user.uid] = role;
+        members[cleanEmail] = role;
+        owners[user.uid] = role;
 
-      const batch = writeBatch(db);
-      batch.set(accessRef, { members }, { merge: true });
-      batch.set(lookupRef, { owners }, { merge: true });
-      await batch.commit();
+        tx.set(accessRef, { members }, { merge: true });
+        tx.set(lookupRef, { owners }, { merge: true });
+      });
     } catch (e) {
       console.error("grantAccess failed:", e);
     }
   };
 
   const revokeAccess = async (email) => {
-    if (!isOwnerAccount) return;
+    if (!isOwnerAccount || !user) return;
     if (!requireOnline()) return;
-    if (!user) return;
 
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
@@ -925,28 +997,27 @@ export default function App() {
     const lookupRef = doc(db, "access_by_email", cleanEmail);
 
     try {
-      const [accessSnap, lookupSnap] = await Promise.all([
-        getDoc(accessRef),
-        getDoc(lookupRef),
-      ]);
+      await runTransaction(db, async (tx) => {
+        const [accessSnap, lookupSnap] = await Promise.all([
+          tx.get(accessRef),
+          tx.get(lookupRef),
+        ]);
 
-      const members = accessSnap.exists()
-        ? { ...(accessSnap.data().members || {}) }
-        : {};
-      delete members[cleanEmail];
+        const members = accessSnap.exists()
+          ? { ...(accessSnap.data().members || {}) }
+          : {};
+        const owners = lookupSnap.exists()
+          ? { ...(lookupSnap.data().owners || {}) }
+          : {};
 
-      const owners = lookupSnap.exists()
-        ? { ...(lookupSnap.data().owners || {}) }
-        : {};
-      delete owners[user.uid];
+        delete members[cleanEmail];
+        delete owners[user.uid];
 
-      const batch = writeBatch(db);
-      batch.set(accessRef, { members }, { merge: false });
-
-      // Keep the reverse-index document valid. Do not delete the whole
-      // document because it may contain grants from other owners.
-      batch.set(lookupRef, { owners }, { merge: false });
-      await batch.commit();
+        tx.set(accessRef, { members }, { merge: false });
+        // Keep the reverse-index document instead of deleting it, because
+        // delete is intentionally disallowed by the security rules.
+        tx.set(lookupRef, { owners }, { merge: false });
+      });
     } catch (e) {
       console.error("revokeAccess failed:", e);
     }
@@ -2385,6 +2456,24 @@ export default function App() {
 
       {screen === "settings" && (
         <div className="px-4 pt-4 pb-24">
+          {availableOwners.length > 1 && (
+            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>مساحات العمل</p>
+              <p className="text-xs mb-3" style={{ color: MUTED }}>اختار الشركة/الحساب الذي تريد العمل عليه.</p>
+              <select
+                value={ownerUid || ""}
+                onChange={(e) => switchOwnerWorkspace(e.target.value)}
+                style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${LINE}`, background: SURFACE_SUBTLE, color: TEXT }}
+              >
+                {availableOwners.map((workspace, index) => (
+                  <option key={workspace.uid} value={workspace.uid}>
+                    {workspace.uid === user?.uid ? "حسابي (Owner)" : `مساحة عمل ${index + 1} — ${workspace.role === "editor" ? "Editor" : "Viewer"}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {canEdit && (
             <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
               <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.duplicatesTitle}</p>
@@ -2472,128 +2561,4 @@ export default function App() {
           )}
 
           {canEdit && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
-
-              <button
-                onClick={exportAllToExcel}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: PRIMARY_MID,
-                  color: "#fff",
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  marginBottom: 10,
-                }}
-              >
-                <Download size={16} /> {t.exportAllBtn}
-              </button>
-
-              <button
-                onClick={exportFilteredToExcel}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: SURFACE,
-                  border: `1px solid ${PRIMARY_MID}`,
-                  color: PRIMARY_MID,
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  marginBottom: 10,
-                }}
-              >
-                <Download size={16} /> {t.exportFilteredBtn(filtered.length)}
-              </button>
-
-              <button
-                onClick={triggerImportPicker}
-                disabled={importing}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: SURFACE,
-                  border: `1px solid ${PRIMARY_MID}`,
-                  color: PRIMARY_MID,
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  opacity: importing ? 0.6 : 1,
-                }}
-              >
-                <Upload size={16} /> {importing ? t.importing : t.importBtn}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleImportFile}
-                style={{ display: "none" }}
-              />
-              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importHint}</p>
-            </div>
-          )}
-
-          {isOwnerAccount && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
-              <label>{t.addMemberEmail}</label>
-              <input
-                type="email"
-                value={newMemberEmail}
-                onChange={(e) => setNewMemberEmail(e.target.value)}
-                placeholder={t.emailPlaceholder}
-              />
-              <div style={{ marginTop: 10 }}>
-                <label>{t.addMemberRole}</label>
-                <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)}>
-                  <option value="viewer">{t.roleViewer}</option>
-                  <option value="editor">{t.roleEditor}</option>
-                </select>
-              </div>
-              <button
-                onClick={async () => {
-                  if (!newMemberEmail.trim()) return;
-                  await grantAccess(newMemberEmail, newMemberRole);
-                  setNewMemberEmail("");
-                }}
-                className="btn-press font-bold"
-                style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 12, width: "100%" }}
-              >
-                {t.addMemberBtn}
-              </button>
-              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.memberInviteHint}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {pendingDelete && (
-        <div
-          className="flex items-center justify-between gap-3"
-          style={{
-            position: "fixed",
-            left: 16,
-            right: 16,
-            bottom: isRootScreen ? 78 : 16,
-            background: PRIMARY,
-            color: "#fff",
-            borderRadius: 14,
-            padding: "12px 16px",
-            boxShadow: "0 8px 20px rgba(0,0,0,.25)",
-            zIndex: 30,
-          }}
-        >
-          <span className="text-sm font-bold">{t.deletedUndoMsg(pendingDelete.companyName || "")}</span>
-          <button
-            onClick={undoDelete}
-            className="btn-press font-extrabold text-sm flex-shrink-0"
-            style={{ color: GOLD }}
-          >
-            {t.undoBtn}
-          </button>
-        </div>
-      )}
-
-      {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} />}
-    </div>
-  );
-}
+            <div style={{ 
