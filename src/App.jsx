@@ -3,13 +3,13 @@ import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, Shield, Bell, Languages, LogOut, Settings, MessageCircle,
   Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote, LayoutDashboard, Users as UsersIcon, Wallet,
-  Moon, Sun, ChevronDown, History, AlertTriangle, Star, Copy, ListFilter, RefreshCw,
+  Moon, Sun, ChevronDown, History, AlertTriangle, Star, Copy, ListFilter, Truck,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, arrayUnion, arrayRemove, getCountFromServer,
+  getDoc, setDoc, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
@@ -26,10 +26,10 @@ import {
   buildActivity, buildOffer, buildVisitEntry, getVisitEvents, ACTIVITY_COLORS,
   visitStatus, fmtReminder, fmtActivityDate, fmtCreatedAt, fmtMoney, fmtOffersTotals, sumOffersByCurrency, corePhoneDigits,
   findDuplicateGroups, isStaleCustomer,
-  emptyForm,
+  emptyForm, emptySupplierForm,
 } from "./constants";
 
-const ROOT_SCREENS = ["dashboard", "list", "settings"];
+const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
 
 function beep() {
   try {
@@ -270,6 +270,7 @@ function BottomNav({ screen, setScreen, t }) {
   const items = [
     { id: "dashboard", label: t.navDashboard, icon: LayoutDashboard },
     { id: "list", label: t.navCustomers, icon: UsersIcon },
+    { id: "suppliers", label: t.navSuppliers, icon: Truck },
     { id: "settings", label: t.navSettings, icon: Settings },
   ];
   return (
@@ -340,8 +341,14 @@ export default function App() {
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [expandedOfferId, setExpandedOfferId] = useState(null);
-  const [appUserCount, setAppUserCount] = useState(null);
-  const [appUserCountLoading, setAppUserCountLoading] = useState(false);
+
+  // ---- Suppliers (separate from customers — contacts only) ----
+  const [suppliers, setSuppliers] = useState([]);
+  const [suppliersLoaded, setSuppliersLoaded] = useState(false);
+  const [supplierQuery, setSupplierQuery] = useState("");
+  const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
+  const [activeSupplierId, setActiveSupplierId] = useState(null);
+  const [supplierErrors, setSupplierErrors] = useState({});
   const fileInputRef = useRef(null);
 
   const [lang, setLang] = useState(() => {
@@ -360,10 +367,6 @@ export default function App() {
   // Permission flags derived from myRole (set from the access_by_email lookup).
   const canEdit = myRole === "owner" || myRole === "editor";
   const isOwnerAccount = myRole === "owner";
-  // The one account allowed to see how many distinct people have opened the
-  // app — a hardcoded personal check, not a role, since it's unrelated to
-  // any single owner's customer data.
-  const isAppAnalyticsAdmin = (user?.email || "").toLowerCase() === "azizmostafamohamed@gmail.com";
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -383,23 +386,6 @@ export default function App() {
     });
     return () => unsub();
   }, []);
-
-  // Records that this account opened the app — purely a usage counter for
-  // the analytics admin, unrelated to any owner's customer data.
-  useEffect(() => {
-    if (!user) return;
-    setDoc(
-      doc(db, "app_users", user.uid),
-      { email: (user.email || "").toLowerCase(), lastSeen: serverTimestamp() },
-      { merge: true }
-    ).catch(() => {});
-  }, [user]);
-
-  useEffect(() => {
-    if (!isAppAnalyticsAdmin) return;
-    fetchAppUserCount();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAppAnalyticsAdmin]);
 
   useEffect(() => {
     if (!user) {
@@ -467,6 +453,26 @@ export default function App() {
         setLoaded(true);
       },
       () => setLoaded(true)
+    );
+    return () => unsub();
+  }, [user, ownerUid]);
+
+  // Suppliers listener — same ownership model as visits, separate collection.
+  useEffect(() => {
+    if (!user || !ownerUid) {
+      setSuppliers([]);
+      setSuppliersLoaded(false);
+      return;
+    }
+    setSuppliersLoaded(false);
+    const ref = collection(db, "users", ownerUid, "suppliers");
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        setSuppliers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setSuppliersLoaded(true);
+      },
+      () => setSuppliersLoaded(true)
     );
     return () => unsub();
   }, [user, ownerUid]);
@@ -604,6 +610,61 @@ export default function App() {
     setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
     setExpandedOfferId(null);
     setScreen("detail");
+  };
+
+  // ---- Suppliers CRUD (simple contact records — no visits/pipeline/offers) ----
+
+  const openNewSupplier = () => {
+    if (!canEdit) return;
+    setSupplierForm(emptySupplierForm);
+    setSupplierErrors({});
+    setActiveSupplierId(null);
+    setScreen("supplier-form");
+  };
+
+  const openEditSupplier = (supplier) => {
+    if (!canEdit) return;
+    setSupplierForm({ ...emptySupplierForm, ...supplier });
+    setSupplierErrors({});
+    setActiveSupplierId(supplier.id);
+    setScreen("supplier-form");
+  };
+
+  const validateSupplier = () => {
+    const e = {};
+    if (!supplierForm.name.trim()) e.name = t.supplierNameError;
+    setSupplierErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const saveSupplierForm = async () => {
+    if (!canEdit) return;
+    if (!requireOnline()) return;
+    if (!validateSupplier() || !user || !ownerUid) return;
+
+    const { id, ...rest } = supplierForm;
+    try {
+      if (activeSupplierId) {
+        await updateDoc(doc(db, "users", ownerUid, "suppliers", activeSupplierId), rest);
+      } else {
+        await addDoc(collection(db, "users", ownerUid, "suppliers"), {
+          ...rest,
+          createdAt: serverTimestamp(),
+        });
+      }
+      setScreen("suppliers");
+    } catch (e) {}
+  };
+
+  const deleteSupplier = async (id) => {
+    if (!canEdit) return;
+    if (!requireOnline()) return;
+    if (!user || !ownerUid) return;
+    if (!window.confirm(t.deleteSupplierConfirm)) return;
+    try {
+      await deleteDoc(doc(db, "users", ownerUid, "suppliers", id));
+      setScreen("suppliers");
+    } catch (e) {}
   };
 
   const validate = () => {
@@ -867,22 +928,6 @@ export default function App() {
     writeExcel(filtered, "filtered");
   };
 
-  // Fetches the total count of distinct accounts that have ever opened the
-  // app. Only callable meaningfully by the analytics admin — Firestore rules
-  // reject the read for anyone else anyway, this is just a UI convenience.
-  const fetchAppUserCount = async () => {
-    if (!isAppAnalyticsAdmin) return;
-    setAppUserCountLoading(true);
-    try {
-      const snap = await getCountFromServer(collection(db, "app_users"));
-      setAppUserCount(snap.data().count);
-    } catch (e) {
-      setAppUserCount(null);
-    } finally {
-      setAppUserCountLoading(false);
-    }
-  };
-
   const triggerImportPicker = () => {
     if (!canEdit) return;
     if (!requireOnline()) return;
@@ -1059,6 +1104,19 @@ export default function App() {
       return db - da;
     });
 
+  const filteredSuppliers = suppliers
+    .filter((s) => {
+      const q = supplierQuery.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        (s.name || "").toLowerCase().includes(q) ||
+        (s.phone || "").toLowerCase().includes(q) ||
+        (s.category || "").toLowerCase().includes(q) ||
+        (s.notes || "").toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"));
+
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
   const activityLog = active ? [...(active.activityLog || [])].sort((a, b) => (a.at < b.at ? 1 : -1)) : [];
   const activeOffers = active ? [...(active.offers || [])].sort((a, b) => {
@@ -1136,7 +1194,12 @@ export default function App() {
       >
         {!isRootScreen ? (
           <button
-            onClick={() => setScreen(screen === "form" && form.id ? "detail" : screen === "detail" ? "list" : "list")}
+            onClick={() => setScreen(
+              screen === "form" && form.id ? "detail" :
+              screen === "detail" ? "list" :
+              screen === "supplier-form" ? "suppliers" :
+              "list"
+            )}
             className="btn-press"
             style={{ color: "#fff" }}
             aria-label={t.back}
@@ -1151,6 +1214,8 @@ export default function App() {
           {screen === "list" && t.appTitle}
           {screen === "form" && (form.id ? t.titleEdit : t.titleNew)}
           {screen === "detail" && t.titleDetail}
+          {screen === "suppliers" && t.suppliersTitle}
+          {screen === "supplier-form" && (activeSupplierId ? t.titleEditSupplier : t.titleNewSupplier)}
           {screen === "settings" && t.settingsTitle}
         </span>
         {isRootScreen && (
@@ -2081,28 +2146,185 @@ export default function App() {
         </div>
       )}
 
-      {screen === "settings" && (
+      {screen === "suppliers" && (
         <div className="px-4 pt-4 pb-24">
-          {isAppAnalyticsAdmin && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <div className="flex items-center justify-between mb-1">
-                <p className="font-bold text-base" style={{ color: TEXT }}>{t.appUsersCountLabel}</p>
-                <button
-                  onClick={fetchAppUserCount}
-                  disabled={appUserCountLoading}
-                  className="btn-press"
-                  style={{ color: PRIMARY_MID, opacity: appUserCountLoading ? 0.5 : 1 }}
-                  aria-label={t.refreshBtn}
-                >
-                  <RefreshCw size={16} />
-                </button>
-              </div>
-              <p className="font-extrabold" style={{ fontSize: 28, color: PRIMARY, margin: 0 }}>
-                {appUserCountLoading ? "…" : appUserCount === null ? "—" : appUserCount}
-              </p>
+          <div className="relative mb-4">
+            <Search
+              size={16}
+              color={MUTED}
+              style={{ position: "absolute", [t.dir === "rtl" ? "right" : "left"]: 12, top: "50%", transform: "translateY(-50%)" }}
+            />
+            <input
+              value={supplierQuery}
+              onChange={(e) => setSupplierQuery(e.target.value)}
+              placeholder={t.searchSuppliersPlaceholder}
+              style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
+            />
+          </div>
+
+          {!suppliersLoaded && <p className="text-sm text-center py-8" style={{ color: MUTED }}>{t.loading}</p>}
+
+          {suppliersLoaded && filteredSuppliers.length === 0 && (
+            <div className="text-center py-16">
+              <Truck size={40} color="#C7C4B6" className="mx-auto mb-2" />
+              <p className="font-bold" style={{ color: TEXT }}>{t.noSuppliers}</p>
+              <p className="text-sm mt-1" style={{ color: MUTED }}>{t.noSuppliersHint}</p>
             </div>
           )}
 
+          {filteredSuppliers.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => openEditSupplier(s)}
+              className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+              style={{
+                display: "block",
+                background: SURFACE,
+                border: `1px solid ${LINE}`,
+                borderRadius: 16,
+                padding: 14,
+                marginBottom: 12,
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-extrabold text-base" style={{ margin: 0, color: TEXT }}>
+                  {s.name || t.noSupplierName}
+                </p>
+                {s.category && (
+                  <span
+                    className="text-xs font-bold flex-shrink-0"
+                    style={{ background: GOLD_SOFT, color: "#7A5420", borderRadius: 999, padding: "3px 9px" }}
+                  >
+                    {s.category}
+                  </span>
+                )}
+              </div>
+              {s.notes && (
+                <p className="text-sm mt-1" style={{ color: MUTED, margin: "4px 0 0" }}>{s.notes}</p>
+              )}
+              <div
+                className="flex items-center justify-between"
+                style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}
+              >
+                <span className="text-sm" style={{ color: MUTED }}>{s.phone || "—"}</span>
+                <div className="flex items-center gap-2">
+                  {s.phone && (
+                    <a
+                      href={`tel:${s.phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="btn-press flex items-center justify-center"
+                      style={{ width: 32, height: 32, borderRadius: 10, background: "#E5F1EA", color: "#2F9E58" }}
+                      aria-label={t.phoneRow}
+                    >
+                      <Phone size={14} />
+                    </a>
+                  )}
+                  {s.phone && (
+                    <a
+                      href={`https://wa.me/${s.phone.replace(/[^0-9]/g, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="btn-press flex items-center justify-center"
+                      style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
+                      aria-label={t.whatsapp}
+                    >
+                      <MessageCircle size={14} />
+                    </a>
+                  )}
+                </div>
+              </div>
+            </button>
+          ))}
+
+          {canEdit && (
+            <button
+              onClick={openNewSupplier}
+              className="btn-press flex items-center justify-center"
+              style={{
+                position: "fixed",
+                bottom: 84,
+                left: 20,
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: GOLD,
+                color: "#fff",
+                border: "none",
+                boxShadow: "0 10px 20px rgba(192,138,62,.4)",
+                zIndex: 20,
+              }}
+              aria-label={t.newSupplierBtn}
+            >
+              <Plus size={26} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {screen === "supplier-form" && canEdit && (
+        <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
+          <div>
+            <label>{t.supplierNameLabel}</label>
+            <input
+              value={supplierForm.name}
+              onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
+              placeholder={t.supplierNamePlaceholder}
+            />
+            {supplierErrors.name && <p className="text-xs mt-1" style={{ color: DANGER }}>{supplierErrors.name}</p>}
+          </div>
+
+          <div>
+            <label>{t.phoneLabel}</label>
+            <input
+              type="tel"
+              value={supplierForm.phone}
+              onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
+              placeholder={t.phonePlaceholder}
+            />
+          </div>
+
+          <div>
+            <label>{t.supplierCategoryLabel}</label>
+            <input
+              value={supplierForm.category}
+              onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
+              placeholder={t.supplierCategoryPlaceholder}
+            />
+          </div>
+
+          <div>
+            <label>{t.supplierNotesLabel}</label>
+            <textarea
+              rows={5}
+              value={supplierForm.notes}
+              onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
+              placeholder={t.notesPlaceholder}
+            />
+          </div>
+
+          <button
+            onClick={saveSupplierForm}
+            className="btn-press font-bold"
+            style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 8 }}
+          >
+            {t.save}
+          </button>
+
+          {activeSupplierId && (
+            <button
+              onClick={() => deleteSupplier(activeSupplierId)}
+              className="btn-press flex items-center justify-center gap-2 font-bold"
+              style={{ background: SURFACE, border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 14, padding: "12px 0" }}
+            >
+              <Trash2 size={16} /> {t.delete}
+            </button>
+          )}
+        </div>
+      )}
+
+      {screen === "settings" && (
+        <div className="px-4 pt-4 pb-24">
           {canEdit && (
             <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
               <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.duplicatesTitle}</p>
