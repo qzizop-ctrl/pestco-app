@@ -77,8 +77,6 @@ export const STRINGS = {
     duplicatesHint: "عملاء بنفس رقم الهاتف أو اسم شركة متشابه جدًا",
     noDuplicatesFound: "مفيش أي تكرار محتمل حاليًا",
     duplicatesBtn: "فحص التكرارات",
-    appUsersCountLabel: "عدد مستخدمي التطبيق",
-    refreshBtn: "تحديث",
     samePhoneReason: "نفس رقم الهاتف",
     similarNameReason: "اسم شركة متشابه",
 
@@ -210,7 +208,25 @@ export const STRINGS = {
     // Bottom navigation
     navDashboard: "Dashboard",
     navCustomers: "العملاء",
+    navSuppliers: "الموردين",
     navSettings: "الإعدادات",
+
+    // Suppliers
+    suppliersTitle: "الموردين",
+    titleNewSupplier: "مورد جديد",
+    titleEditSupplier: "تعديل المورد",
+    supplierNameLabel: "اسم المورد *",
+    supplierNamePlaceholder: "مثال: شركة الفا للتوريدات",
+    supplierNameError: "اكتب اسم المورد",
+    supplierCategoryLabel: "نوع البضاعة / الخدمة",
+    supplierCategoryPlaceholder: "مثال: كاميرات مراقبة، كابلات، أجهزة إنذار",
+    supplierNotesLabel: "ملاحظات",
+    newSupplierBtn: "مورد جديد",
+    noSuppliers: "لا يوجد موردين بعد",
+    noSuppliersHint: 'اضغط على "مورد جديد" لإضافة أول مورد',
+    noSupplierName: "بدون اسم مورد",
+    deleteSupplierConfirm: "هل أنت متأكد من حذف هذا المورد؟",
+    searchSuppliersPlaceholder: "ابحث بالاسم أو الرقم أو نوع البضاعة",
 
     // Offers
     offersLabel: "الأوفرات",
@@ -304,8 +320,6 @@ export const STRINGS = {
     duplicatesHint: "Customers sharing a phone number or a very similar company name",
     noDuplicatesFound: "No possible duplicates right now",
     duplicatesBtn: "Check Duplicates",
-    appUsersCountLabel: "App Users Count",
-    refreshBtn: "Refresh",
     samePhoneReason: "Same phone number",
     similarNameReason: "Similar company name",
 
@@ -437,7 +451,25 @@ export const STRINGS = {
     // Bottom navigation
     navDashboard: "Dashboard",
     navCustomers: "Customers",
+    navSuppliers: "Suppliers",
     navSettings: "Settings",
+
+    // Suppliers
+    suppliersTitle: "Suppliers",
+    titleNewSupplier: "New Supplier",
+    titleEditSupplier: "Edit Supplier",
+    supplierNameLabel: "Supplier Name *",
+    supplierNamePlaceholder: "e.g. Alpha Supplies Co.",
+    supplierNameError: "Enter the supplier name",
+    supplierCategoryLabel: "Goods / Service Type",
+    supplierCategoryPlaceholder: "e.g. CCTV cameras, cabling, alarm systems",
+    supplierNotesLabel: "Notes",
+    newSupplierBtn: "New Supplier",
+    noSuppliers: "No suppliers yet",
+    noSuppliersHint: 'Tap "New Supplier" to add your first one',
+    noSupplierName: "No supplier name",
+    deleteSupplierConfirm: "Are you sure you want to delete this supplier?",
+    searchSuppliersPlaceholder: "Search by name, phone, or goods type",
 
     // Offers
     offersLabel: "Offers",
@@ -853,4 +885,12 @@ export const emptyForm = {
   offers: [],
   visitHistory: [],
   isPinned: false,
+};
+
+export const emptySupplierForm = {
+  id: null,
+  name: "",
+  phone: "",
+  category: "",
+  notes: "",
 };
