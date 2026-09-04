@@ -470,7 +470,7 @@ export default function App() {
         const currentStillValid = nextOwners.some((x) => x.uid === currentOwner);
         const savedStillValid = nextOwners.some((x) => x.uid === savedOwner);
         const selected = currentStillValid
-          ? ownerUid
+          ? currentOwner
           : savedStillValid
             ? savedOwner
             : nextOwners[0].uid;
