@@ -2565,7 +2565,7 @@ export default function App() {
             className="btn-press font-bold"
             style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 8 }}
           >
-            {t.save}
+            {t.saveSupplier}
           </button>
 
           {activeSupplierId && (
