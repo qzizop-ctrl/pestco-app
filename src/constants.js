@@ -238,6 +238,12 @@ export const STRINGS = {
     deleteSupplierConfirm: "هل أنت متأكد من حذف هذا المورد؟",
     searchSuppliersPlaceholder: "ابحث بالاسم أو الرقم أو نوع البضاعة",
 
+    // Supplier tags (product names supplied)
+    supplierTagsLabel: "المنتجات (Tags)",
+    supplierTagsPlaceholder: "افصل بينهم بفاصلة، مثال: كاميرات، كابلات، أجهزة إنذار",
+    supplierTagsAll: "كل المنتجات",
+    noSupplierTags: "بدون منتجات مسجلة",
+
     // Offers
     offersLabel: "الأوفرات",
     offerNameLabel: "اسم الأوفر",
@@ -481,6 +487,12 @@ export const STRINGS = {
     deleteSupplierConfirm: "Are you sure you want to delete this supplier?",
     searchSuppliersPlaceholder: "Search by name, phone, or goods type",
 
+    // Supplier tags (product names supplied)
+    supplierTagsLabel: "Products (Tags)",
+    supplierTagsPlaceholder: "Comma separated, e.g. Cameras, Cabling, Alarm systems",
+    supplierTagsAll: "All Products",
+    noSupplierTags: "No products recorded",
+
     // Offers
     offersLabel: "Offers",
     offerNameLabel: "Offer Name",
@@ -614,12 +626,21 @@ export function findStageId(value) {
   return "survey";
 }
 
-// Splits a comma separated Excel cell into a clean tag array
+// Splits a comma separated Excel cell into a clean tag array.
+// Shared by both customer tags and supplier product tags.
 export function parseTagsCell(value) {
   return String(value || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+// Collects the sorted, de-duplicated set of tags across a list of suppliers
+// (their `tags` array), for populating the supplier "filter by product" list.
+export function collectSupplierTags(suppliers) {
+  const set = new Set();
+  (suppliers || []).forEach((s) => (s.tags || []).forEach((t) => t && set.add(t)));
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
 // Parses a visitDate/offerDate value that might be stored as ISO (yyyy-mm-dd,
@@ -913,5 +934,6 @@ export const emptySupplierForm = {
   name: "",
   phone: "",
   category: "",
+  tagsInput: "",
   notes: "",
 };
