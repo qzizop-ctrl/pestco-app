@@ -3,6 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ============================================================
+    // Helpers
+    // ============================================================
+
     function isSignedIn() {
       return request.auth != null;
     }
@@ -23,10 +27,12 @@ service cloud.firestore {
         && request.auth.uid == ownerUid;
     }
 
+    // The owner-maintained access document.
     function accessDoc(ownerUid) {
       return /databases/$(database)/documents/access/$(ownerUid);
     }
 
+    // Role granted by the owner to the current signed-in user.
     function roleOn(ownerUid) {
       return hasEmail()
         && exists(accessDoc(ownerUid))
@@ -44,59 +50,182 @@ service cloud.firestore {
         || roleOn(ownerUid) == 'editor';
     }
 
+
+    // ============================================================
+    // USERS / VISITS
+    // ============================================================
+
     match /users/{ownerUid}/visits/{visitId} {
+
       allow read: if canRead(ownerUid);
+
       allow create, update, delete: if canWrite(ownerUid);
     }
+
+
+    // ============================================================
+    // USERS / SUPPLIERS
+    // ============================================================
 
     match /users/{ownerUid}/suppliers/{supplierId} {
+
       allow read: if canRead(ownerUid);
+
       allow create, update, delete: if canWrite(ownerUid);
     }
 
-    // Only the owner can manage their own access list.
+
+    // ============================================================
+    // ACCESS
+    //
+    // access/{ownerUid}
+    //
+    // {
+    //   members: {
+    //     "person@email.com": "editor",
+    //     "viewer@email.com": "viewer"
+    //   }
+    // }
+    //
+    // ONLY the owner can access this document.
+    // ============================================================
+
     match /access/{ownerUid} {
+
       allow read, write: if isOwner(ownerUid);
     }
 
-    // Reverse index used by the client to discover which owner/workspace
-    // an authenticated email belongs to. The access document is still the
-    // authoritative source for actual data authorization.
+
+    // ============================================================
+    // ACCESS BY EMAIL
     //
-    // getAfter() is intentional: grant/revoke uses a transaction that updates
-    // access/{ownerUid} and access_by_email/{email} atomically. Using get()
-    // here would validate against the OLD access document during that write.
+    // access_by_email/{lowercasedEmail}
+    //
+    // {
+    //   owners: {
+    //     "<ownerUid>": "editor"
+    //   }
+    // }
+    //
+    // This is ONLY a reverse index.
+    //
+    // A user can read ONLY his/her own email document.
+    //
+    // A user can modify ONLY the entry belonging to his own UID.
+    // And that UID must actually be the owner of the corresponding
+    // access grant.
+    // ============================================================
+
     match /access_by_email/{email} {
-      allow read: if hasEmail() && myEmail() == email;
+
+      // ----------------------------------------------------------
+      // READ
+      // ----------------------------------------------------------
+
+      allow read: if hasEmail()
+        && myEmail() == email;
+
+
+      // ----------------------------------------------------------
+      // CREATE
+      //
+      // Only the owner can create:
+      //
+      // access_by_email/person@email.com
+      //
+      // owners: {
+      //   OWNER_UID: "editor"
+      // }
+      //
+      // And the access document must already confirm the grant.
+      // ----------------------------------------------------------
 
       allow create: if hasEmail()
         && request.resource.data.keys().hasOnly(['owners'])
         && request.resource.data.owners is map
-        && request.resource.data.owners.keys().hasOnly([request.auth.uid])
-        && request.resource.data.owners[request.auth.uid] in ['editor', 'viewer']
+        && request.resource.data.owners.keys().hasOnly([
+             request.auth.uid
+           ])
+        && request.resource.data.owners[request.auth.uid]
+             in ['editor', 'viewer']
         && exists(accessDoc(request.auth.uid))
-        && getAfter(accessDoc(request.auth.uid)).data.members[email]
+        && get(accessDoc(request.auth.uid))
+             .data.members[email]
              == request.resource.data.owners[request.auth.uid];
 
+
+      // ----------------------------------------------------------
+      // UPDATE
+      //
+      // The caller may modify ONLY his/her own owner entry.
+      //
+      // Example:
+      //
+      // {
+      //   owners: {
+      //     "OWNER_A": "editor",
+      //     "OWNER_B": "viewer"
+      //   }
+      // }
+      //
+      // OWNER_A cannot modify OWNER_B's entry.
+      //
+      // If the entry is being changed to editor/viewer, the
+      // corresponding access document must contain the same role.
+      //
+      // If the entry is being removed, the access document must
+      // no longer grant that email access.
+      // ----------------------------------------------------------
+
       allow update: if hasEmail()
+
+        // Do not allow arbitrary top-level fields.
         && request.resource.data.keys().hasOnly(['owners'])
-        && request.resource.data.owners.diff(resource.data.owners)
-             .affectedKeys().hasOnly([request.auth.uid])
+
+        // The only changed owner key must belong to the caller.
+        && request.resource.data.owners
+             .diff(resource.data.owners)
+             .affectedKeys()
+             .hasOnly([request.auth.uid])
+
+        // Caller must actually be the owner of this grant.
         && exists(accessDoc(request.auth.uid))
+
+        // If the caller's entry still exists, it must match the
+        // owner's access document.
         && (
-          !request.resource.data.owners.keys().hasAny([request.auth.uid])
+          !request.resource.data.owners.keys()
+             .hasAny([request.auth.uid])
+
           ||
+
           (
-            request.resource.data.owners[request.auth.uid] in ['editor', 'viewer']
-            && getAfter(accessDoc(request.auth.uid)).data.members[email]
-                 == request.resource.data.owners[request.auth.uid]
+            request.resource.data.owners[request.auth.uid]
+              in ['editor', 'viewer']
+
+            && get(accessDoc(request.auth.uid))
+                 .data.members[email]
+              == request.resource.data.owners[request.auth.uid]
           )
         );
 
-      // Keep the index document even when its owners map becomes empty.
-      // This avoids destructive deletion and preserves a predictable shape.
+
+      // ----------------------------------------------------------
+      // DELETE
+      //
+      // Never delete the entire reverse-index document.
+      //
+      // The client should remove the owner's entry from "owners"
+      // instead.
+      // ----------------------------------------------------------
+
       allow delete: if false;
     }
+
+
+    // ============================================================
+    // DENY EVERYTHING ELSE
+    // ============================================================
 
     match /{document=**} {
       allow read, write: if false;
