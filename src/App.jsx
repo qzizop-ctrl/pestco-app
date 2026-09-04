@@ -675,7 +675,14 @@ export default function App() {
     if (!canEdit || !visit || !ownerUid) return;
     if (!requireOnline()) return;
     if (!newOffer.name.trim()) return;
-    const offer = buildOffer(newOffer);
+
+    let offerToSave = newOffer;
+    if (newOffer.status === "rejected") {
+      const reason = window.prompt(t.offerRejectionReasonPrompt, "") || "";
+      offerToSave = { ...newOffer, rejectionReason: reason };
+    }
+
+    const offer = buildOffer(offerToSave);
     try {
       await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
         offers: arrayUnion(offer),
