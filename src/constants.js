@@ -37,9 +37,9 @@ export const STRINGS = {
     dir: "rtl",
     locale: "ar-EG",
     appTitle: "Pest.Co — بيانات العملاء",
-    titleEdit: "تعديل الزيارة",
+    titleEdit: "تعديل العميل",
     titleNew: "عميل جديد",
-    titleDetail: "تفاصيل الزيارة",
+    titleDetail: "تفاصيل العميل",
     titleDashboard: "Dashboard",
     back: "رجوع",
     langToggle: "English",
@@ -220,15 +220,6 @@ export const STRINGS = {
     supplierNameError: "اكتب اسم المورد",
     supplierCategoryLabel: "نوع البضاعة / الخدمة",
     supplierCategoryPlaceholder: "مثال: كاميرات مراقبة، كابلات، أجهزة إنذار",
-    supplierCategoryAll: "الكل",
-    supplierCategoryNone: "بدون تصنيف",
-    supplierCategories: {
-      equipment: "معدات وأجهزة",
-      cctv: "كاميرات وأنظمة مراقبة",
-      spareParts: "قطع غيار",
-      services: "خدمات",
-      other: "أخرى",
-    },
     saveSupplier: "حفظ مورد",
     supplierNotesLabel: "ملاحظات",
     newSupplierBtn: "مورد جديد",
@@ -296,9 +287,9 @@ export const STRINGS = {
     dir: "ltr",
     locale: "en-US",
     appTitle: "Pest.Co — Client Data",
-    titleEdit: "Edit Visit",
+    titleEdit: "Edit Customer",
     titleNew: "New Customer",
-    titleDetail: "Visit Details",
+    titleDetail: "Customer Details",
     titleDashboard: "Dashboard",
     back: "Back",
     langToggle: "عربي",
@@ -580,16 +571,6 @@ export const OFFER_STATUS_COLORS = {
   installed: "#2E6B8F",
 };
 export const offerStatusColor = (id) => OFFER_STATUS_COLORS[id] || OFFER_STATUS_COLORS.pending;
-
-export const SUPPLIER_CATEGORY_IDS = ["chemicals", "equipment", "cctv", "spareParts", "services", "other"];
-export const SUPPLIER_CATEGORY_COLORS = {
-  equipment: "#2C6E8C",
-  cctv: "#3D8C6C",
-  spareParts: "#6B4C8C",
-  services: "#B9832A",
-  other: "#6B7168",
-};
-export const supplierCategoryColor = (id) => SUPPLIER_CATEGORY_COLORS[id] || SUPPLIER_CATEGORY_COLORS.other;
 
 // Matches an imported Excel cell value (Arabic or English label, or raw id) to a sector id
 export function findSectorId(value) {

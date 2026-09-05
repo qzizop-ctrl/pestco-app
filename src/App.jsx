@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search, Plus, X, Trash2, Phone, Mail, Calendar,
   FileText, Building2, User, Pencil, ChevronRight, Shield, Bell, Languages, LogOut, Settings, MessageCircle,
-  Download, Upload, Tag, Wifi, WifiOff, Workflow, Clock, StickyNote, LayoutDashboard, Users as UsersIcon, Wallet,
-  Moon, Sun, ChevronDown, History, AlertTriangle, Star, Copy, ListFilter, Truck,
+  Download, Upload, Tag, Wifi, WifiOff, Clock, LayoutDashboard, Users as UsersIcon, Wallet,
+  Moon, Sun, History, AlertTriangle, Star, Copy, ListFilter, Truck,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";

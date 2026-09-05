@@ -4,10 +4,10 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
 } from "firebase/auth";
-import { ShieldCheck, Languages } from "lucide-react";
+import { Shield, Languages } from "lucide-react";
 import { auth } from "./firebase";
+import { PRIMARY } from "./constants";
 
-const PRIMARY = "#0F5132";
 const BG = "#F7F6F2";
 const TEXT = "#22282B";
 const MUTED = "#6B7168";
@@ -182,7 +182,7 @@ export default function AuthScreen({ lang, setLang }) {
               margin: "0 auto 12px",
             }}
           >
-            <ShieldCheck size={32} color="#fff" />
+            <Shield size={32} color="#fff" />
           </div>
           <div style={{ fontWeight: 900, fontSize: 22, color: TEXT }}>{t.appTitle}</div>
           <div style={{ color: MUTED, fontSize: 13 }}>{t.subtitle}</div>
