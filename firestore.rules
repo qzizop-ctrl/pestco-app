@@ -36,7 +36,7 @@ service cloud.firestore {
     function roleOn(ownerUid) {
       return hasEmail()
         && exists(accessDoc(ownerUid))
-        ? get(accessDoc(ownerUid)).data.members[myEmail()]
+        ? get(accessDoc(ownerUid)).data.members.get(myEmail(), null)
         : null;
     }
 
