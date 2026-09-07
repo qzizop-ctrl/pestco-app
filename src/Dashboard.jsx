@@ -252,6 +252,12 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
   const winRateDecidedCount = useMemo(() => computeDecidedCount(stats.offersByStatus), [stats]);
   const prevWinRate = useMemo(() => (prevStats ? computeWinRate(prevStats.offersByStatus) : null), [prevStats]);
 
+  const customersAddedLabel = useMemo(() => {
+    return month === "all"
+      ? t.dashCustomersAddedAllLabel(year)
+      : t.dashCustomersAddedMonthLabel(t.months[month]);
+  }, [t, year, month]);
+
   const chartData = useMemo(() => {
     if (month === "all") {
       const buckets = Array.from({ length: 12 }, (_, i) => ({ label: t.months[i].slice(0, 3), count: 0 }));
@@ -390,7 +396,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         />
         <SummaryCard
           icon={Users}
-          label={t.dashNewCustomersLabel}
+          label={customersAddedLabel}
           value={stats.customersAddedCount}
           delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
           t={t}

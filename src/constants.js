@@ -172,6 +172,12 @@ export const STRINGS = {
     deleteActivityConfirm: "هل تريد حذف هذا النشاط؟",
     totalCustomersLabel: "إجمالي العملاء",
     dashNewCustomersLabel: "عملاء جداد",
+    // Dynamic label for the "customers added" card: the wording changes
+    // with the selected filter so it never implies a "new vs previous
+    // period" comparison when it's actually a cumulative count for
+    // whatever range (a whole year, or one month) is currently selected.
+    dashCustomersAddedAllLabel: (year) => `إجمالي العملاء المُضافين (${year})`,
+    dashCustomersAddedMonthLabel: (monthName) => `عملاء تم إضافتهم في ${monthName}`,
 
     // Dark mode
     darkModeToggle: "الوضع الليلي",
@@ -431,6 +437,8 @@ export const STRINGS = {
     deleteActivityConfirm: "Delete this activity entry?",
     totalCustomersLabel: "Total Customers",
     dashNewCustomersLabel: "New Customers",
+    dashCustomersAddedAllLabel: (year) => `Total Customers Added (${year})`,
+    dashCustomersAddedMonthLabel: (monthName) => `Customers Added in ${monthName}`,
 
     // Dark mode
     darkModeToggle: "Dark Mode",
