@@ -37,11 +37,14 @@ function pctChange(current, previous) {
 // Average deal size, computed from EGP-denominated offers only — mixing
 // currencies into one "average" number would be misleading, so this is
 // intentionally scoped to the dominant currency.
-function computeAvgDealSizeEGP(offersInRange) {
-  const egpOffers = (offersInRange || []).filter((o) => (o.currency || "EGP") === "EGP");
-  if (egpOffers.length === 0) return null;
-  const total = egpOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
-  return total / egpOffers.length;
+// Average deal size for a specific currency. Kept per-currency rather than
+// blended across currencies — averaging EGP and USD amounts together would
+// be meaningless (they're different units, not just different numbers).
+function computeAvgDealSizeForCurrency(offersInRange, currency) {
+  const offers = (offersInRange || []).filter((o) => (o.currency || "EGP") === currency);
+  if (offers.length === 0) return null;
+  const total = offers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+  return total / offers.length;
 }
 
 // Win rate: purchased / (purchased + rejected). Offers still pending or
@@ -51,6 +54,27 @@ function computeWinRate(offersByStatus) {
   const rejected = (offersByStatus.rejected || {}).count || 0;
   const decided = purchased + rejected;
   return decided > 0 ? (purchased / decided) * 100 : null;
+}
+
+// Builds a per-day (specific month) or per-month ("all") bucket array of
+// offer values for one currency, used to feed a value-trend BarChart.
+function buildOffersChartData(offersInRange, currency, month, year, months) {
+  const inCurrency = (o) => (o.currency || "EGP") === currency;
+  if (month === "all") {
+    const buckets = Array.from({ length: 12 }, (_, i) => ({ label: months[i].slice(0, 3), value: 0 }));
+    offersInRange.filter(inCurrency).forEach((o) => {
+      const d = parseVisitDate(o.offerDate);
+      if (d) buckets[d.getMonth()].value += Number(o.amount) || 0;
+    });
+    return buckets;
+  }
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), value: 0 }));
+  offersInRange.filter(inCurrency).forEach((o) => {
+    const d = parseVisitDate(o.offerDate);
+    if (d) buckets[d.getDate() - 1].value += Number(o.amount) || 0;
+  });
+  return buckets;
 }
 
 function computePeriodStats(visits, year, month, sector) {
@@ -132,7 +156,7 @@ function computePeriodStats(visits, year, month, sector) {
   };
 }
 
-function SummaryCard({ icon: Icon, label, value, delta, t }) {
+function SummaryCard({ icon: Icon, label, value, delta, subValue, t }) {
   return (
     <div
       style={{
@@ -154,6 +178,9 @@ function SummaryCard({ icon: Icon, label, value, delta, t }) {
         <span className="text-xs font-bold" style={{ color: MUTED }}>{label}</span>
       </div>
       <p className="font-extrabold" style={{ margin: 0, fontSize: 22, color: TEXT }}>{value}</p>
+      {subValue && (
+        <p className="text-xs font-bold" style={{ margin: "2px 0 0", color: MUTED }}>{subValue}</p>
+      )}
       {delta !== undefined && (
         <div className="flex items-center gap-1 mt-1">
           {delta === null ? (
@@ -208,8 +235,10 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
     return computePeriodStats(visits, py, pm, sector);
   }, [visits, year, month, sector, compare]);
 
-  const avgDealSize = useMemo(() => computeAvgDealSizeEGP(stats.offersInRange), [stats]);
-  const prevAvgDealSize = useMemo(() => (prevStats ? computeAvgDealSizeEGP(prevStats.offersInRange) : null), [prevStats]);
+  const avgDealSize = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "EGP"), [stats]);
+  const prevAvgDealSize = useMemo(() => (prevStats ? computeAvgDealSizeForCurrency(prevStats.offersInRange, "EGP") : null), [prevStats]);
+  const avgDealSizeUSD = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "USD"), [stats]);
+  const hasUSDOffers = useMemo(() => stats.offersInRange.some((o) => o.currency === "USD"), [stats]);
   const winRate = useMemo(() => computeWinRate(stats.offersByStatus), [stats]);
   const prevWinRate = useMemo(() => (prevStats ? computeWinRate(prevStats.offersByStatus) : null), [prevStats]);
 
@@ -231,26 +260,17 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
     return buckets;
   }, [stats, month, year, t]);
 
-  // Offers value trend (EGP-denominated offers only, same rationale as
-  // avgDealSize — mixing currencies into one bar height would be misleading).
-  const offersChartData = useMemo(() => {
-    const inEGP = (o) => (o.currency || "EGP") === "EGP";
-    if (month === "all") {
-      const buckets = Array.from({ length: 12 }, (_, i) => ({ label: t.months[i].slice(0, 3), value: 0 }));
-      stats.offersInRange.filter(inEGP).forEach((o) => {
-        const d = parseVisitDate(o.offerDate);
-        if (d) buckets[d.getMonth()].value += Number(o.amount) || 0;
-      });
-      return buckets;
-    }
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), value: 0 }));
-    stats.offersInRange.filter(inEGP).forEach((o) => {
-      const d = parseVisitDate(o.offerDate);
-      if (d) buckets[d.getDate() - 1].value += Number(o.amount) || 0;
-    });
-    return buckets;
-  }, [stats, month, year, t]);
+  // Offers value trend, one chart per currency (mixing currencies into one
+  // bar height would be misleading). The USD chart only renders below if
+  // there's actually USD data in the selected period.
+  const offersChartData = useMemo(
+    () => buildOffersChartData(stats.offersInRange, "EGP", month, year, t.months),
+    [stats, month, year, t]
+  );
+  const offersChartDataUSD = useMemo(
+    () => buildOffersChartData(stats.offersInRange, "USD", month, year, t.months),
+    [stats, month, year, t]
+  );
 
   // Customers filtered by the selected period (their visitDate must fall in
   // range) and sector. Customers with no visitDate yet are always kept —
@@ -290,6 +310,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
   const offersListValueTotals = sumOffersByCurrency(offersList);
   const maxChartCount = Math.max(1, ...chartData.map((b) => b.count));
   const maxOffersChartValue = Math.max(1, ...offersChartData.map((b) => b.value));
+  const maxOffersChartValueUSD = Math.max(1, ...offersChartDataUSD.map((b) => b.value));
 
   return (
     <div className="px-4 pt-4 pb-24" style={{ direction: t.dir }}>
@@ -382,6 +403,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
           icon={DollarSign}
           label={t.dashAvgDealSize}
           value={avgDealSize === null ? t.dashNoOffersYet : `${fmtMoney(avgDealSize, t.locale)} ${t.dashCurrency}`}
+          subValue={avgDealSizeUSD !== null ? `${fmtMoney(avgDealSizeUSD, t.locale)} ${t.currencies.USD}` : undefined}
           delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
           t={t}
         />
@@ -437,6 +459,26 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {hasUSDOffers && (
+        <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
+          <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashOffersValueTrendUSD}</p>
+          <div style={{ width: "100%", height: 180 }}>
+            <ResponsiveContainer>
+              <BarChart data={offersChartDataUSD} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={month === "all" ? 0 : "preserveStartEnd"} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValueUSD]} />
+                <Tooltip
+                  formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.currencies.USD}`, t.dashCardOffersValue]}
+                  contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
+                />
+                <Bar dataKey="value" fill={GOLD} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Sales pipeline */}
       <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
