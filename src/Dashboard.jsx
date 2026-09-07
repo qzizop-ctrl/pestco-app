@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft } from "lucide-react";
+import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, Percent, DollarSign } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -32,6 +32,25 @@ function getPreviousPeriod(year, month) {
 function pctChange(current, previous) {
   if (!previous) return null;
   return ((current - previous) / previous) * 100;
+}
+
+// Average deal size, computed from EGP-denominated offers only — mixing
+// currencies into one "average" number would be misleading, so this is
+// intentionally scoped to the dominant currency.
+function computeAvgDealSizeEGP(offersInRange) {
+  const egpOffers = (offersInRange || []).filter((o) => (o.currency || "EGP") === "EGP");
+  if (egpOffers.length === 0) return null;
+  const total = egpOffers.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+  return total / egpOffers.length;
+}
+
+// Win rate: purchased / (purchased + rejected). Offers still pending or
+// installed aren't "decided" yet, so they're excluded from the denominator.
+function computeWinRate(offersByStatus) {
+  const purchased = (offersByStatus.purchased || {}).count || 0;
+  const rejected = (offersByStatus.rejected || {}).count || 0;
+  const decided = purchased + rejected;
+  return decided > 0 ? (purchased / decided) * 100 : null;
 }
 
 function computePeriodStats(visits, year, month, sector) {
@@ -139,6 +158,14 @@ function SummaryCard({ icon: Icon, label, value, delta, t }) {
         <div className="flex items-center gap-1 mt-1">
           {delta === null ? (
             <span className="text-xs" style={{ color: MUTED }}>{t.dashNoComparisonData}</span>
+          ) : typeof delta === "object" ? (
+            <span
+              className="flex items-center gap-1 text-xs font-bold"
+              style={{ color: delta.points >= 0 ? "#2F9E58" : "#C4443A" }}
+            >
+              {delta.points >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              {delta.points >= 0 ? "+" : ""}{delta.points.toFixed(0)} {t.dashPointsSuffix}
+            </span>
           ) : (
             <span
               className="flex items-center gap-1 text-xs font-bold"
@@ -181,6 +208,11 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
     return computePeriodStats(visits, py, pm, sector);
   }, [visits, year, month, sector, compare]);
 
+  const avgDealSize = useMemo(() => computeAvgDealSizeEGP(stats.offersInRange), [stats]);
+  const prevAvgDealSize = useMemo(() => (prevStats ? computeAvgDealSizeEGP(prevStats.offersInRange) : null), [prevStats]);
+  const winRate = useMemo(() => computeWinRate(stats.offersByStatus), [stats]);
+  const prevWinRate = useMemo(() => (prevStats ? computeWinRate(prevStats.offersByStatus) : null), [prevStats]);
+
   const chartData = useMemo(() => {
     if (month === "all") {
       const buckets = Array.from({ length: 12 }, (_, i) => ({ label: t.months[i].slice(0, 3), count: 0 }));
@@ -195,6 +227,27 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
     stats.visitEventsInRange.forEach((e) => {
       const d = parseVisitDate(e.date);
       if (d) buckets[d.getDate() - 1].count += 1;
+    });
+    return buckets;
+  }, [stats, month, year, t]);
+
+  // Offers value trend (EGP-denominated offers only, same rationale as
+  // avgDealSize — mixing currencies into one bar height would be misleading).
+  const offersChartData = useMemo(() => {
+    const inEGP = (o) => (o.currency || "EGP") === "EGP";
+    if (month === "all") {
+      const buckets = Array.from({ length: 12 }, (_, i) => ({ label: t.months[i].slice(0, 3), value: 0 }));
+      stats.offersInRange.filter(inEGP).forEach((o) => {
+        const d = parseVisitDate(o.offerDate);
+        if (d) buckets[d.getMonth()].value += Number(o.amount) || 0;
+      });
+      return buckets;
+    }
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), value: 0 }));
+    stats.offersInRange.filter(inEGP).forEach((o) => {
+      const d = parseVisitDate(o.offerDate);
+      if (d) buckets[d.getDate() - 1].value += Number(o.amount) || 0;
     });
     return buckets;
   }, [stats, month, year, t]);
@@ -236,6 +289,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
 
   const offersListValueTotals = sumOffersByCurrency(offersList);
   const maxChartCount = Math.max(1, ...chartData.map((b) => b.count));
+  const maxOffersChartValue = Math.max(1, ...offersChartData.map((b) => b.value));
 
   return (
     <div className="px-4 pt-4 pb-24" style={{ direction: t.dir }}>
@@ -324,6 +378,26 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
           delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
           t={t}
         />
+        <SummaryCard
+          icon={DollarSign}
+          label={t.dashAvgDealSize}
+          value={avgDealSize === null ? t.dashNoOffersYet : `${fmtMoney(avgDealSize, t.locale)} ${t.dashCurrency}`}
+          delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
+          t={t}
+        />
+        <SummaryCard
+          icon={Percent}
+          label={t.dashWinRate}
+          value={winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}%`}
+          delta={
+            compare
+              ? (prevStats && winRate !== null && prevWinRate !== null
+                  ? { points: winRate - prevWinRate }
+                  : null)
+              : undefined
+          }
+          t={t}
+        />
       </div>
 
       {/* Visits performance chart */}
@@ -340,6 +414,25 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
                 contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
               />
               <Bar dataKey="count" fill={GOLD} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Offers value trend */}
+      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
+        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashOffersValueTrend}</p>
+        <div style={{ width: "100%", height: 180 }}>
+          <ResponsiveContainer>
+            <BarChart data={offersChartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={month === "all" ? 0 : "preserveStartEnd"} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValue]} />
+              <Tooltip
+                formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.dashCurrency}`, t.dashCardOffersValue]}
+                contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
+              />
+              <Bar dataKey="value" fill={PRIMARY_MID} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
