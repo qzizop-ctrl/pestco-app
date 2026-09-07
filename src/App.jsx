@@ -823,6 +823,14 @@ export default function App() {
     } catch (e) {}
   };
 
+  const togglePinSupplier = async (supplier) => {
+    if (!canEdit || !ownerUid) return;
+    if (!requireOnline()) return;
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "suppliers", supplier.id), { isPinned: !supplier.isPinned });
+    } catch (e) {}
+  };
+
   const validate = () => {
     const e = {};
     if (!form.companyName.trim()) e.companyName = t.companyError;
@@ -1304,13 +1312,18 @@ export default function App() {
       if (!q) return true;
       return (
         (s.name || "").toLowerCase().includes(q) ||
+        (s.contactName || "").toLowerCase().includes(q) ||
         (s.phone || "").toLowerCase().includes(q) ||
+        (s.email || "").toLowerCase().includes(q) ||
         (s.category || "").toLowerCase().includes(q) ||
         (s.notes || "").toLowerCase().includes(q) ||
         (s.tags || []).some((tag) => tag.toLowerCase().includes(q))
       );
     })
-    .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"));
+    .sort((a, b) => {
+      if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
+      return (a.name || "").localeCompare(b.name || "", "ar");
+    });
 
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
   const activityLog = active ? [...(active.activityLog || [])].sort((a, b) => (a.at < b.at ? 1 : -1)) : [];
@@ -2407,75 +2420,117 @@ export default function App() {
           )}
 
           {filteredSuppliers.map((s) => (
-            <button
+            <div
               key={s.id}
-              onClick={() => openEditSupplier(s)}
-              className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
               style={{
-                display: "block",
+                position: "relative",
                 background: SURFACE,
                 border: `1px solid ${LINE}`,
                 borderRadius: 16,
-                padding: 14,
                 marginBottom: 12,
               }}
             >
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-extrabold text-base" style={{ margin: 0, color: TEXT }}>
-                  {s.name || t.noSupplierName}
-                </p>
-                {s.category && (
-                  <span
-                    className="text-xs font-bold flex-shrink-0"
-                    style={{ background: GOLD_SOFT, color: "#7A5420", borderRadius: 999, padding: "3px 9px" }}
-                  >
-                    {s.category}
-                  </span>
-                )}
-              </div>
-              {s.notes && (
-                <p className="text-sm mt-1" style={{ color: MUTED, margin: "4px 0 0" }}>{s.notes}</p>
+              {canEdit && (
+                <button
+                  onClick={() => togglePinSupplier(s)}
+                  className="btn-press flex items-center justify-center"
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    [t.dir === "rtl" ? "left" : "right"]: 10,
+                    width: 28,
+                    height: 28,
+                    zIndex: 2,
+                    color: s.isPinned ? GOLD : "#C7C4B6",
+                  }}
+                  aria-label={s.isPinned ? t.unpinBtn : t.pinBtn}
+                >
+                  <Star size={17} fill={s.isPinned ? GOLD : "none"} />
+                </button>
               )}
-              {(s.tags || []).length > 0 && (
-                <div className="flex items-center flex-wrap gap-1 mt-2">
-                  {s.tags.map((tag) => (
-                    <TagChip key={tag} label={tag} />
-                  ))}
-                </div>
-              )}
-              <div
-                className="flex items-center justify-between"
-                style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}
+              <button
+                onClick={() => openEditSupplier(s)}
+                className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+                style={{ display: "block", padding: 14 }}
               >
-                <span className="text-sm" style={{ color: MUTED }}>{s.phone || "—"}</span>
-                <div className="flex items-center gap-2">
-                  {s.phone && (
-                    <a
-                      href={`tel:${s.phone}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="btn-press flex items-center justify-center"
-                      style={{ width: 32, height: 32, borderRadius: 10, background: "#E5F1EA", color: "#2F9E58" }}
-                      aria-label={t.phoneRow}
+                <div className="flex items-start justify-between gap-2">
+                  <div style={{ [t.dir === "rtl" ? "paddingLeft" : "paddingRight"]: 32 }}>
+                    <p className="font-extrabold text-base" style={{ margin: 0, color: TEXT }}>
+                      {s.name || t.noSupplierName}
+                    </p>
+                    {s.contactName && (
+                      <p className="text-sm" style={{ margin: "2px 0 0", color: MUTED }}>{s.contactName}</p>
+                    )}
+                  </div>
+                  {s.category && (
+                    <span
+                      className="text-xs font-bold flex-shrink-0"
+                      style={{ background: GOLD_SOFT, color: "#7A5420", borderRadius: 999, padding: "3px 9px" }}
                     >
-                      <Phone size={14} />
-                    </a>
-                  )}
-                  {s.phone && (
-                    <a
-                      href={`https://wa.me/${s.phone.replace(/[^0-9]/g, "")}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="btn-press flex items-center justify-center"
-                      style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
-                      aria-label={t.whatsapp}
-                    >
-                      <MessageCircle size={14} />
-                    </a>
+                      {s.category}
+                    </span>
                   )}
                 </div>
-              </div>
-            </button>
+                {s.notes && (
+                  <p className="text-sm mt-1" style={{ color: MUTED, margin: "4px 0 0" }}>{s.notes}</p>
+                )}
+                {(s.tags || []).length > 0 && (
+                  <div className="flex items-center flex-wrap gap-1 mt-2">
+                    {s.tags.map((tag) => (
+                      <TagChip key={tag} label={tag} />
+                    ))}
+                  </div>
+                )}
+                <div
+                  className="flex items-center justify-between"
+                  style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}
+                >
+                  <div>
+                    <p className="text-sm" style={{ margin: 0, color: MUTED }}>{s.phone || "—"}</p>
+                    {s.email && (
+                      <p className="text-xs" style={{ margin: "2px 0 0", color: MUTED }}>{s.email}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {s.email && (
+                      <a
+                        href={`mailto:${s.email}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="btn-press flex items-center justify-center"
+                        style={{ width: 32, height: 32, borderRadius: 10, background: "#E7EEF8", color: PRIMARY_MID }}
+                        aria-label={t.emailRow}
+                      >
+                        <Mail size={14} />
+                      </a>
+                    )}
+                    {s.phone && (
+                      <a
+                        href={`tel:${s.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="btn-press flex items-center justify-center"
+                        style={{ width: 32, height: 32, borderRadius: 10, background: "#E5F1EA", color: "#2F9E58" }}
+                        aria-label={t.phoneRow}
+                      >
+                        <Phone size={14} />
+                      </a>
+                    )}
+                    {s.phone && (
+                      <a
+                        href={`https://wa.me/${s.phone.replace(/[^0-9]/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="btn-press flex items-center justify-center"
+                        style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
+                        aria-label={t.whatsapp}
+                      >
+                        <MessageCircle size={14} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </button>
+            </div>
           ))}
 
           {canEdit && (
@@ -2506,309 +2561,4 @@ export default function App() {
       {screen === "supplier-form" && canEdit && (
         <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
           <div>
-            <label>{t.supplierNameLabel}</label>
-            <input
-              value={supplierForm.name}
-              onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
-              placeholder={t.supplierNamePlaceholder}
-            />
-            {supplierErrors.name && <p className="text-xs mt-1" style={{ color: DANGER }}>{supplierErrors.name}</p>}
-          </div>
-
-          <div>
-            <label>{t.phoneLabel}</label>
-            <input
-              type="tel"
-              value={supplierForm.phone}
-              onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
-              placeholder={t.phonePlaceholder}
-            />
-          </div>
-
-          <div>
-            <label>{t.supplierCategoryLabel}</label>
-            <input
-              value={supplierForm.category}
-              onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
-              placeholder={t.supplierCategoryPlaceholder}
-            />
-          </div>
-
-          <div>
-            <label>{t.supplierTagsLabel}</label>
-            <input
-              value={supplierForm.tagsInput}
-              onChange={(e) => setSupplierForm({ ...supplierForm, tagsInput: e.target.value })}
-              placeholder={t.supplierTagsPlaceholder}
-            />
-            {parseTagsCell(supplierForm.tagsInput).length > 0 && (
-              <div className="flex items-center flex-wrap gap-1 mt-2">
-                {parseTagsCell(supplierForm.tagsInput).map((tag) => (
-                  <TagChip key={tag} label={tag} onRemove={() => removeTagFromSupplierForm(tag)} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label>{t.supplierNotesLabel}</label>
-            <textarea
-              rows={5}
-              value={supplierForm.notes}
-              onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
-              placeholder={t.notesPlaceholder}
-            />
-          </div>
-
-          <button
-            onClick={saveSupplierForm}
-            className="btn-press font-bold"
-            style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 8 }}
-          >
-            {t.saveSupplier}
-          </button>
-
-          {activeSupplierId && (
-            <button
-              onClick={() => deleteSupplier(activeSupplierId)}
-              className="btn-press flex items-center justify-center gap-2 font-bold"
-              style={{ background: SURFACE, border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 14, padding: "12px 0" }}
-            >
-              <Trash2 size={16} /> {t.delete}
-            </button>
-          )}
-        </div>
-      )}
-
-      {screen === "settings" && isOwnerAccount && (
-        <div className="px-4 pt-4 pb-24">
-          {availableOwners.length > 1 && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>مساحات العمل</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>اختار الشركة/الحساب الذي تريد العمل عليه.</p>
-              <select
-                value={ownerUid || ""}
-                onChange={(e) => switchOwnerWorkspace(e.target.value)}
-                style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${LINE}`, background: SURFACE_SUBTLE, color: TEXT }}
-              >
-                {availableOwners.map((workspace, index) => (
-                  <option key={workspace.uid} value={workspace.uid}>
-                    {workspace.uid === user?.uid ? "حسابي (Owner)" : `مساحة عمل ${index + 1} — ${workspace.role === "editor" ? "Editor" : "Viewer"}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {canEdit && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.duplicatesTitle}</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>{t.duplicatesHint}</p>
-
-              <button
-                onClick={() => setShowDuplicates((s) => !s)}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: showDuplicates ? SURFACE : PRIMARY_MID,
-                  border: showDuplicates ? `1px solid ${PRIMARY_MID}` : "none",
-                  color: showDuplicates ? PRIMARY_MID : "#fff",
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                }}
-              >
-                <Copy size={16} /> {t.duplicatesBtn}
-              </button>
-
-              {showDuplicates && (
-                <div style={{ marginTop: 12 }}>
-                  {duplicateGroups.length === 0 ? (
-                    <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noDuplicatesFound}</p>
-                  ) : (
-                    duplicateGroups.map((group, idx) => (
-                      <div
-                        key={idx}
-                        style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10, marginBottom: 8 }}
-                      >
-                        <span className="text-xs font-bold" style={{ color: GOLD }}>
-                          {group.reason === "phone" ? t.samePhoneReason : t.similarNameReason}
-                        </span>
-                        {group.customers.map((c) => (
-                          <button
-                            key={c.id}
-                            onClick={() => openDetail(c)}
-                            className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                            style={{ padding: "6px 0" }}
-                          >
-                            <span className="text-sm font-bold" style={{ color: TEXT }}>{c.companyName || t.noCompanyName}</span>
-                            <span className="text-xs" style={{ color: MUTED }}>{c.phone || "—"}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {isOwnerAccount && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>{t.membersTitle}</p>
-
-              {Object.keys(members).length === 0 && (
-                <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noMembers}</p>
-              )}
-
-              {Object.entries(members).map(([email, role]) => (
-                <div
-                  key={email}
-                  className="flex items-center justify-between"
-                  style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
-                >
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: TEXT }}>{email}</p>
-                    <p className="text-xs" style={{ color: MUTED }}>{role === "editor" ? t.roleEditor : t.roleViewer}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (window.confirm(t.removeConfirm)) revokeAccess(email);
-                    }}
-                    className="btn-press"
-                    style={{ color: DANGER }}
-                    aria-label={t.delete}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {canEdit && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
-
-              <button
-                onClick={exportAllToExcel}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: PRIMARY_MID,
-                  color: "#fff",
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  marginBottom: 10,
-                }}
-              >
-                <Download size={16} /> {t.exportAllBtn}
-              </button>
-
-              <button
-                onClick={exportFilteredToExcel}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: SURFACE,
-                  border: `1px solid ${PRIMARY_MID}`,
-                  color: PRIMARY_MID,
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  marginBottom: 10,
-                }}
-              >
-                <Download size={16} /> {t.exportFilteredBtn(filtered.length)}
-              </button>
-
-              <button
-                onClick={triggerImportPicker}
-                disabled={importing}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: SURFACE,
-                  border: `1px solid ${PRIMARY_MID}`,
-                  color: PRIMARY_MID,
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  opacity: importing ? 0.6 : 1,
-                }}
-              >
-                <Upload size={16} /> {importing ? t.importing : t.importBtn}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleImportFile}
-                style={{ display: "none" }}
-              />
-              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importHint}</p>
-            </div>
-          )}
-
-          {isOwnerAccount && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
-              <label>{t.addMemberEmail}</label>
-              <input
-                type="email"
-                value={newMemberEmail}
-                onChange={(e) => setNewMemberEmail(e.target.value)}
-                placeholder={t.emailPlaceholder}
-              />
-              <div style={{ marginTop: 10 }}>
-                <label>{t.addMemberRole}</label>
-                <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)}>
-                  <option value="viewer">{t.roleViewer}</option>
-                  <option value="editor">{t.roleEditor}</option>
-                </select>
-              </div>
-              <button
-                onClick={async () => {
-                  if (!newMemberEmail.trim()) return;
-                  await grantAccess(newMemberEmail, newMemberRole);
-                  setNewMemberEmail("");
-                }}
-                className="btn-press font-bold"
-                style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 12, width: "100%" }}
-              >
-                {t.addMemberBtn}
-              </button>
-              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.memberInviteHint}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {pendingDelete && (
-        <div
-          className="flex items-center justify-between gap-3"
-          style={{
-            position: "fixed",
-            left: 16,
-            right: 16,
-            bottom: isRootScreen ? 78 : 16,
-            background: PRIMARY,
-            color: "#fff",
-            borderRadius: 14,
-            padding: "12px 16px",
-            boxShadow: "0 8px 20px rgba(0,0,0,.25)",
-            zIndex: 30,
-          }}
-        >
-          <span className="text-sm font-bold">{t.deletedUndoMsg(pendingDelete.companyName || "")}</span>
-          <button
-            onClick={undoDelete}
-            className="btn-press font-extrabold text-sm flex-shrink-0"
-            style={{ color: GOLD }}
-          >
-            {t.undoBtn}
-          </button>
-        </div>
-      )}
-
-      {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} isOwnerAccount={isOwnerAccount} />}
-    </div>
-  );
-}
+           
