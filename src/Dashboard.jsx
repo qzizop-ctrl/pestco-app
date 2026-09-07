@@ -56,6 +56,15 @@ function computeWinRate(offersByStatus) {
   return decided > 0 ? (purchased / decided) * 100 : null;
 }
 
+// Sample size behind the win rate — shown alongside the percentage so a
+// rate computed from very few deals (e.g. 100% from 2 deals) isn't read
+// with the same confidence as one computed from a large sample.
+function computeDecidedCount(offersByStatus) {
+  const purchased = (offersByStatus.purchased || {}).count || 0;
+  const rejected = (offersByStatus.rejected || {}).count || 0;
+  return purchased + rejected;
+}
+
 // Builds a per-day (specific month) or per-month ("all") bucket array of
 // offer values for one currency, used to feed a value-trend BarChart.
 function buildOffersChartData(offersInRange, currency, month, year, months) {
@@ -240,6 +249,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
   const avgDealSizeUSD = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "USD"), [stats]);
   const hasUSDOffers = useMemo(() => stats.offersInRange.some((o) => o.currency === "USD"), [stats]);
   const winRate = useMemo(() => computeWinRate(stats.offersByStatus), [stats]);
+  const winRateDecidedCount = useMemo(() => computeDecidedCount(stats.offersByStatus), [stats]);
   const prevWinRate = useMemo(() => (prevStats ? computeWinRate(prevStats.offersByStatus) : null), [prevStats]);
 
   const chartData = useMemo(() => {
@@ -411,6 +421,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
           icon={Percent}
           label={t.dashWinRate}
           value={winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}%`}
+          subValue={winRate !== null ? t.dashWinRateSample(winRateDecidedCount) : undefined}
           delta={
             compare
               ? (prevStats && winRate !== null && prevWinRate !== null
@@ -488,14 +499,25 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
             const isLast = idx === arr.length - 1;
             const label = id === "none" ? t.stageNone : t.stages[id];
             const color = id === "none" ? MUTED : stageColor(id);
+            const count = stats.pipeline[id] || 0;
+            const isEmpty = count === 0;
             return (
               <React.Fragment key={id}>
-                <div className="flex flex-col items-center" style={{ flexShrink: 0, minWidth: 66 }}>
+                <div className="flex flex-col items-center" style={{ flexShrink: 0, minWidth: 66, opacity: isEmpty ? 0.45 : 1 }}>
                   <div
                     className="flex items-center justify-center font-extrabold"
-                    style={{ width: 44, height: 44, borderRadius: "50%", background: color, color: "#fff", fontSize: 15 }}
+                    style={{
+                      width: isEmpty ? 36 : 44,
+                      height: isEmpty ? 36 : 44,
+                      borderRadius: "50%",
+                      background: isEmpty ? SURFACE_SUBTLE : color,
+                      color: isEmpty ? MUTED : "#fff",
+                      border: isEmpty ? `1.4px solid ${LINE}` : "none",
+                      fontSize: isEmpty ? 13 : 15,
+                      transition: "width .15s, height .15s",
+                    }}
                   >
-                    {stats.pipeline[id] || 0}
+                    {count}
                   </div>
                   <span className="text-xs font-bold mt-1 text-center" style={{ color: MUTED }}>{label}</span>
                 </div>
@@ -566,7 +588,16 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         <div className="flex items-center justify-between mb-2">
           <p className="font-bold text-sm" style={{ color: TEXT }}>{t.dashOffersSection}</p>
         </div>
-        <div className="flex items-center gap-2 mb-3" style={{ overflowX: "auto" }}>
+        <div
+          className="flex items-center gap-2 mb-3"
+          style={{
+            overflowX: "auto",
+            // Fades the two edges so a partially-visible tab reads as
+            // "more to scroll" instead of looking like a cut-off layout bug.
+            WebkitMaskImage: "linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%)",
+            maskImage: "linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%)",
+          }}
+        >
           {["all", ...OFFER_STATUS_IDS].map((id) => {
             const isActive = offerStatusFilter === id;
             const label = id === "all" ? t.dashOfferFilterAll : t.offerStatuses[id];

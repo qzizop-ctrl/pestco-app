@@ -274,6 +274,7 @@ export const STRINGS = {
     dashSalesPerformance: "أداء المبيعات",
     dashAvgDealSize: "متوسط قيمة الصفقة",
     dashWinRate: "نسبة الفوز",
+    dashWinRateSample: (n) => `من ${n} صفقة محسومة`,
     dashOffersValueTrend: "اتجاه قيمة الأوفرات (جنيه)",
     dashOffersValueTrendUSD: "اتجاه قيمة الأوفرات (دولار)",
     dashPointsSuffix: "نقطة",
@@ -532,6 +533,7 @@ export const STRINGS = {
     dashSalesPerformance: "Sales Performance",
     dashAvgDealSize: "Average Deal Size",
     dashWinRate: "Win Rate",
+    dashWinRateSample: (n) => `of ${n} decided deals`,
     dashOffersValueTrend: "Offers Value Trend (EGP)",
     dashOffersValueTrendUSD: "Offers Value Trend (USD)",
     dashPointsSuffix: "pts",
@@ -784,7 +786,7 @@ export function visitStatus(visit) {
 export function fmtReminder(dt, locale) {
   try {
     const d = new Date(dt);
-    return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
   } catch (e) {
     return dt;
   }
@@ -805,7 +807,7 @@ export function fmtCreatedAt(ts, locale) {
   const d = toJsDate(ts);
   if (!d) return "";
   try {
-    return d.toLocaleString(locale, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleString(locale, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
   } catch (e) {
     return "";
   }
@@ -814,17 +816,26 @@ export function fmtCreatedAt(ts, locale) {
 export function fmtActivityDate(dt, locale) {
   try {
     const d = new Date(dt);
-    return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
   } catch (e) {
     return dt;
   }
 }
 
+// Always renders Western (Latin) digits, even under the "ar-EG" locale,
+// which would otherwise switch to Arabic-Indic numerals (٠١٢٣...) and mix
+// with the plain Western digits used elsewhere in the app (e.g. raw counts
+// rendered without toLocaleString). Keeping every on-screen number in the
+// same digit system avoids that inconsistency.
 export function fmtMoney(n, locale) {
   try {
-    return Number(n || 0).toLocaleString(locale);
+    return Number(n || 0).toLocaleString(locale, { numberingSystem: "latn" });
   } catch (e) {
-    return String(n || 0);
+    try {
+      return Number(n || 0).toLocaleString("en-US");
+    } catch (e2) {
+      return String(n || 0);
+    }
   }
 }
 
