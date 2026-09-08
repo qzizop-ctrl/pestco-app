@@ -171,6 +171,11 @@ export const STRINGS = {
     requireOnlineMsg: "لازم يكون فيه اتصال بالإنترنت عشان تقدر تحفظ",
     deleteActivityConfirm: "هل تريد حذف هذا النشاط؟",
     totalCustomersLabel: "إجمالي العملاء",
+    // Used only on the Dashboard's customer list, which is filtered by the
+    // selected year/month/sector — kept separate from totalCustomersLabel
+    // (the true, unfiltered count shown on the customer list screen) so
+    // renaming one never mislabels the other.
+    dashPeriodCustomersLabel: "عملاء الفترة المختارة",
     dashNewCustomersLabel: "عملاء جداد",
     // Dynamic label for the "customers added" card: the wording changes
     // with the selected filter so it never implies a "new vs previous
@@ -436,6 +441,7 @@ export const STRINGS = {
     requireOnlineMsg: "You need an internet connection to save changes",
     deleteActivityConfirm: "Delete this activity entry?",
     totalCustomersLabel: "Total Customers",
+    dashPeriodCustomersLabel: "Customers in Selected Period",
     dashNewCustomersLabel: "New Customers",
     dashCustomersAddedAllLabel: (year) => `Total Customers Added (${year})`,
     dashCustomersAddedMonthLabel: (monthName) => `Customers Added in ${monthName}`,

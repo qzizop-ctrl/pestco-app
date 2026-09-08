@@ -686,7 +686,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
 
       {/* Total customers (independent of the selected period) */}
       <div>
-        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.totalCustomersLabel}</p>
+        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashPeriodCustomersLabel}</p>
         {periodCustomersList.length === 0 ? (
           <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noVisits}</p>
         ) : (
