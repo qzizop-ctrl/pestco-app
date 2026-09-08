@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Search, Plus, Trash2, Phone, Mail, Calendar,
-  FileText, Building2, User, Pencil, ChevronRight, Bell, Languages, LogOut, Settings, MessageCircle,
-  Download, Upload, Tag, Wifi, WifiOff, Clock, Wallet,
-  Moon, Sun, History, AlertTriangle, Star, Copy, ListFilter,
+  ChevronRight, Languages, LogOut, Settings,
+  Wifi, WifiOff, Moon, Sun,
 } from "lucide-react";
 import { Logo, TagChip, VisitCard, BottomNav, beep } from "./components/Shared";
 import { SuppliersListScreen, SupplierFormScreen } from "./components/Suppliers";
+import SettingsScreen from "./components/Settings";
+import CustomerListScreen from "./components/CustomerList";
+import CustomerFormScreen from "./components/CustomerForm";
+import CustomerDetailScreen from "./components/CustomerDetail";
 import * as XLSX from "xlsx";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
@@ -20,13 +22,12 @@ import {
   requestNotificationPermission, scheduleCallReminder, cancelCallReminder,
 } from "./notifications";
 import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE, SURFACE_SUBTLE, STATUS_COLORS,
-  STRINGS, ROLE_IDS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS, CURRENCY_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
-  sectorColor, stageColor, offerStatusColor,
+  PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD,
+  STRINGS, SECTOR_IDS, STAGE_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
   findSectorId, findRoleId, findStageId, parseTagsCell,
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
-  buildActivity, buildOffer, buildVisitEntry, getVisitEvents, ACTIVITY_COLORS,
-  visitStatus, fmtReminder, fmtActivityDate, fmtCreatedAt, fmtMoney, fmtOffersTotals, sumOffersByCurrency, corePhoneDigits,
+  buildActivity, buildOffer, buildVisitEntry,
+  visitStatus, fmtReminder, fmtOffersTotals, sumOffersByCurrency, corePhoneDigits,
   findDuplicateGroups, isStaleCustomer, collectSupplierTags,
   emptyForm, emptySupplierForm,
 } from "./constants";
@@ -734,6 +735,19 @@ export default function App() {
     } catch (e) {}
   };
 
+  // Clears a customer's pending call reminder: cancels the local
+  // notification and logs it as a completed call in the activity feed.
+  const clearCallReminder = async (visit) => {
+    if (!requireOnline()) return;
+    if (!user || !ownerUid || !visit) return;
+    updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
+      callDateTime: "",
+      notified: false,
+    }).catch(() => {});
+    cancelCallReminder(visit.id);
+    await appendActivity(visit.id, buildActivity("call", t.activityCallDone));
+  };
+
   const submitActivity = async () => {
     if (!canEdit || !active) return;
     if (!requireOnline()) return;
@@ -1196,890 +1210,74 @@ export default function App() {
       )}
 
       {screen === "list" && (
-        <div className="px-4 pt-4 pb-24">
-          {!isOnline && (
-            <div
-              className="flex items-center gap-2"
-              style={{
-                background: "rgba(219,154,44,.12)",
-                border: "1px solid rgba(219,154,44,.4)",
-                borderRadius: 12,
-                padding: "8px 12px",
-                marginBottom: 12,
-              }}
-            >
-              <WifiOff size={14} color={STATUS_COLORS.today} />
-              <span className="text-xs font-bold" style={{ color: "#8C6110" }}>{t.offlineBanner}</span>
-            </div>
-          )}
-
-          {dueReminders.length > 0 && (
-            <div
-              style={{
-                background: "rgba(196,68,58,.1)",
-                border: "1px solid rgba(196,68,58,.35)",
-                borderRadius: 14,
-                padding: 12,
-                marginBottom: 14,
-              }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <Bell size={16} color={STATUS_COLORS.overdue} />
-                <span className="text-sm font-bold" style={{ color: STATUS_COLORS.overdue }}>
-                  {t.dueCalls(dueReminders.length)}
-                </span>
-              </div>
-              {dueReminders.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => openDetail(v)}
-                  className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                  style={{ padding: "6px 0" }}
-                >
-                  <span className="text-sm font-bold" style={{ color: TEXT }}>{v.companyName}</span>
-                  <span className="text-xs" style={{ color: MUTED }}>{fmtReminder(v.callDateTime, t.locale)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {staleOffers.length > 0 && (
-            <div
-              style={{
-                background: "rgba(219,154,44,.1)",
-                border: "1px solid rgba(219,154,44,.35)",
-                borderRadius: 14,
-                padding: 12,
-                marginBottom: 14,
-              }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle size={16} color={STATUS_COLORS.today} />
-                <span className="text-sm font-bold" style={{ color: "#8C6110" }}>
-                  {t.staleOffersBanner(staleOffers.length)}
-                </span>
-              </div>
-              {staleOffers.map((o) => (
-                <button
-                  key={o.id}
-                  onClick={() => openDetail(o.customer)}
-                  className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                  style={{ padding: "6px 0" }}
-                >
-                  <span className="text-sm font-bold" style={{ color: TEXT }}>{o.customer.companyName}</span>
-                  <span className="text-xs" style={{ color: MUTED }}>{o.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {staleCustomers.length > 0 && (
-            <div
-              style={{
-                background: "rgba(219,154,44,.1)",
-                border: "1px solid rgba(219,154,44,.35)",
-                borderRadius: 14,
-                padding: 12,
-                marginBottom: 14,
-              }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle size={16} color={STATUS_COLORS.today} />
-                <span className="text-sm font-bold" style={{ color: "#8C6110" }}>
-                  {t.staleBadge} ({staleCustomers.length})
-                </span>
-              </div>
-              {staleCustomers.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => openDetail(v)}
-                  className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                  style={{ padding: "6px 0" }}
-                >
-                  <span className="text-sm font-bold" style={{ color: TEXT }}>{v.companyName}</span>
-                  <span className="text-xs" style={{ color: MUTED }}>{t.staleHint(STALE_ACTIVITY_DAYS)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="relative mb-4">
-            <Search
-              size={16}
-              color={MUTED}
-              style={{ position: "absolute", [t.dir === "rtl" ? "right" : "left"]: 12, top: "50%", transform: "translateY(-50%)" }}
-            />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t.searchPlaceholder}
-              style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
-            />
-          </div>
-
-          <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
-            <div className="flex items-center gap-2 mb-2">
-              <Clock size={15} color={PRIMARY_MID} />
-              <span className="text-sm font-bold" style={{ color: TEXT }}>{t.todaysCustomersTitle}</span>
-            </div>
-            {todaysCustomers.length === 0 ? (
-              <p className="text-xs text-center py-2" style={{ color: MUTED }}>{t.noTodaysCustomers}</p>
-            ) : (
-              todaysCustomers.map((v) => (
-                <div
-                  key={v.id}
-                  className="flex items-center justify-between"
-                  style={{ padding: "8px 0", borderTop: `1px dashed ${LINE}` }}
-                >
-                  <button
-                    onClick={() => openDetail(v)}
-                    className={`btn-press flex-1 ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                  >
-                    <p className="text-sm font-bold" style={{ margin: 0, color: TEXT }}>{v.companyName}</p>
-                    <p className="text-xs" style={{ margin: 0, color: MUTED }}>{fmtReminder(v.callDateTime, t.locale)}</p>
-                  </button>
-                  <div className="flex items-center gap-2">
-                    {v.phone && (
-                      <a
-                        href={`tel:${v.phone}`}
-                        className="btn-press flex items-center justify-center"
-                        style={{ width: 30, height: 30, borderRadius: 9, background: "#E5F1EA", color: "#2F9E58" }}
-                        aria-label={t.phoneRow}
-                      >
-                        <Phone size={13} />
-                      </a>
-                    )}
-                    {v.phone && (
-                      <a
-                        href={`https://wa.me/${v.phone.replace(/[^0-9]/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-press flex items-center justify-center"
-                        style={{ width: 30, height: 30, borderRadius: 9, background: "#E4F5EA", color: "#25A245" }}
-                        aria-label={t.whatsapp}
-                      >
-                        <MessageCircle size={13} />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-bold" style={{ color: TEXT }}>{t.totalCustomersLabel}</span>
-              <span className="text-sm font-extrabold" style={{ color: PRIMARY }}>{totalCustomers}</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              {SECTOR_IDS.map((id) => (
-                <div key={id} className="flex items-center justify-between">
-                  <span className="text-xs font-bold" style={{ color: MUTED }}>{t.sectors[id]}</span>
-                  <span className="text-xs font-extrabold" style={{ color: sectorColor(id) }}>{sectorCounts[id]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 mb-2" style={{ overflowX: "auto" }}>
-            {["all", ...SECTOR_IDS].map((id) => {
-              const isActive = sectorFilter === id;
-              const label = id === "all" ? t.sectorAll : t.sectors[id];
-              const count = id === "all" ? totalCustomers : sectorCounts[id];
-              return (
-                <button
-                  key={id}
-                  onClick={() => setSectorFilter(id)}
-                  className="btn-press font-bold text-xs"
-                  style={{
-                    flexShrink: 0,
-                    padding: "8px 16px",
-                    borderRadius: 999,
-                    border: `1.4px solid ${isActive ? PRIMARY : LINE}`,
-                    background: isActive ? PRIMARY : SURFACE,
-                    color: isActive ? "#fff" : MUTED,
-                  }}
-                >
-                  {label} ({count})
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2 mb-2" style={{ overflowX: "auto" }}>
-            {["all", ...STAGE_IDS].map((id) => {
-              const isActive = stageFilter === id;
-              const label = id === "all" ? t.pipelineAll : t.stages[id];
-              const bg = id === "all" ? (isActive ? PRIMARY : SURFACE) : (isActive ? stageColor(id) : SURFACE);
-              return (
-                <button
-                  key={id}
-                  onClick={() => setStageFilter(id)}
-                  className="btn-press font-bold text-xs"
-                  style={{
-                    flexShrink: 0,
-                    padding: "8px 16px",
-                    borderRadius: 999,
-                    border: `1.4px solid ${isActive ? bg : LINE}`,
-                    background: bg,
-                    color: isActive ? "#fff" : MUTED,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-
-          {allTags.length > 0 && (
-            <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
-              <button
-                onClick={() => setTagFilter("all")}
-                className="btn-press font-bold text-xs flex items-center gap-1"
-                style={{
-                  flexShrink: 0,
-                  padding: "8px 16px",
-                  borderRadius: 999,
-                  border: `1.4px solid ${tagFilter === "all" ? PRIMARY : LINE}`,
-                  background: tagFilter === "all" ? PRIMARY : SURFACE,
-                  color: tagFilter === "all" ? "#fff" : MUTED,
-                }}
-              >
-                <Tag size={12} /> {t.tagsAll}
-              </button>
-              {allTags.map((tag) => {
-                const isActive = tagFilter === tag;
-                return (
-                  <button
-                    key={tag}
-                    onClick={() => setTagFilter(tag)}
-                    className="btn-press font-bold text-xs"
-                    style={{
-                      flexShrink: 0,
-                      padding: "8px 16px",
-                      borderRadius: 999,
-                      border: `1.4px solid ${isActive ? GOLD : LINE}`,
-                      background: isActive ? GOLD : SURFACE,
-                      color: isActive ? "#fff" : MUTED,
-                    }}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
-            <button
-              onClick={() => setMissingDataOnly((m) => !m)}
-              className="btn-press font-bold text-xs flex items-center gap-1"
-              style={{
-                flexShrink: 0,
-                padding: "8px 16px",
-                borderRadius: 999,
-                border: `1.4px solid ${missingDataOnly ? DANGER : LINE}`,
-                background: missingDataOnly ? DANGER : SURFACE,
-                color: missingDataOnly ? "#fff" : MUTED,
-              }}
-            >
-              <ListFilter size={12} /> {t.missingDataFilter} ({missingDataCount})
-            </button>
-          </div>
-
-          {!loaded && <p className="text-sm text-center py-8" style={{ color: MUTED }}>{t.loading}</p>}
-
-          {loaded && filtered.length === 0 && (
-            <div className="text-center py-16">
-              <Building2 size={40} color="#C7C4B6" className="mx-auto mb-2" />
-              <p className="font-bold" style={{ color: TEXT }}>{t.noVisits}</p>
-              <p className="text-sm mt-1" style={{ color: MUTED }}>{t.noVisitsHint}</p>
-            </div>
-          )}
-
-          {filtered.map((v) => (
-            <VisitCard key={v.id} visit={v} onOpen={openDetail} onTogglePin={togglePin} canEdit={canEdit} t={t} />
-          ))}
-
-          {canEdit && (
-            <button
-              onClick={openNew}
-              className="btn-press flex items-center justify-center"
-              style={{
-                position: "fixed",
-                bottom: 84,
-                left: 20,
-                width: 56,
-                height: 56,
-                borderRadius: "50%",
-                background: GOLD,
-                color: "#fff",
-                border: "none",
-                boxShadow: "0 10px 20px rgba(192,138,62,.4)",
-                zIndex: 20,
-              }}
-              aria-label={t.newVisit}
-            >
-              <Plus size={26} />
-            </button>
-          )}
-        </div>
+        <CustomerListScreen
+          t={t}
+          isOnline={isOnline}
+          dueReminders={dueReminders}
+          staleOffers={staleOffers}
+          staleCustomers={staleCustomers}
+          openDetail={openDetail}
+          query={query}
+          setQuery={setQuery}
+          todaysCustomers={todaysCustomers}
+          totalCustomers={totalCustomers}
+          sectorCounts={sectorCounts}
+          sectorFilter={sectorFilter}
+          setSectorFilter={setSectorFilter}
+          stageFilter={stageFilter}
+          setStageFilter={setStageFilter}
+          allTags={allTags}
+          tagFilter={tagFilter}
+          setTagFilter={setTagFilter}
+          missingDataOnly={missingDataOnly}
+          setMissingDataOnly={setMissingDataOnly}
+          missingDataCount={missingDataCount}
+          loaded={loaded}
+          filtered={filtered}
+          togglePin={togglePin}
+          canEdit={canEdit}
+          openNew={openNew}
+        />
       )}
 
       {screen === "form" && canEdit && (
-        <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
-          <div>
-            <label>{t.companyLabel}</label>
-            <input
-              value={form.companyName}
-              onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-              placeholder={t.companyPlaceholder}
-            />
-            {errors.companyName && <p className="text-xs mt-1" style={{ color: DANGER }}>{errors.companyName}</p>}
-          </div>
-
-          <div>
-            <label>{t.contactLabel}</label>
-            <input
-              value={form.contactName}
-              onChange={(e) => setForm({ ...form, contactName: e.target.value })}
-              placeholder={t.contactPlaceholder}
-            />
-            {errors.contactName && <p className="text-xs mt-1" style={{ color: DANGER }}>{errors.contactName}</p>}
-          </div>
-
-          <div>
-            <label>{t.pipelineLabel}</label>
-            <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
-              <option value="">{t.stageNone}</option>
-              {STAGE_IDS.map((id) => (
-                <option key={id} value={id}>{t.stages[id]}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label>{t.sectorLabel}</label>
-            <select value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
-              {SECTOR_IDS.map((id) => (
-                <option key={id} value={id}>{t.sectors[id]}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label>{t.roleLabel}</label>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              {ROLE_IDS.map((id) => (
-                <option key={id} value={id}>{t.roles[id]}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label>{t.tagsLabel}</label>
-            <input
-              value={form.tagsInput}
-              onChange={(e) => setForm({ ...form, tagsInput: e.target.value })}
-              placeholder={t.tagsPlaceholder}
-            />
-            {parseTagsCell(form.tagsInput).length > 0 && (
-              <div className="flex items-center flex-wrap gap-1 mt-2">
-                {parseTagsCell(form.tagsInput).map((tag) => (
-                  <TagChip key={tag} label={tag} onRemove={() => removeTagFromForm(tag)} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label>{t.phoneLabel}</label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              placeholder={t.phonePlaceholder}
-            />
-          </div>
-
-          <div>
-            <label>{t.emailLabel}</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder={t.emailPlaceholder}
-            />
-          </div>
-
-          <div>
-            <label>{t.visitDateLabel}</label>
-            <input
-              type="date"
-              value={form.visitDate}
-              onChange={(e) => setForm({ ...form, visitDate: e.target.value })}
-            />
-            <p className="text-xs mt-1" style={{ color: MUTED }}>
-              {t.visitDateHint}
-            </p>
-          </div>
-
-          <div>
-            <label>{t.callDateLabel}</label>
-            <input
-              type="datetime-local"
-              value={form.callDateTime}
-              onChange={(e) => setForm({ ...form, callDateTime: e.target.value, notified: false })}
-            />
-            <p className="text-xs mt-1" style={{ color: MUTED }}>
-              {t.callDateHint}
-            </p>
-          </div>
-
-          <div>
-            <label>{t.notesLabel}</label>
-            <textarea
-              rows={5}
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              placeholder={t.notesPlaceholder}
-            />
-          </div>
-
-          <button
-            onClick={saveForm}
-            className="btn-press font-bold"
-            style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 8 }}
-          >
-            {t.save}
-          </button>
-        </div>
+        <CustomerFormScreen
+          t={t}
+          form={form}
+          setForm={setForm}
+          errors={errors}
+          removeTagFromForm={removeTagFromForm}
+          saveForm={saveForm}
+        />
       )}
 
       {screen === "detail" && active && (
-        <div className="px-4 pt-4 pb-10">
-          <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-lg">{active.companyName}</span>
-                {canEdit && (
-                  <button
-                    onClick={() => togglePin(active)}
-                    className="btn-press flex items-center justify-center"
-                    style={{ color: active.isPinned ? GOLD : "#C7C4B6" }}
-                    aria-label={active.isPinned ? t.unpinBtn : t.pinBtn}
-                  >
-                    <Star size={18} fill={active.isPinned ? GOLD : "none"} />
-                  </button>
-                )}
-              </div>
-              <span
-                className="text-xs font-extrabold px-2 py-0.5 rounded-full"
-                style={{ background: STATUS_COLORS[visitStatus(active)], color: "#fff" }}
-              >
-                {{
-                  overdue: t.statusOverdue,
-                  today: t.statusToday,
-                  upcoming: t.statusUpcoming,
-                  none: t.statusNone,
-                }[visitStatus(active)]}
-              </span>
-            </div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1" style={{ color: MUTED }}>
-                <User size={14} /> <span className="text-sm">{active.contactName}</span>
-              </div>
-              <span className="text-xs font-bold" style={{ color: GOLD }}>
-                {t.sectors[active.sector] || t.sectors.private}
-              </span>
-            </div>
-
-            {(active.tags || []).length > 0 && (
-              <div className="flex items-center flex-wrap gap-1 mb-3">
-                {active.tags.map((tag) => (
-                  <TagChip key={tag} label={tag} />
-                ))}
-              </div>
-            )}
-
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ marginBottom: 8 }}>{t.pipelineLabel}</label>
-              <div className="flex items-center" style={{ gap: 4 }}>
-                {STAGE_IDS.map((id, idx) => {
-                  const isCurrent = id === active.stage;
-                  const isPast = activeStageIdx >= 0 && idx < activeStageIdx;
-                  return (
-                    <React.Fragment key={id}>
-                      <button
-                        onClick={() => changeStage(active, id)}
-                        disabled={!canEdit}
-                        className="btn-press flex-1 text-center"
-                        style={{
-                          padding: "8px 2px",
-                          borderRadius: 10,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: isCurrent || isPast ? stageColor(id) : "#F2F1EA",
-                          color: isCurrent || isPast ? "#fff" : MUTED,
-                          border: "none",
-                        }}
-                      >
-                        {t.stages[id]}
-                      </button>
-                      {idx < STAGE_IDS.length - 1 && (
-                        <div style={{ width: 6, height: 2, background: isPast ? stageColor(id) : "#F2F1EA", flexShrink: 0 }} />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3" style={{ borderTop: `0.5px solid ${LINE}`, paddingTop: 12 }}>
-              <a
-                href={active.phone ? `tel:${active.phone}` : undefined}
-                className="flex items-center justify-between"
-                style={{ color: active.phone ? TEXT : "#C7C4B6", textDecoration: "none" }}
-              >
-                <span className="flex items-center gap-2 text-sm"><Phone size={15} /> {t.phoneRow}</span>
-                <span className="text-sm font-bold">{active.phone || "—"}</span>
-              </a>
-              {active.phone && (
-                <a
-                  href={`https://wa.me/${active.phone.replace(/[^0-9]/g, "")}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-between"
-                  style={{ color: "#25A245", textDecoration: "none" }}
-                >
-                  <span className="flex items-center gap-2 text-sm"><MessageCircle size={15} /> {t.whatsapp}</span>
-                  <span className="text-sm font-bold">{active.phone}</span>
-                </a>
-              )}
-              <a
-                href={active.email ? `mailto:${active.email}` : undefined}
-                className="flex items-center justify-between"
-                style={{ color: active.email ? TEXT : "#C7C4B6", textDecoration: "none" }}
-              >
-                <span className="flex items-center gap-2 text-sm"><Mail size={15} /> {t.emailRow}</span>
-                <span className="text-sm font-bold">{active.email || "—"}</span>
-              </a>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><Calendar size={15} /> {t.visitDateRow}</span>
-                <span className="text-sm font-bold">{active.visitDate || "—"}</span>
-              </div>
-              {active.createdAt && (
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><Clock size={15} /> {t.dateAddedRow}</span>
-                  <span className="text-sm font-bold">{fmtCreatedAt(active.createdAt, t.locale)}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-sm" style={{ color: TEXT }}><History size={15} /> {t.visitCountLabel(getVisitEvents(active).length)}</span>
-                {canEdit && (
-                  <button
-                    onClick={() => logVisitToday(active)}
-                    className="btn-press text-xs font-bold"
-                    style={{ color: PRIMARY_MID }}
-                  >
-                    {t.logVisitBtn}
-                  </button>
-                )}
-              </div>
-
-              {getVisitEvents(active).length > 0 && (
-                <div style={{ marginTop: 8 }}>
-                  <div className="flex items-center flex-wrap gap-1">
-                    {[...getVisitEvents(active)]
-                      .sort((a, b) => (a.date < b.date ? 1 : -1))
-                      .map((ev) => (
-                        <span
-                          key={ev.id}
-                          className="text-xs font-bold"
-                          style={{ background: SURFACE_SUBTLE, color: MUTED, borderRadius: 999, padding: "4px 10px" }}
-                        >
-                          {ev.date}
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {active.callDateTime && (
-              <div
-                className="flex items-center justify-between mt-3"
-                style={{
-                  background: active.notified ? "#F2F1EA" : "rgba(196,68,58,.1)",
-                  borderRadius: 10,
-                  padding: 10,
-                }}
-              >
-                <span
-                  className="flex items-center gap-2 text-sm font-bold"
-                  style={{ color: active.notified ? MUTED : STATUS_COLORS.overdue }}
-                >
-                  <Bell size={15} /> {t.callDueLabel} {fmtReminder(active.callDateTime, t.locale)}
-                </span>
-                {canEdit && (
-                  <button
-                    onClick={async () => {
-                      if (!requireOnline()) return;
-                      if (!user || !ownerUid) return;
-                      updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
-                        callDateTime: "",
-                        notified: false,
-                      }).catch(() => {});
-                      cancelCallReminder(active.id);
-                      await appendActivity(active.id, buildActivity("call", t.activityCallDone));
-                    }}
-                    className="btn-press text-xs font-bold"
-                    style={{ color: PRIMARY_MID }}
-                  >
-                    {t.callDone}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {active.notes && (
-              <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 12, paddingTop: 12 }}>
-                <span className="flex items-center gap-2 text-sm font-bold mb-1"><FileText size={15} /> {t.notesRow}</span>
-                <p className="text-sm" style={{ color: MUTED, lineHeight: 1.7 }}>{active.notes}</p>
-              </div>
-            )}
-
-            {/* Offers */}
-            <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 12, paddingTop: 12 }}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="flex items-center gap-2 text-sm font-bold"><Wallet size={15} /> {t.offersLabel}</span>
-                {activeOffersValueText && (
-                  <span className="text-xs font-bold" style={{ color: PRIMARY_MID }}>
-                    {activeOffersValueText}
-                  </span>
-                )}
-              </div>
-
-              {activeOffers.length === 0 ? (
-                <p className="text-sm text-center py-2" style={{ color: MUTED }}>{t.noOffers}</p>
-              ) : (
-                <div className="flex flex-col gap-2 mb-3">
-                  {activeOffers.map((offer) => {
-                    const isExpanded = expandedOfferId === offer.id;
-                    return (
-                      <div key={offer.id} style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10 }}>
-                        <button
-                          onClick={() => setExpandedOfferId(isExpanded ? null : offer.id)}
-                          className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-bold" style={{ color: TEXT }}>
-                              {offer.name}{offer.offerNumber ? ` — ${offer.offerNumber}` : ""}
-                            </span>
-                            <span
-                              className="text-xs font-bold flex-shrink-0"
-                              style={{
-                                background: offerStatusColor(offer.status),
-                                color: "#fff",
-                                borderRadius: 999,
-                                padding: "3px 9px",
-                              }}
-                            >
-                              {t.offerStatuses[offer.status] || offer.status}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-xs" style={{ color: MUTED }}>{offer.offerDate}</span>
-                            <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID }}>
-                              {fmtMoney(offer.amount, t.locale)} {t.currencies[offer.currency] || t.currencies.EGP}
-                            </span>
-                          </div>
-                          {offer.status === "rejected" && offer.rejectionReason && (
-                            <p className="text-xs mt-1" style={{ color: DANGER, margin: "4px 0 0" }}>
-                              {t.rejectionReasonRow} {offer.rejectionReason}
-                            </p>
-                          )}
-                        </button>
-
-                        {isExpanded && canEdit && (
-                          <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}>
-                            <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>{t.changeStatusLabel}</p>
-                            <div className="flex items-center flex-wrap gap-1">
-                              {OFFER_STATUS_IDS.map((sid) => {
-                                const isActive = offer.status === sid;
-                                return (
-                                  <button
-                                    key={sid}
-                                    onClick={() => updateOfferStatus(active, offer, sid)}
-                                    className="btn-press text-xs font-bold"
-                                    style={{
-                                      padding: "4px 10px",
-                                      borderRadius: 999,
-                                      border: `1.2px solid ${isActive ? offerStatusColor(sid) : LINE}`,
-                                      background: isActive ? offerStatusColor(sid) : SURFACE,
-                                      color: isActive ? "#fff" : MUTED,
-                                    }}
-                                  >
-                                    {t.offerStatuses[sid]}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <button
-                              onClick={() => deleteOffer(active, offer)}
-                              className="btn-press flex items-center gap-1 text-xs font-bold"
-                              style={{ color: DANGER, marginTop: 10 }}
-                            >
-                              <Trash2 size={13} /> {t.delete}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {canEdit && (
-                <div className="flex flex-col gap-2" style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10 }}>
-                  <input
-                    value={newOffer.name}
-                    onChange={(e) => setNewOffer({ ...newOffer, name: e.target.value })}
-                    placeholder={t.offerNamePlaceholder}
-                  />
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={newOffer.offerNumber}
-                      onChange={(e) => setNewOffer({ ...newOffer, offerNumber: e.target.value })}
-                      placeholder={t.offerNumberLabel}
-                    />
-                    <input
-                      type="number"
-                      value={newOffer.amount}
-                      onChange={(e) => setNewOffer({ ...newOffer, amount: e.target.value })}
-                      placeholder={t.offerAmountLabel}
-                    />
-                    <select
-                      value={newOffer.currency}
-                      onChange={(e) => setNewOffer({ ...newOffer, currency: e.target.value })}
-                    >
-                      {CURRENCY_IDS.map((cid) => (
-                        <option key={cid} value={cid}>{t.currencies[cid]}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      value={newOffer.offerDate}
-                      onChange={(e) => setNewOffer({ ...newOffer, offerDate: e.target.value })}
-                    />
-                    <select
-                      value={newOffer.status}
-                      onChange={(e) => setNewOffer({ ...newOffer, status: e.target.value })}
-                    >
-                      {OFFER_STATUS_IDS.map((sid) => (
-                        <option key={sid} value={sid}>{t.offerStatuses[sid]}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    onClick={() => addOffer(active)}
-                    className="btn-press font-bold text-sm"
-                    style={{ background: PRIMARY_MID, color: "#fff", borderRadius: 10, padding: "10px 0" }}
-                  >
-                    {t.addOfferBtn}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 12, paddingTop: 12 }}>
-              <span className="flex items-center gap-2 text-sm font-bold mb-2"><Clock size={15} /> {t.activityLabel}</span>
-
-              {canEdit && (
-                <div className="flex items-center gap-2 mb-3">
-                  <input
-                    value={newActivityText}
-                    onChange={(e) => setNewActivityText(e.target.value)}
-                    placeholder={t.addActivityPlaceholder}
-                  />
-                  <button
-                    onClick={submitActivity}
-                    className="btn-press font-bold text-xs flex-shrink-0"
-                    style={{ background: PRIMARY_MID, color: "#fff", borderRadius: 10, padding: "10px 14px" }}
-                  >
-                    {t.addActivityBtn}
-                  </button>
-                </div>
-              )}
-
-              {activityLog.length === 0 ? (
-                <p className="text-sm text-center py-3" style={{ color: MUTED }}>{t.noActivity}</p>
-              ) : (
-                <div
-                  className="flex flex-col gap-3"
-                  style={{ [t.dir === "rtl" ? "borderRight" : "borderLeft"]: `2px solid ${LINE}`, [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 14 }}
-                >
-                  {activityLog.map((entry) => {
-                    const color = ACTIVITY_COLORS[entry.type] || MUTED;
-                    return (
-                      <div key={entry.id} style={{ position: "relative" }}>
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: 3,
-                            [t.dir === "rtl" ? "right" : "left"]: -19,
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            background: color,
-                          }}
-                        />
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm" style={{ margin: 0, color: TEXT }}>{entry.text}</p>
-                            <span className="text-xs" style={{ color: MUTED }}>{fmtActivityDate(entry.at, t.locale)}</span>
-                          </div>
-                          {canEdit && (
-                            <button
-                              onClick={() => deleteActivity(entry)}
-                              className="btn-press flex-shrink-0"
-                              style={{ color: DANGER }}
-                              aria-label={t.delete}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {canEdit && (
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => openEdit(active)}
-                className="btn-press flex-1 flex items-center justify-center gap-2 font-bold"
-                style={{ background: SURFACE, border: `1px solid ${PRIMARY_MID}`, color: PRIMARY_MID, borderRadius: 14, padding: "12px 0" }}
-              >
-                <Pencil size={16} /> {t.edit}
-              </button>
-              <button
-                onClick={() => deleteVisit(active.id)}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{ background: SURFACE, border: `1px solid ${DANGER}`, color: DANGER, borderRadius: 14, padding: "12px 20px" }}
-              >
-                <Trash2 size={16} /> {t.delete}
-              </button>
-            </div>
-          )}
-        </div>
+        <CustomerDetailScreen
+          t={t}
+          active={active}
+          canEdit={canEdit}
+          togglePin={togglePin}
+          activeStageIdx={activeStageIdx}
+          changeStage={changeStage}
+          clearCallReminder={clearCallReminder}
+          logVisitToday={logVisitToday}
+          activeOffersValueText={activeOffersValueText}
+          activeOffers={activeOffers}
+          expandedOfferId={expandedOfferId}
+          setExpandedOfferId={setExpandedOfferId}
+          updateOfferStatus={updateOfferStatus}
+          deleteOffer={deleteOffer}
+          newOffer={newOffer}
+          setNewOffer={setNewOffer}
+          addOffer={addOffer}
+          activityLog={activityLog}
+          newActivityText={newActivityText}
+          setNewActivityText={setNewActivityText}
+          submitActivity={submitActivity}
+          deleteActivity={deleteActivity}
+          openEdit={openEdit}
+          deleteVisit={deleteVisit}
+        />
       )}
 
       {screen === "suppliers" && (
@@ -2113,204 +1311,33 @@ export default function App() {
       )}
 
       {screen === "settings" && isOwnerAccount && (
-        <div className="px-4 pt-4 pb-24">
-          {availableOwners.length > 1 && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>مساحات العمل</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>اختار الشركة/الحساب الذي تريد العمل عليه.</p>
-              <select
-                value={ownerUid || ""}
-                onChange={(e) => switchOwnerWorkspace(e.target.value)}
-                style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${LINE}`, background: SURFACE_SUBTLE, color: TEXT }}
-              >
-                {availableOwners.map((workspace, index) => (
-                  <option key={workspace.uid} value={workspace.uid}>
-                    {workspace.uid === user?.uid ? "حسابي (Owner)" : `مساحة عمل ${index + 1} — ${workspace.role === "editor" ? "Editor" : "Viewer"}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {canEdit && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.duplicatesTitle}</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>{t.duplicatesHint}</p>
-
-              <button
-                onClick={() => setShowDuplicates((s) => !s)}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: showDuplicates ? SURFACE : PRIMARY_MID,
-                  border: showDuplicates ? `1px solid ${PRIMARY_MID}` : "none",
-                  color: showDuplicates ? PRIMARY_MID : "#fff",
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                }}
-              >
-                <Copy size={16} /> {t.duplicatesBtn}
-              </button>
-
-              {showDuplicates && (
-                <div style={{ marginTop: 12 }}>
-                  {duplicateGroups.length === 0 ? (
-                    <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noDuplicatesFound}</p>
-                  ) : (
-                    duplicateGroups.map((group, idx) => (
-                      <div
-                        key={idx}
-                        style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10, marginBottom: 8 }}
-                      >
-                        <span className="text-xs font-bold" style={{ color: GOLD }}>
-                          {group.reason === "phone" ? t.samePhoneReason : t.similarNameReason}
-                        </span>
-                        {group.customers.map((c) => (
-                          <button
-                            key={c.id}
-                            onClick={() => openDetail(c)}
-                            className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                            style={{ padding: "6px 0" }}
-                          >
-                            <span className="text-sm font-bold" style={{ color: TEXT }}>{c.companyName || t.noCompanyName}</span>
-                            <span className="text-xs" style={{ color: MUTED }}>{c.phone || "—"}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {isOwnerAccount && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.manageAccess}</p>
-              <p className="text-xs mb-3" style={{ color: MUTED }}>{t.membersTitle}</p>
-
-              {Object.keys(members).length === 0 && (
-                <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noMembers}</p>
-              )}
-
-              {Object.entries(members).map(([email, role]) => (
-                <div
-                  key={email}
-                  className="flex items-center justify-between"
-                  style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
-                >
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: TEXT }}>{email}</p>
-                    <p className="text-xs" style={{ color: MUTED }}>{role === "editor" ? t.roleEditor : t.roleViewer}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (window.confirm(t.removeConfirm)) revokeAccess(email);
-                    }}
-                    className="btn-press"
-                    style={{ color: DANGER }}
-                    aria-label={t.delete}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {canEdit && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
-              <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
-
-              <button
-                onClick={exportAllToExcel}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: PRIMARY_MID,
-                  color: "#fff",
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  marginBottom: 10,
-                }}
-              >
-                <Download size={16} /> {t.exportAllBtn}
-              </button>
-
-              <button
-                onClick={exportFilteredToExcel}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: SURFACE,
-                  border: `1px solid ${PRIMARY_MID}`,
-                  color: PRIMARY_MID,
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  marginBottom: 10,
-                }}
-              >
-                <Download size={16} /> {t.exportFilteredBtn(filtered.length)}
-              </button>
-
-              <button
-                onClick={triggerImportPicker}
-                disabled={importing}
-                className="btn-press flex items-center justify-center gap-2 font-bold"
-                style={{
-                  background: SURFACE,
-                  border: `1px solid ${PRIMARY_MID}`,
-                  color: PRIMARY_MID,
-                  borderRadius: 14,
-                  padding: "12px 0",
-                  width: "100%",
-                  opacity: importing ? 0.6 : 1,
-                }}
-              >
-                <Upload size={16} /> {importing ? t.importing : t.importBtn}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleImportFile}
-                style={{ display: "none" }}
-              />
-              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importHint}</p>
-            </div>
-          )}
-
-          {isOwnerAccount && (
-            <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
-              <label>{t.addMemberEmail}</label>
-              <input
-                type="email"
-                value={newMemberEmail}
-                onChange={(e) => setNewMemberEmail(e.target.value)}
-                placeholder={t.emailPlaceholder}
-              />
-              <div style={{ marginTop: 10 }}>
-                <label>{t.addMemberRole}</label>
-                <select value={newMemberRole} onChange={(e) => setNewMemberRole(e.target.value)}>
-                  <option value="viewer">{t.roleViewer}</option>
-                  <option value="editor">{t.roleEditor}</option>
-                </select>
-              </div>
-              <button
-                onClick={async () => {
-                  if (!newMemberEmail.trim()) return;
-                  await grantAccess(newMemberEmail, newMemberRole);
-                  setNewMemberEmail("");
-                }}
-                className="btn-press font-bold"
-                style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 12, width: "100%" }}
-              >
-                {t.addMemberBtn}
-              </button>
-              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.memberInviteHint}</p>
-            </div>
-          )}
-        </div>
+        <SettingsScreen
+          t={t}
+          availableOwners={availableOwners}
+          ownerUid={ownerUid}
+          user={user}
+          switchOwnerWorkspace={switchOwnerWorkspace}
+          canEdit={canEdit}
+          showDuplicates={showDuplicates}
+          setShowDuplicates={setShowDuplicates}
+          duplicateGroups={duplicateGroups}
+          openDetail={openDetail}
+          isOwnerAccount={isOwnerAccount}
+          members={members}
+          revokeAccess={revokeAccess}
+          exportAllToExcel={exportAllToExcel}
+          exportFilteredToExcel={exportFilteredToExcel}
+          filteredCount={filtered.length}
+          triggerImportPicker={triggerImportPicker}
+          importing={importing}
+          fileInputRef={fileInputRef}
+          handleImportFile={handleImportFile}
+          newMemberEmail={newMemberEmail}
+          setNewMemberEmail={setNewMemberEmail}
+          newMemberRole={newMemberRole}
+          setNewMemberRole={setNewMemberRole}
+          grantAccess={grantAccess}
+        />
       )}
 
       {pendingDelete && (
