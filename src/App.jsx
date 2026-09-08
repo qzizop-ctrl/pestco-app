@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   ChevronRight, Languages, LogOut, Settings,
   Wifi, WifiOff, Moon, Sun,
@@ -9,7 +9,10 @@ import SettingsScreen from "./components/Settings";
 import CustomerListScreen from "./components/CustomerList";
 import CustomerFormScreen from "./components/CustomerForm";
 import CustomerDetailScreen from "./components/CustomerDetail";
-import * as XLSX from "xlsx";
+// xlsx is loaded lazily (dynamic import) only when Export/Import is
+// actually used from Settings, instead of top-level here — it's a sizeable
+// library that most sessions never touch, so this keeps it out of the
+// app's initial bundle/load.
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
@@ -846,7 +849,8 @@ export default function App() {
       [t.notesLabel]: v.notes || "",
     }));
 
-  const writeExcel = (rows, filenameSuffix) => {
+  const writeExcel = async (rows, filenameSuffix) => {
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(visitsToRows(rows));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Visits");
@@ -855,16 +859,16 @@ export default function App() {
 
   // The live listener already holds every customer (no pagination limit),
   // so exporting "all" is just exporting the current in-memory list.
-  const exportAllToExcel = () => {
+  const exportAllToExcel = async () => {
     if (!canEdit) return;
-    writeExcel(visibleVisits, "all");
+    await writeExcel(visibleVisits, "all");
   };
 
   // Exports only what's currently loaded and passing the active filters on
   // the customers list screen.
-  const exportFilteredToExcel = () => {
+  const exportFilteredToExcel = async () => {
     if (!canEdit) return;
-    writeExcel(filtered, "filtered");
+    await writeExcel(filtered, "filtered");
   };
 
   const triggerImportPicker = () => {
@@ -882,6 +886,7 @@ export default function App() {
 
     setImporting(true);
     try {
+      const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
       const wb = XLSX.read(data, { type: "array", cellDates: true });
       const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -1000,48 +1005,66 @@ export default function App() {
   // name), reviewed from the Settings screen.
   const duplicateGroups = findDuplicateGroups(visibleVisits);
 
-  const allTags = Array.from(new Set(visibleVisits.flatMap((v) => v.tags || []))).sort();
+  // Memoized: these were recomputed from scratch on every render (including
+  // unrelated ones, e.g. typing in a form field elsewhere), scanning the
+  // full customer list each time. useMemo skips that work unless the
+  // underlying data or the relevant filter actually changed.
+  const allTags = useMemo(
+    () => Array.from(new Set(visibleVisits.flatMap((v) => v.tags || []))).sort(),
+    [visibleVisits]
+  );
 
-  const sectorCounts = SECTOR_IDS.reduce((acc, id) => {
-    acc[id] = visibleVisits.filter((v) => v.sector === id).length;
-    return acc;
-  }, {});
+  const sectorCounts = useMemo(
+    () =>
+      SECTOR_IDS.reduce((acc, id) => {
+        acc[id] = visibleVisits.filter((v) => v.sector === id).length;
+        return acc;
+      }, {}),
+    [visibleVisits]
+  );
   const totalCustomers = visibleVisits.length;
-  const missingDataCount = visibleVisits.filter((v) => !v.phone || !v.email).length;
+  const missingDataCount = useMemo(
+    () => visibleVisits.filter((v) => !v.phone || !v.email).length,
+    [visibleVisits]
+  );
 
-  const filtered = visibleVisits
-    .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
-    .filter((v) => stageFilter === "all" || v.stage === stageFilter)
-    .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
-    .filter((v) => !missingDataOnly || !v.phone || !v.email)
-    .filter((v) => {
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        v.companyName.toLowerCase().includes(q) ||
-        v.contactName.toLowerCase().includes(q) ||
-        (v.phone || "").toLowerCase().includes(q) ||
-        (v.notes || "").toLowerCase().includes(q) ||
-        (v.visitDate || "").toLowerCase().includes(q) ||
-        (v.callDateTime || "").toLowerCase().includes(q) ||
-        (v.tags || []).some((tag) => tag.toLowerCase().includes(q)) ||
-        (v.activityLog || []).some((entry) => (entry.text || "").toLowerCase().includes(q)) ||
-        fmtReminder(v.callDateTime, t.locale).toLowerCase().includes(q)
-      );
-    })
-    .sort((a, b) => {
-      if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
-      const sa = visitStatus(a);
-      const sb = visitStatus(b);
-      const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
-      if (order[sa] !== order[sb]) return order[sa] - order[sb];
-      const da = parseVisitDate(a.visitDate);
-      const db = parseVisitDate(b.visitDate);
-      if (!da && !db) return 0;
-      if (!da) return 1;
-      if (!db) return -1;
-      return db - da;
-    });
+  const filtered = useMemo(
+    () =>
+      visibleVisits
+        .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
+        .filter((v) => stageFilter === "all" || v.stage === stageFilter)
+        .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
+        .filter((v) => !missingDataOnly || !v.phone || !v.email)
+        .filter((v) => {
+          const q = query.trim().toLowerCase();
+          if (!q) return true;
+          return (
+            v.companyName.toLowerCase().includes(q) ||
+            v.contactName.toLowerCase().includes(q) ||
+            (v.phone || "").toLowerCase().includes(q) ||
+            (v.notes || "").toLowerCase().includes(q) ||
+            (v.visitDate || "").toLowerCase().includes(q) ||
+            (v.callDateTime || "").toLowerCase().includes(q) ||
+            (v.tags || []).some((tag) => tag.toLowerCase().includes(q)) ||
+            (v.activityLog || []).some((entry) => (entry.text || "").toLowerCase().includes(q)) ||
+            fmtReminder(v.callDateTime, t.locale).toLowerCase().includes(q)
+          );
+        })
+        .sort((a, b) => {
+          if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
+          const sa = visitStatus(a);
+          const sb = visitStatus(b);
+          const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
+          if (order[sa] !== order[sb]) return order[sa] - order[sb];
+          const da = parseVisitDate(a.visitDate);
+          const db = parseVisitDate(b.visitDate);
+          if (!da && !db) return 0;
+          if (!da) return 1;
+          if (!db) return -1;
+          return db - da;
+        }),
+    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, query, t.locale]
+  );
 
   // All unique product tags across every supplier, used to populate the
   // "filter by product" chip row on the Suppliers list.
