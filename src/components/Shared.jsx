@@ -68,7 +68,7 @@ export function TagChip({ label, onRemove }) {
   );
 }
 
-export function VisitCard({ visit, onOpen, onTogglePin, canEdit, t }) {
+export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onTogglePin, canEdit, t }) {
   const status = visitStatus(visit);
   const statusColor = STATUS_COLORS[status];
   const statusLabel = {
@@ -249,7 +249,7 @@ export function VisitCard({ visit, onOpen, onTogglePin, canEdit, t }) {
       </button>
     </div>
   );
-}
+});
 
 export function BottomNav({ screen, setScreen, t, isOwnerAccount }) {
   const items = [
