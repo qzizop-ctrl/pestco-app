@@ -8,6 +8,8 @@ on:
       - 'electron.js'
       - 'package.json'
       - '.github/workflows/build-windows.yml'
+    tags:
+      - 'v*.*.*'
   workflow_dispatch: {}
 
 jobs:
@@ -38,8 +40,22 @@ jobs:
       - name: Build web app
         run: npm run build
 
+      # A plain push to main just builds the installer for the run's
+      # Artifacts tab (same as before) — no GitHub Release, no update feed.
       - name: Build Windows installer (.exe)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: npx electron-builder --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A tag push (e.g. "v1.0.1") builds AND publishes a GitHub Release
+      # with the installer + the update-feed file electron-updater reads —
+      # this is what makes already-installed copies of the app offer to
+      # self-update. Push a tag with:
+      #   git tag v1.0.1 && git push origin v1.0.1
+      - name: Build & publish Windows installer (.exe) with auto-update feed
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
