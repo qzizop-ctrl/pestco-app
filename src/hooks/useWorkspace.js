@@ -15,7 +15,7 @@ const REVIEWER_EMAIL = "qzizop@gmail.com";
 // hook keeps track of every workspace they can see and which one is
 // currently selected — and takes `screen`/`setScreen`/`setActiveId` so it
 // can bounce the UI back to a safe screen when access changes underneath it.
-export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) {
+export function useWorkspace({ requireOnline, reportError, screen, setScreen, setActiveId }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
 
@@ -284,6 +284,14 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
       });
     } catch (e) {
       console.error("grantAccess failed:", e);
+      // This used to fail silently — the owner would see the Settings UI
+      // close/complete normally with no indication anything went wrong,
+      // while the invited person still couldn't get in (their lookup finds
+      // no grant, since none was actually written). Most common real cause:
+      // the Firestore security rules deployed on the live project don't
+      // match firestore.rules in the repo (the file has to be deployed
+      // separately — having it in the project doesn't apply it).
+      reportError && reportError(e);
     }
   };
 
@@ -321,6 +329,7 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
       });
     } catch (e) {
       console.error("revokeAccess failed:", e);
+      reportError && reportError(e);
     }
   };
 
@@ -336,6 +345,7 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
       await deleteDoc(doc(db, "signups", uid));
     } catch (e) {
       console.error("Failed to clear reviewed signup:", e);
+      reportError && reportError(e);
     }
   };
 
@@ -345,6 +355,7 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
       await deleteDoc(doc(db, "signups", uid));
     } catch (e) {
       console.error("Failed to dismiss signup:", e);
+      reportError && reportError(e);
     }
   };
 
