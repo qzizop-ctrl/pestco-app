@@ -9,6 +9,7 @@ import SettingsScreen from "./components/Settings";
 import CustomerListScreen from "./components/CustomerList";
 import CustomerFormScreen from "./components/CustomerForm";
 import CustomerDetailScreen from "./components/CustomerDetail";
+import RejectionReasonModal from "./components/RejectionReasonModal";
 // xlsx is loaded lazily (dynamic import) only when Export/Import is
 // actually used from Settings, instead of top-level here — it's a sizeable
 // library that most sessions never touch, so this keeps it out of the
@@ -87,6 +88,9 @@ export default function App() {
     }
   });
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
+  // Drives the in-app rejection-reason modal (replaces window.prompt).
+  // { initialReason, onConfirm(reason) } while the modal is open, else null.
+  const [rejectionPrompt, setRejectionPrompt] = useState(null);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [expandedOfferId, setExpandedOfferId] = useState(null);
 
@@ -444,37 +448,50 @@ export default function App() {
     if (!requireOnline()) return;
     if (!newOffer.name.trim()) return;
 
-    let offerToSave = newOffer;
-    if (newOffer.status === "rejected") {
-      const reason = window.prompt(t.offerRejectionReasonPrompt, "") || "";
-      offerToSave = { ...newOffer, rejectionReason: reason };
-    }
+    const saveOffer = async (offerToSave) => {
+      const offer = buildOffer(offerToSave);
+      try {
+        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
+          offers: arrayUnion(offer),
+        });
+        await appendActivity(visit.id, buildActivity("offer", t.activityOfferAdded(offer.name)));
+        setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
+      } catch (e) {}
+    };
 
-    const offer = buildOffer(offerToSave);
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
-        offers: arrayUnion(offer),
+    if (newOffer.status === "rejected") {
+      setRejectionPrompt({
+        initialReason: "",
+        onConfirm: (reason) => saveOffer({ ...newOffer, rejectionReason: reason }),
       });
-      await appendActivity(visit.id, buildActivity("offer", t.activityOfferAdded(offer.name)));
-      setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
-    } catch (e) {}
+      return;
+    }
+    await saveOffer(newOffer);
   };
 
   const updateOfferStatus = async (visit, offer, newStatus) => {
     if (!canEdit || !visit || !ownerUid) return;
     if (!requireOnline()) return;
     if (newStatus === offer.status) return;
-    let rejectionReason = offer.rejectionReason || "";
+
+    const saveStatus = async (rejectionReason) => {
+      const updated = (visit.offers || []).map((o) =>
+        o.id === offer.id ? { ...o, status: newStatus, rejectionReason: newStatus === "rejected" ? rejectionReason : "" } : o
+      );
+      try {
+        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { offers: updated });
+        await appendActivity(visit.id, buildActivity("offer", t.activityOfferStatus(offer.name, t.offerStatuses[newStatus] || newStatus)));
+      } catch (e) {}
+    };
+
     if (newStatus === "rejected") {
-      rejectionReason = window.prompt(t.offerRejectionReasonPrompt, rejectionReason) || "";
+      setRejectionPrompt({
+        initialReason: offer.rejectionReason || "",
+        onConfirm: (reason) => saveStatus(reason),
+      });
+      return;
     }
-    const updated = (visit.offers || []).map((o) =>
-      o.id === offer.id ? { ...o, status: newStatus, rejectionReason: newStatus === "rejected" ? rejectionReason : "" } : o
-    );
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { offers: updated });
-      await appendActivity(visit.id, buildActivity("offer", t.activityOfferStatus(offer.name, t.offerStatuses[newStatus] || newStatus)));
-    } catch (e) {}
+    await saveStatus("");
   };
 
   const deleteOffer = async (visit, offer) => {
@@ -1438,6 +1455,19 @@ export default function App() {
       )}
 
       {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} isOwnerAccount={isOwnerAccount} />}
+
+      {rejectionPrompt && (
+        <RejectionReasonModal
+          t={t}
+          initialReason={rejectionPrompt.initialReason}
+          onConfirm={(reason) => {
+            const { onConfirm } = rejectionPrompt;
+            setRejectionPrompt(null);
+            onConfirm(reason);
+          }}
+          onCancel={() => setRejectionPrompt(null)}
+        />
+      )}
     </div>
   );
 }

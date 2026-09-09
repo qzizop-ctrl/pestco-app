@@ -213,6 +213,10 @@ export const STRINGS = {
     // Offer rejection reason
     offerRejectionReasonLabel: "سبب الرفض (اختياري)",
     offerRejectionReasonPrompt: "اكتب سبب رفض الأوفر (اختياري):",
+    rejectionModalTitle: "سبب الرفض",
+    rejectionModalPlaceholder: "اكتب السبب هنا (اختياري)...",
+    rejectionModalConfirm: "تأكيد الرفض",
+    rejectionModalCancel: "إلغاء",
     rejectionReasonRow: "سبب الرفض:",
     changeStatusLabel: "تغيير حالة الأوفر:",
 
@@ -475,6 +479,10 @@ export const STRINGS = {
     // Offer rejection reason
     offerRejectionReasonLabel: "Rejection reason (optional)",
     offerRejectionReasonPrompt: "Enter the reason the offer was rejected (optional):",
+    rejectionModalTitle: "Rejection Reason",
+    rejectionModalPlaceholder: "Type the reason here (optional)...",
+    rejectionModalConfirm: "Confirm Rejection",
+    rejectionModalCancel: "Cancel",
     rejectionReasonRow: "Rejection reason:",
     changeStatusLabel: "Change offer status:",
 
