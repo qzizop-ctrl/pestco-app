@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot, runTransaction } from "firebase/firestore";
+import { doc, collection, onSnapshot, runTransaction, deleteDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
+
+// Matches firestore.rules' isReviewer() — the single hardcoded account
+// that can see and act on the "pending accounts" list in Settings. This
+// mirrors the app's current single-company/single-team usage, not a
+// general multi-tenant admin model.
+const REVIEWER_EMAIL = "qzizop@gmail.com";
 
 // Handles authentication plus multi-workspace permission resolution
 // (owner / editor / viewer) and the access-granting/revoking transactions.
@@ -14,6 +20,7 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
   const [user, setUser] = useState(null);
 
   const [members, setMembers] = useState({});
+  const [pendingSignups, setPendingSignups] = useState([]);
   const [ownerUid, setOwnerUid] = useState(null);
   const [myRole, setMyRole] = useState(null);
   const [availableOwners, setAvailableOwners] = useState([]);
@@ -182,6 +189,31 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
     return () => unsub();
   }, [user]);
 
+  const isReviewer = Boolean(user && (user.email || "").trim().toLowerCase() === REVIEWER_EMAIL);
+
+  // Only the reviewer account subscribes to this collection at all — for
+  // everyone else it would just be a permission-denied listener doing
+  // nothing. New signups already granted a role (present in `members`)
+  // are filtered out client-side as a second safety net, in case a
+  // reviewSignup() call granted access but its signups/{uid} delete
+  // didn't finish (e.g. a dropped connection right after).
+  useEffect(() => {
+    if (!isReviewer) {
+      setPendingSignups([]);
+      return;
+    }
+    const unsub = onSnapshot(collection(db, "signups"), (snap) => {
+      const rows = snap.docs
+        .map((d) => ({ uid: d.id, ...d.data() }))
+        .filter((row) => row.email && !(row.email in members));
+      rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setPendingSignups(rows);
+    }, (error) => {
+      console.error("Failed to load pending signups:", error.code, error.message);
+    });
+    return () => unsub();
+  }, [isReviewer, members]);
+
   // Settings is owner-only. If a non-owner ever ends up on this screen
   // (e.g. they switch to a workspace where they're a viewer/editor while
   // already on Settings), bounce them back to the customer list.
@@ -266,6 +298,30 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
     }
   };
 
+  // Grants the chosen role in one step, then removes the entry from the
+  // pending-review list. Grant and cleanup are two separate requests (the
+  // signups doc lives outside the access/access_by_email transaction), so
+  // if the delete fails after a successful grant, the client-side filter
+  // above still hides it next time `members` updates.
+  const reviewSignup = async (uid, email, role) => {
+    if (!isReviewer) return;
+    await grantAccess(email, role);
+    try {
+      await deleteDoc(doc(db, "signups", uid));
+    } catch (e) {
+      console.error("Failed to clear reviewed signup:", e);
+    }
+  };
+
+  const dismissSignup = async (uid) => {
+    if (!isReviewer) return;
+    try {
+      await deleteDoc(doc(db, "signups", uid));
+    } catch (e) {
+      console.error("Failed to dismiss signup:", e);
+    }
+  };
+
   return {
     authChecked,
     user,
@@ -275,6 +331,10 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
     canEdit,
     isOwnerAccount,
     members,
+    pendingSignups,
+    isReviewer,
+    reviewSignup,
+    dismissSignup,
     switchOwnerWorkspace,
     grantAccess,
     revokeAccess,
