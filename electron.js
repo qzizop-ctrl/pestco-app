@@ -1,7 +1,38 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
+
+// Checks GitHub Releases (configured via the "publish" block in
+// package.json) for a newer version than the one currently installed.
+// Only meaningful for a packaged build published with
+// "electron-builder --publish always" — see the "Build Windows installer"
+// step in .github/workflows/build-windows.yml, which only runs on a tag
+// push (e.g. v1.0.1). Silently does nothing during local/dev runs.
+function initAutoUpdate() {
+  if (!app.isPackaged) return;
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog
+      .showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'تحديث جاهز',
+        message: 'في نسخة أحدث من التطبيق اتحمّلت. تحب تعيد التشغيل دلوقتي عشان تتظبط؟',
+        buttons: ['إعادة التشغيل الآن', 'لاحقًا'],
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) autoUpdater.quitAndInstall();
+      });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('Auto-update check failed:', err);
+  });
+
+  autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -28,7 +59,10 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  initAutoUpdate();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

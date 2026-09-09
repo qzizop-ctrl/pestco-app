@@ -12,12 +12,14 @@
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "electron:start": "electron .",
-    "electron:build": "npm run build && electron-builder --win"
+    "electron:build": "npm run build && electron-builder --win",
+    "electron:release": "npm run build && electron-builder --win --publish always"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",
     "@capacitor/core": "^6.1.2",
     "@capacitor/local-notifications": "^6.1.0",
+    "electron-updater": "^6.3.0",
     "firebase": "^10.12.2",
     "lucide-react": "^0.383.0",
     "react": "^18.3.1",
@@ -54,6 +56,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github"
     }
   }
 }
