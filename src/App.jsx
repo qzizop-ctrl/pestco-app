@@ -173,7 +173,9 @@ export default function App() {
       await updateDoc(doc(db, "users", ownerUid, "visits", visitId), {
         activityLog: arrayUnion(activity),
       });
-    } catch (e) {}
+    } catch (e) {
+      reportSaveError(e);
+    }
   };
 
   // Removes one entry from a visit's activity timeline (with confirmation).
@@ -185,7 +187,9 @@ export default function App() {
         await updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
           activityLog: arrayRemove(entry),
         });
-      } catch (e) {}
+      } catch (e) {
+        reportSaveError(e);
+      }
     }, { danger: true });
   };
 
@@ -206,7 +210,9 @@ export default function App() {
         });
         await appendActivity(visit.id, buildActivity("offer", t.activityOfferAdded(offer.name)));
         setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
-      } catch (e) {}
+      } catch (e) {
+        reportSaveError(e);
+      }
     };
 
     if (newOffer.status === "rejected") {
@@ -231,7 +237,9 @@ export default function App() {
       try {
         await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { offers: updated });
         await appendActivity(visit.id, buildActivity("offer", t.activityOfferStatus(offer.name, t.offerStatuses[newStatus] || newStatus)));
-      } catch (e) {}
+      } catch (e) {
+        reportSaveError(e);
+      }
     };
 
     if (newStatus === "rejected") {
@@ -252,7 +260,9 @@ export default function App() {
         await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
           offers: arrayRemove(offer),
         });
-      } catch (e) {}
+      } catch (e) {
+        reportSaveError(e);
+      }
     }, { danger: true });
   };
 
@@ -359,7 +369,9 @@ export default function App() {
       try {
         await deleteDoc(doc(db, "users", ownerUid, "suppliers", id));
         setScreen("suppliers");
-      } catch (e) {}
+      } catch (e) {
+        reportSaveError(e);
+      }
     }, { danger: true });
   };
 
@@ -368,7 +380,9 @@ export default function App() {
     if (!requireOnline()) return;
     try {
       await updateDoc(doc(db, "users", ownerUid, "suppliers", supplier.id), { isPinned: !supplier.isPinned });
-    } catch (e) {}
+    } catch (e) {
+      reportSaveError(e);
+    }
   };
 
   const validate = () => {
@@ -502,7 +516,9 @@ export default function App() {
       try {
         await deleteDoc(doc(db, "users", ownerUid, "visits", id));
         await cancelCallReminder(id);
-      } catch (e) {}
+      } catch (e) {
+        reportSaveError(e);
+      }
       setPendingDelete((cur) => (cur && cur.id === id ? null : cur));
     }, 5000);
 
@@ -532,7 +548,9 @@ export default function App() {
           target ? t.activityStageChanged(t.stages[target] || target) : t.activityStageCleared
         )
       );
-    } catch (e) {}
+    } catch (e) {
+      reportSaveError(e);
+    }
   };
 
   // Pins/unpins a customer so it stays sorted to the top of the list.
@@ -543,7 +561,9 @@ export default function App() {
     if (!requireOnline()) return;
     try {
       await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { isPinned: !visit.isPinned });
-    } catch (e) {}
+    } catch (e) {
+      reportSaveError(e);
+    }
   }, [canEdit, ownerUid, requireOnline]);
 
   // Records that an actual visit happened today: pushes a new visit-history
@@ -559,7 +579,9 @@ export default function App() {
         visitHistory: arrayUnion(buildVisitEntry(today)),
       });
       await appendActivity(visit.id, buildActivity("visit", t.activityVisitLogged(today)));
-    } catch (e) {}
+    } catch (e) {
+      reportSaveError(e);
+    }
   };
 
   // Clears a customer's pending call reminder: cancels the local
@@ -714,50 +736,78 @@ export default function App() {
     }
   };
 
-  const now = Date.now();
-  const visibleVisits = pendingDelete ? visits.filter((v) => v.id !== pendingDelete.id) : visits;
+  // Bucketed to the minute rather than Date.now() directly: using the raw
+  // timestamp as a useMemo dependency below would defeat the memoization
+  // (it's a different value on every render), but none of these lists need
+  // finer-than-a-minute precision to be correct.
+  const nowBucket = Math.floor(Date.now() / 60000);
+  const now = nowBucket * 60000;
+  const visibleVisits = useMemo(
+    () => (pendingDelete ? visits.filter((v) => v.id !== pendingDelete.id) : visits),
+    [visits, pendingDelete]
+  );
 
-  const dueReminders = visibleVisits
-    .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
-    .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime));
+  // These were recomputed from scratch on every render (including unrelated
+  // ones, e.g. typing in a form field elsewhere), each scanning the full
+  // customer list. With 500+ customers that showed up as visible jank while
+  // typing in the search box. useMemo skips the work unless the customer
+  // list actually changed or a minute has passed.
+  const dueReminders = useMemo(
+    () =>
+      visibleVisits
+        .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
+        .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime)),
+    [visibleVisits, nowBucket]
+  );
 
-  const staleOffers = visibleVisits.flatMap((v) =>
-    (v.offers || [])
-      .filter((o) => {
-        if (o.status !== "pending") return false;
-        const d = parseVisitDate(o.offerDate);
-        if (!d) return false;
-        return (now - d.getTime()) / (1000 * 3600 * 24) > STALE_OFFER_DAYS;
-      })
-      .map((o) => ({ ...o, customer: v }))
+  const staleOffers = useMemo(
+    () =>
+      visibleVisits.flatMap((v) =>
+        (v.offers || [])
+          .filter((o) => {
+            if (o.status !== "pending") return false;
+            const d = parseVisitDate(o.offerDate);
+            if (!d) return false;
+            return (now - d.getTime()) / (1000 * 3600 * 24) > STALE_OFFER_DAYS;
+          })
+          .map((o) => ({ ...o, customer: v }))
+      ),
+    [visibleVisits, nowBucket]
   );
 
   // Customers with a follow-up call scheduled for today specifically (same
   // calendar day), used for the always-visible "Today's Customers" panel.
-  const todaysCustomers = visibleVisits
-    .filter((v) => {
-      if (!v.callDateTime) return false;
-      const d = new Date(v.callDateTime);
-      const n = new Date();
-      return (
-        d.getFullYear() === n.getFullYear() &&
-        d.getMonth() === n.getMonth() &&
-        d.getDate() === n.getDate()
-      );
-    })
-    .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime));
+  const todaysCustomers = useMemo(
+    () =>
+      visibleVisits
+        .filter((v) => {
+          if (!v.callDateTime) return false;
+          const d = new Date(v.callDateTime);
+          const n = new Date(now);
+          return (
+            d.getFullYear() === n.getFullYear() &&
+            d.getMonth() === n.getMonth() &&
+            d.getDate() === n.getDate()
+          );
+        })
+        .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime)),
+    [visibleVisits, nowBucket]
+  );
 
   // Customers with no recent activity (visit, call, or note) — a nudge to
   // follow up before they go completely cold.
-  const staleCustomers = visibleVisits.filter((v) => isStaleCustomer(v, STALE_ACTIVITY_DAYS));
+  const staleCustomers = useMemo(
+    () => visibleVisits.filter((v) => isStaleCustomer(v, STALE_ACTIVITY_DAYS)),
+    [visibleVisits, nowBucket]
+  );
 
   // Possible duplicate customers (same phone or a near-identical company
   // name), reviewed from the Settings screen.
-  const duplicateGroups = findDuplicateGroups(visibleVisits);
+  const duplicateGroups = useMemo(() => findDuplicateGroups(visibleVisits), [visibleVisits]);
 
   // Memoized: these were recomputed from scratch on every render (including
   // unrelated ones, e.g. typing in a form field elsewhere), scanning the
-  // full customer list each time. useMemo skips that work unless the
+  // full customer list. useMemo skips that work unless the
   // underlying data or the relevant filter actually changed.
   const allTags = useMemo(
     () => Array.from(new Set(visibleVisits.flatMap((v) => v.tags || []))).sort(),
