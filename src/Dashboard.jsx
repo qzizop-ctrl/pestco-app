@@ -107,14 +107,18 @@ function computePeriodStats(visits, year, month, sector) {
   // Customers added during the period (by createdAt), regardless of whether
   // a visit has been logged for them yet — this is what "Total Customers"
   // on the dashboard reflects, not just customers who were visited.
-  // Records with no createdAt (legacy/imported data missing the field) are
-  // only counted in the "all months" view, so the total matches the full
-  // customer list — but they're excluded from any specific month, since we
-  // can't confirm they actually belong to that month.
+  // Records with no createdAt (legacy/imported data missing the field, or
+  // a brand-new record whose serverTimestamp hasn't finished syncing yet)
+  // fall back to visit status: if the customer has never been visited
+  // either, there's no reliable date to exclude them by, so they're always
+  // counted rather than disappearing whenever a specific month is
+  // selected. A dateless record that HAS been visited is still only
+  // counted in the "all months" view, since we can't confirm which month
+  // it belongs to.
   const customersAddedInRange = visits.filter((v) => {
     if (!inSector(v)) return false;
     const d = toJsDate(v.createdAt);
-    if (!d) return month === "all";
+    if (!d) return month === "all" || getVisitEvents(v).length === 0;
     return d >= start && d <= end;
   });
 
@@ -158,6 +162,12 @@ function computePeriodStats(visits, year, month, sector) {
     visitsCount: visitEventsInRange.length,
     customersCount: customerIdsInRange.size,
     customersAddedCount: customersAddedInRange.length,
+    // Exposed so the "customers in this period" list on the dashboard can
+    // show exactly the same set of customers the card above counts —
+    // previously it used a different rule (visitDate-based, always
+    // including no-visitDate customers regardless of month) and could
+    // show a different, larger set than what the count reflected.
+    customersAddedList: customersAddedInRange,
     offersCount: offersInRange.length,
     offersValueTotals,
     offersByStatus,
@@ -288,27 +298,20 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
     [stats, month, year, t]
   );
 
-  // Customers filtered by the selected period (their visitDate must fall in
-  // range) and sector. Customers with no visitDate yet are always kept —
-  // there's no date to match against, and dropping them would hide "still
-  // needs a first visit" customers from every period.
+  // Customers behind the "Customers added" card above: the exact same set
+  // (createdAt-based, matching the card's count) rather than a separately
+  // computed visitDate-based list, so this list and that number always
+  // agree — sorted with the most recently added first.
   const periodCustomersList = useMemo(() => {
-    return visits
-      .filter((v) => sector === "all" || v.sector === sector)
-      .filter((v) => {
-        const d = parseVisitDate(v.visitDate);
-        if (!d) return true;
-        return d >= stats.start && d <= stats.end;
-      })
-      .sort((a, b) => {
-        const da = parseVisitDate(a.visitDate);
-        const db = parseVisitDate(b.visitDate);
-        if (!da && !db) return 0;
-        if (!da) return 1;
-        if (!db) return -1;
-        return db - da;
-      });
-  }, [visits, sector, stats]);
+    return [...stats.customersAddedList].sort((a, b) => {
+      const da = toJsDate(a.createdAt);
+      const db = toJsDate(b.createdAt);
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return db - da;
+    });
+  }, [stats]);
 
   const offersList = useMemo(() => {
     return stats.offersInRange
@@ -684,9 +687,9 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         )}
       </div>
 
-      {/* Total customers (independent of the selected period) */}
+      {/* The individual customers behind the "Customers added" count above */}
       <div>
-        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashPeriodCustomersLabel}</p>
+        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{customersAddedLabel}</p>
         {periodCustomersList.length === 0 ? (
           <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noVisits}</p>
         ) : (
