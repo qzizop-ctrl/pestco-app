@@ -125,12 +125,28 @@ export default function App() {
     return true;
   }, [isOnline, t, showAlert]);
 
+  // Surfaces a failed access-management write (grant/revoke/review/dismiss)
+  // instead of leaving it silent. This previously only logged to the
+  // browser console, so the owner would see the Settings action "succeed"
+  // with no feedback while the underlying Firestore write was actually
+  // rejected — most commonly because the security rules deployed on the
+  // live Firebase project are out of date (the firestore.rules file has to
+  // be deployed on its own; having it in the repo doesn't apply it).
+  const reportWorkspaceError = useCallback((e) => {
+    const code = e && e.code ? ` (${e.code})` : "";
+    showAlert(
+      lang === "ar"
+        ? `حصل خطأ أثناء حفظ التغيير${code}. لو بيتكرر، تأكد إن قواعد الأمان (Firestore Rules) متنشورة فعليًا على مشروع Firebase — وجودها في الكود مش كفاية.`
+        : `Failed to save the change${code}. If this keeps happening, confirm the Firestore security rules are actually deployed on the Firebase project — having them in the code isn't enough.`
+    );
+  }, [lang, showAlert]);
+
   const {
     authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
     canEdit, isOwnerAccount, members,
     pendingSignups, isReviewer, reviewSignup, dismissSignup,
     switchOwnerWorkspace, grantAccess, revokeAccess,
-  } = useWorkspace({ requireOnline, screen, setScreen, setActiveId });
+  } = useWorkspace({ requireOnline, reportError: reportWorkspaceError, screen, setScreen, setActiveId });
 
   const { visits, loaded, visitsError, suppliers, suppliersLoaded } = useLiveData(user, ownerUid);
 
