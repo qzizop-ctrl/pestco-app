@@ -14,16 +14,20 @@ import RejectionReasonModal from "./components/RejectionReasonModal";
 // actually used from Settings, instead of top-level here — it's a sizeable
 // library that most sessions never touch, so this keeps it out of the
 // app's initial bundle/load.
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import {
-  collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  getDoc, setDoc, runTransaction, arrayUnion, arrayRemove,
+  collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp,
+  arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
 import {
-  requestNotificationPermission, scheduleCallReminder, cancelCallReminder,
+  scheduleCallReminder, cancelCallReminder,
 } from "./notifications";
+import { useAppPrefs } from "./hooks/useAppPrefs";
+import { useWorkspace } from "./hooks/useWorkspace";
+import { useLiveData } from "./hooks/useLiveData";
+import { useReminders } from "./hooks/useReminders";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD,
   STRINGS, SECTOR_IDS, STAGE_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
@@ -43,11 +47,8 @@ const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
 const Dashboard = lazy(() => import("./Dashboard"));
 
 export default function App() {
-  const [authChecked, setAuthChecked] = useState(false);
-  const [user, setUser] = useState(null);
+  const { lang, setLang, darkMode, setDarkMode, isOnline } = useAppPrefs();
 
-  const [visits, setVisits] = useState([]);
-  const [loaded, setLoaded] = useState(false);
   const [screen, setScreen] = useState("list"); // dashboard | list | form | detail | settings
   const [query, setQuery] = useState("");
   // The input stays bound to `query` directly so typing feels instant; the
@@ -67,26 +68,12 @@ export default function App() {
   const [form, setForm] = useState(emptyForm);
   const [activeId, setActiveId] = useState(null);
   const [errors, setErrors] = useState({});
-  const [members, setMembers] = useState({});
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("viewer");
-  const [ownerUid, setOwnerUid] = useState(null);
-  const [myRole, setMyRole] = useState(null);
-  const [availableOwners, setAvailableOwners] = useState([]);
-  const [permissionLoading, setPermissionLoading] = useState(true);
-  const previousResolvedOwnerRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [newActivityText, setNewActivityText] = useState("");
   const [newOffer, setNewOffer] = useState({
     name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
-  });
-  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
-  const [darkMode, setDarkMode] = useState(() => {
-    try {
-      return localStorage.getItem("pestco_dark") === "1";
-    } catch (e) {
-      return false;
-    }
   });
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
   // Drives the in-app rejection-reason modal (replaces window.prompt).
@@ -96,8 +83,6 @@ export default function App() {
   const [expandedOfferId, setExpandedOfferId] = useState(null);
 
   // ---- Suppliers (separate from customers — contacts only) ----
-  const [suppliers, setSuppliers] = useState([]);
-  const [suppliersLoaded, setSuppliersLoaded] = useState(false);
   const [supplierQuery, setSupplierQuery] = useState("");
   // Same pattern as the customer search: the input stays bound to
   // supplierQuery directly for instant typing feedback, while filtering
@@ -113,281 +98,30 @@ export default function App() {
   const [supplierTagFilter, setSupplierTagFilter] = useState("all");
   const fileInputRef = useRef(null);
 
-  const [lang, setLang] = useState(() => {
-    try {
-      const saved = localStorage.getItem("pestco_lang");
-      return saved && STRINGS[saved] ? saved : "ar";
-    } catch (e) {
-      return "ar";
-    }
-  });
-
   const t = STRINGS[lang];
-  const active = visits.find((v) => v.id === activeId) || null;
   const isRootScreen = ROOT_SCREENS.includes(screen);
 
-  // Permission flags derived from myRole (set from the access_by_email lookup).
-  const canEdit = !permissionLoading && (myRole === "owner" || myRole === "editor");
-  const isOwnerAccount = !permissionLoading && myRole === "owner";
-
-  useEffect(() => {
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-    return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setAuthChecked(true);
-    });
-    return () => unsub();
-  }, []);
-
-  // Live permission/workspace listener. A user may belong to more than one
-  // owner/workspace, so we keep all valid owners and remember the last choice.
-  useEffect(() => {
-    if (!user) {
-      setOwnerUid(null);
-      setMyRole(null);
-      setAvailableOwners([]);
-      setPermissionLoading(false);
-      previousResolvedOwnerRef.current = null;
-      return;
-    }
-
-    setPermissionLoading(true);
-    const emailKey = (user.email || "").trim().toLowerCase();
-
-    if (!emailKey) {
-      setOwnerUid(user.uid);
-      setMyRole("owner");
-      setAvailableOwners([{ uid: user.uid, role: "owner" }]);
-      setPermissionLoading(false);
-      previousResolvedOwnerRef.current = user.uid;
-      return;
-    }
-
-    const lookupRef = doc(db, "access_by_email", emailKey);
-
-    const unsub = onSnapshot(
-      lookupRef,
-      (snap) => {
-        const ownersMap = snap.exists() ? snap.data().owners || {} : {};
-        const externalOwners = Object.entries(ownersMap)
-          .filter(([, role]) => role === "editor" || role === "viewer")
-          .map(([uid, role]) => ({ uid, role }));
-
-        // The signed-in account is always an owner of its own workspace on
-        // initial login, but only when they have no other granted access —
-        // someone who was invited as a viewer/editor should land straight
-        // in the workspace they were granted, never in a phantom empty
-        // "Owner" workspace of their own. A revoked external user must also
-        // NOT be converted into a new owner workspace.
-        const previousOwner = previousResolvedOwnerRef.current;
-        const hasKnownExternalAccess = Boolean(previousOwner && previousOwner !== user.uid);
-
-        let nextOwners = externalOwners;
-        if (externalOwners.some((x) => x.uid === user.uid)) {
-          nextOwners = externalOwners.map((x) => x.uid === user.uid ? { ...x, role: "owner" } : x);
-        } else if (!hasKnownExternalAccess && externalOwners.length === 0) {
-          nextOwners = [{ uid: user.uid, role: "owner" }, ...externalOwners];
-        }
-
-        // Remove duplicates and keep a stable order.
-        const seen = new Set();
-        nextOwners = nextOwners.filter((x) => {
-          if (seen.has(x.uid)) return false;
-          seen.add(x.uid);
-          return true;
-        });
-
-        if (nextOwners.length === 0) {
-          setOwnerUid(null);
-          setMyRole(null);
-          setAvailableOwners([]);
-          previousResolvedOwnerRef.current = null;
-          setScreen("list");
-          setActiveId(null);
-          setPermissionLoading(false);
-          return;
-        }
-
-        setAvailableOwners(nextOwners);
-
-        let savedOwner = null;
-        try {
-          savedOwner = localStorage.getItem("pestco_selected_owner");
-        } catch (e) {}
-
-        const currentOwner = previousResolvedOwnerRef.current;
-        const currentStillValid = nextOwners.some((x) => x.uid === currentOwner);
-        const savedStillValid = nextOwners.some((x) => x.uid === savedOwner);
-        const selected = currentStillValid
-          ? currentOwner
-          : savedStillValid
-            ? savedOwner
-            : nextOwners[0].uid;
-
-        const selectedEntry = nextOwners.find((x) => x.uid === selected);
-        setOwnerUid(selected);
-        setMyRole(selectedEntry?.role || null);
-        previousResolvedOwnerRef.current = selected;
-        try {
-          localStorage.setItem("pestco_selected_owner", selected);
-        } catch (e) {}
-        setPermissionLoading(false);
-      },
-      (error) => {
-        console.error("Permission listener failed:", error);
-        setOwnerUid(null);
-        setMyRole(null);
-        setAvailableOwners([]);
-        previousResolvedOwnerRef.current = null;
-        setPermissionLoading(false);
-        setScreen("list");
-        setActiveId(null);
-      }
-    );
-
-    return () => unsub();
-  }, [user]);
-
-  // Keep the selected workspace and role synchronized when the user changes
-  // workspace from Settings.
-  const switchOwnerWorkspace = (nextOwnerUid) => {
-    const selected = availableOwners.find((x) => x.uid === nextOwnerUid);
-    if (!selected) return;
-    setOwnerUid(selected.uid);
-    setMyRole(selected.role);
-    previousResolvedOwnerRef.current = selected.uid;
-    setActiveId(null);
-    setScreen("list");
-    try {
-      localStorage.setItem("pestco_selected_owner", selected.uid);
-    } catch (e) {}
-  };
-
-  useEffect(() => {
-    if (!user) return;
-    const ref = doc(db, "access", user.uid);
-    const unsub = onSnapshot(ref, (snap) => {
-      setMembers(snap.exists() ? snap.data().members || {} : {});
-    });
-    return () => unsub();
-  }, [user]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("pestco_lang", lang);
-    } catch (e) {}
-  }, [lang]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("pestco_dark", darkMode ? "1" : "0");
-    } catch (e) {}
-  }, [darkMode]);
-
-  // Single unlimited listener: the customer count (~900) is small enough
-  // that loading everything up front is simpler and safer than pagination —
-  // it also guarantees search/filters always see every customer, and the
-  // Dashboard's stats are never skewed by how much of the list is "loaded".
-  useEffect(() => {
-    if (!user || !ownerUid) {
-      setVisits([]);
-      setLoaded(false);
-      return;
-    }
-    setLoaded(false);
-    const ref = collection(db, "users", ownerUid, "visits");
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        setVisits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoaded(true);
-      },
-      () => setLoaded(true)
-    );
-    return () => unsub();
-  }, [user, ownerUid]);
-
-  // Suppliers listener — same ownership model as visits, separate collection.
-  useEffect(() => {
-    if (!user || !ownerUid) {
-      setSuppliers([]);
-      setSuppliersLoaded(false);
-      return;
-    }
-    setSuppliersLoaded(false);
-    const ref = collection(db, "users", ownerUid, "suppliers");
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        setSuppliers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setSuppliersLoaded(true);
-      },
-      () => setSuppliersLoaded(true)
-    );
-    return () => unsub();
-  }, [user, ownerUid]);
-
-  useEffect(() => {
-    try {
-      if (window.Notification && Notification.permission === "default") {
-        Notification.requestPermission();
-      }
-    } catch (e) {}
-    requestNotificationPermission();
-  }, []);
-
-  // Settings is owner-only. If a non-owner ever ends up on this screen
-  // (e.g. they switch to a workspace where they're a viewer/editor while
-  // already on Settings), bounce them back to the customer list.
-  useEffect(() => {
-    if (!permissionLoading && screen === "settings" && !isOwnerAccount) {
-      setScreen("list");
-    }
-  }, [permissionLoading, screen, isOwnerAccount]);
-
-  // Reminder checks only need to look at visits that actually have a
-  // pending call reminder — most customers won't at any given moment.
-  // Precomputing this list means the 15-second interval below scans a
-  // small subset instead of the entire customer list on every tick.
-  const pendingReminders = useMemo(
-    () => visits.filter((v) => v.callDateTime && !v.notified),
-    [visits]
-  );
-
-  useEffect(() => {
-    if (!user || !ownerUid) return;
-    const id = setInterval(() => {
-      const now = Date.now();
-      pendingReminders.forEach((v) => {
-        if (new Date(v.callDateTime).getTime() <= now) {
-          beep();
-          try {
-            if (window.Notification && Notification.permission === "granted") {
-              new Notification(`${t.reminderTitle} ${v.companyName}`, {
-                body: t.reminderBody(v.contactName),
-              });
-            }
-          } catch (e) {}
-          if (canEdit) {
-            updateDoc(doc(db, "users", ownerUid, "visits", v.id), { notified: true }).catch(() => {});
-          }
-        }
-      });
-    }, 15000);
-    return () => clearInterval(id);
-  }, [pendingReminders, t, user, ownerUid, canEdit]);
-
   // Blocks any write attempt while offline instead of queueing it for later sync.
+  const requireOnline = useCallback(() => {
+    if (!isOnline) {
+      alert(t.requireOnlineMsg);
+      return false;
+    }
+    return true;
+  }, [isOnline, t]);
+
+  const {
+    authChecked, user, ownerUid, availableOwners, permissionLoading,
+    canEdit, isOwnerAccount, members,
+    switchOwnerWorkspace, grantAccess, revokeAccess,
+  } = useWorkspace({ requireOnline, screen, setScreen, setActiveId });
+
+  const { visits, loaded, suppliers, suppliersLoaded } = useLiveData(user, ownerUid);
+
+  const active = visits.find((v) => v.id === activeId) || null;
+
+  useReminders({ visits, user, ownerUid, canEdit, t });
+
   // Surfaces a save failure to the user instead of swallowing it silently.
   // A "permission-denied" here almost always means the signed-in account's
   // role in Firestore doesn't actually match what Settings shows (e.g. it's
@@ -404,19 +138,6 @@ export default function App() {
         : (lang === "ar" ? `حصل خطأ أثناء الحفظ: ${e && e.message ? e.message : e}` : `Save failed: ${e && e.message ? e.message : e}`)
     );
   };
-
-  // Memoized so it keeps the same reference across renders that don't
-  // touch isOnline/t (e.g. typing in the search box) — needed for
-  // togglePin below (and anything else calling it) to stay stable too,
-  // which in turn is what lets VisitCard's React.memo actually skip
-  // re-rendering the customer list while the user types.
-  const requireOnline = useCallback(() => {
-    if (!isOnline) {
-      alert(t.requireOnlineMsg);
-      return false;
-    }
-    return true;
-  }, [isOnline, t]);
 
   // Appends one entry to a visit's activity timeline without overwriting the rest of the log.
   const appendActivity = async (visitId, activity) => {
@@ -817,80 +538,6 @@ export default function App() {
     if (!text) return;
     await appendActivity(active.id, buildActivity("note", text));
     setNewActivityText("");
-  };
-
-  const grantAccess = async (email, role) => {
-    if (!isOwnerAccount || !user) return;
-    if (!requireOnline()) return;
-
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !["editor", "viewer"].includes(role)) return;
-
-    const accessRef = doc(db, "access", user.uid);
-    const lookupRef = doc(db, "access_by_email", cleanEmail);
-
-    try {
-      // Transaction prevents concurrent owner changes from overwriting each
-      // other when multiple clients edit the same members/owners maps.
-      await runTransaction(db, async (tx) => {
-        const [accessSnap, lookupSnap] = await Promise.all([
-          tx.get(accessRef),
-          tx.get(lookupRef),
-        ]);
-
-        const members = accessSnap.exists()
-          ? { ...(accessSnap.data().members || {}) }
-          : {};
-        const owners = lookupSnap.exists()
-          ? { ...(lookupSnap.data().owners || {}) }
-          : {};
-
-        members[cleanEmail] = role;
-        owners[user.uid] = role;
-
-        tx.set(accessRef, { members }, { merge: true });
-        tx.set(lookupRef, { owners }, { merge: true });
-      });
-    } catch (e) {
-      console.error("grantAccess failed:", e);
-    }
-  };
-
-  const revokeAccess = async (email) => {
-    if (!isOwnerAccount || !user) return;
-    if (!requireOnline()) return;
-
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) return;
-
-    const accessRef = doc(db, "access", user.uid);
-    const lookupRef = doc(db, "access_by_email", cleanEmail);
-
-    try {
-      await runTransaction(db, async (tx) => {
-        const [accessSnap, lookupSnap] = await Promise.all([
-          tx.get(accessRef),
-          tx.get(lookupRef),
-        ]);
-
-        const members = accessSnap.exists()
-          ? { ...(accessSnap.data().members || {}) }
-          : {};
-        const owners = lookupSnap.exists()
-          ? { ...(lookupSnap.data().owners || {}) }
-          : {};
-
-        delete members[cleanEmail];
-        delete owners[user.uid];
-
-        tx.set(accessRef, { members }, { merge: false });
-        // Keep the reverse-index document instead of deleting it, because
-        // delete is intentionally disallowed by the security rules.
-        tx.set(lookupRef, { owners }, { merge: false });
-      });
-    } catch (e) {
-      console.error("revokeAccess failed:", e);
-    }
   };
 
   const visitsToRows = (rows) =>

@@ -851,15 +851,21 @@ export function fmtActivityDate(dt, locale) {
 // with the plain Western digits used elsewhere in the app (e.g. raw counts
 // rendered without toLocaleString). Keeping every on-screen number in the
 // same digit system avoids that inconsistency.
+// Always formats using Western digits AND Western punctuation (comma
+// thousands separator, period decimal point), regardless of the app's
+// display language or the device's ICU data. Forcing numberingSystem
+// alone (Latin digits under an Arabic locale) isn't reliable across every
+// Android WebView version for the punctuation itself — some still render
+// the Arabic decimal separator (٫) instead of a period for non-whole
+// numbers, which only becomes visible once a value has a fraction (like
+// an average). Using "en-US" outright sidesteps that inconsistency
+// entirely; the `locale` param is kept for call-site compatibility but no
+// longer affects the output.
 export function fmtMoney(n, locale) {
   try {
-    return Number(n || 0).toLocaleString(locale, { numberingSystem: "latn" });
+    return Number(n || 0).toLocaleString("en-US");
   } catch (e) {
-    try {
-      return Number(n || 0).toLocaleString("en-US");
-    } catch (e2) {
-      return String(n || 0);
-    }
+    return String(n || 0);
   }
 }
 
