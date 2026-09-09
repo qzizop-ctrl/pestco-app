@@ -65,14 +65,15 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
       lookupRef,
       (snap) => {
         // A snapshot can arrive from the local cache before Firestore has
-        // confirmed the real answer with the server (e.g. cold start on a
-        // slow/offline connection). If that cache happens to be empty, we
-        // must NOT treat it as "no external access" — doing so previously
-        // caused the app to wrongly conclude the user owns their own empty
-        // workspace and persist that mistake to localStorage, permanently
-        // hiding the real shared workspace on that device. So: an empty
-        // result is only trusted once it's confirmed by the server.
-        if (snap.metadata.fromCache && !snap.exists()) {
+        // confirmed the real answer with the server — e.g. right after
+        // reopening the app, the cache may still hold whatever role this
+        // account had *before* the owner's last change (say "editor" from
+        // before it was switched to "viewer"). Acting on that stale cached
+        // value made the UI show edit controls that the server would then
+        // correctly reject, which looked like "it lets me try, then says
+        // I'm not allowed." So: nothing is committed — role, ownerUid, or
+        // localStorage — until Firestore confirms the read with the server.
+        if (snap.metadata.fromCache) {
           return;
         }
 
