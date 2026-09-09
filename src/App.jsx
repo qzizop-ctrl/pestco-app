@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
 import {
   ChevronRight, Languages, LogOut, Settings,
   Wifi, WifiOff, Moon, Sun,
@@ -350,12 +350,21 @@ export default function App() {
     }
   }, [permissionLoading, screen, isOwnerAccount]);
 
+  // Reminder checks only need to look at visits that actually have a
+  // pending call reminder — most customers won't at any given moment.
+  // Precomputing this list means the 15-second interval below scans a
+  // small subset instead of the entire customer list on every tick.
+  const pendingReminders = useMemo(
+    () => visits.filter((v) => v.callDateTime && !v.notified),
+    [visits]
+  );
+
   useEffect(() => {
     if (!user || !ownerUid) return;
     const id = setInterval(() => {
       const now = Date.now();
-      visits.forEach((v) => {
-        if (v.callDateTime && !v.notified && new Date(v.callDateTime).getTime() <= now) {
+      pendingReminders.forEach((v) => {
+        if (new Date(v.callDateTime).getTime() <= now) {
           beep();
           try {
             if (window.Notification && Notification.permission === "granted") {
@@ -371,7 +380,7 @@ export default function App() {
       });
     }, 15000);
     return () => clearInterval(id);
-  }, [visits, t, user, ownerUid]);
+  }, [pendingReminders, t, user, ownerUid, canEdit]);
 
   // Blocks any write attempt while offline instead of queueing it for later sync.
   // Surfaces a save failure to the user instead of swallowing it silently.
@@ -391,13 +400,18 @@ export default function App() {
     );
   };
 
-  const requireOnline = () => {
+  // Memoized so it keeps the same reference across renders that don't
+  // touch isOnline/t (e.g. typing in the search box) — needed for
+  // togglePin below (and anything else calling it) to stay stable too,
+  // which in turn is what lets VisitCard's React.memo actually skip
+  // re-rendering the customer list while the user types.
+  const requireOnline = useCallback(() => {
     if (!isOnline) {
       alert(t.requireOnlineMsg);
       return false;
     }
     return true;
-  };
+  }, [isOnline, t]);
 
   // Appends one entry to a visit's activity timeline without overwriting the rest of the log.
   const appendActivity = async (visitId, activity) => {
@@ -494,13 +508,17 @@ export default function App() {
     setScreen("form");
   };
 
-  const openDetail = (visit) => {
+  // Stable reference (empty deps — only calls setState setters, which React
+  // guarantees never change) so VisitCard's React.memo can actually skip
+  // re-rendering rows on unrelated App re-renders, e.g. while typing in
+  // the search box.
+  const openDetail = useCallback((visit) => {
     setActiveId(visit.id);
     setNewActivityText("");
     setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
     setExpandedOfferId(null);
     setScreen("detail");
-  };
+  }, []);
 
   // ---- Suppliers CRUD (simple contact records — no visits/pipeline/offers) ----
 
@@ -735,13 +753,15 @@ export default function App() {
   };
 
   // Pins/unpins a customer so it stays sorted to the top of the list.
-  const togglePin = async (visit) => {
+  // Stable across renders unless canEdit/ownerUid/requireOnline actually
+  // change — same reasoning as openDetail above.
+  const togglePin = useCallback(async (visit) => {
     if (!canEdit || !ownerUid) return;
     if (!requireOnline()) return;
     try {
       await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { isPinned: !visit.isPinned });
     } catch (e) {}
-  };
+  }, [canEdit, ownerUid, requireOnline]);
 
   // Records that an actual visit happened today: pushes a new visit-history
   // entry (so the Dashboard's visit count reflects real repeat visits) and
