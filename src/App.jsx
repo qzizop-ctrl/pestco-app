@@ -31,7 +31,7 @@ import {
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
   buildActivity, buildOffer, buildVisitEntry,
   visitStatus, fmtReminder, fmtOffersTotals, sumOffersByCurrency, corePhoneDigits,
-  findDuplicateGroups, isStaleCustomer, collectSupplierTags,
+  findDuplicateGroups, isStaleCustomer, collectSupplierTags, getVisitEvents,
   emptyForm, emptySupplierForm,
 } from "./constants";
 
