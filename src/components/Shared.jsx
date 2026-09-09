@@ -16,6 +16,30 @@ import {
   stageColor, visitStatus, fmtReminder, isStaleCustomer,
 } from "../constants";
 
+// Loading placeholder shown instead of a plain "loading..." line while
+// Firestore's initial snapshot is still arriving. `count` controls how many
+// stacked placeholder cards to render (mimics the shape of a VisitCard list).
+export function SkeletonList({ count = 4 }) {
+  return (
+    <div className="flex flex-col gap-3" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="p-4 rounded-2xl"
+          style={{ background: SURFACE, border: `1px solid ${LINE}` }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="skeleton animate-shimmer" style={{ width: "55%", height: 14 }} />
+            <div className="skeleton animate-shimmer" style={{ width: 40, height: 14 }} />
+          </div>
+          <div className="skeleton animate-shimmer mb-2" style={{ width: "80%", height: 10 }} />
+          <div className="skeleton animate-shimmer" style={{ width: "40%", height: 10 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function beep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();

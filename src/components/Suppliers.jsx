@@ -10,7 +10,7 @@
 
 import React from "react";
 import { Search, Tag, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2 } from "lucide-react";
-import { TagChip } from "./Shared";
+import { TagChip, SkeletonList } from "./Shared";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
   parseTagsCell,
@@ -85,7 +85,7 @@ export function SuppliersListScreen({
         </div>
       )}
 
-      {!suppliersLoaded && <p className="text-sm text-center py-8" style={{ color: MUTED }}>{t.loading}</p>}
+      {!suppliersLoaded && <SkeletonList count={4} />}
 
       {suppliersLoaded && filteredSuppliers.length === 0 && (
         <div className="text-center py-16">

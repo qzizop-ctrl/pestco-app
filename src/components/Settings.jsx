@@ -27,6 +27,7 @@ export default function SettingsScreen({
   isOwnerAccount,
   members,
   revokeAccess,
+  confirmAction,
   exportAllToExcel,
   exportFilteredToExcel,
   filteredCount,
@@ -132,9 +133,7 @@ export default function SettingsScreen({
                 <p className="text-xs" style={{ color: MUTED }}>{role === "editor" ? t.roleEditor : t.roleViewer}</p>
               </div>
               <button
-                onClick={() => {
-                  if (window.confirm(t.removeConfirm)) revokeAccess(email);
-                }}
+                onClick={() => confirmAction(t.removeConfirm, () => revokeAccess(email), { danger: true })}
                 className="btn-press"
                 style={{ color: DANGER }}
                 aria-label={t.delete}

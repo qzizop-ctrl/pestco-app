@@ -8,7 +8,7 @@ import {
   Search, WifiOff, Bell, AlertTriangle, Clock, Phone, MessageCircle,
   Tag, ListFilter, Building2, Plus,
 } from "lucide-react";
-import { VisitCard } from "./Shared";
+import { VisitCard, SkeletonList } from "./Shared";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, STATUS_COLORS,
   SECTOR_IDS, STAGE_IDS, STALE_ACTIVITY_DAYS,
@@ -353,7 +353,7 @@ export default function CustomerListScreen({
         </button>
       </div>
 
-      {!loaded && <p className="text-sm text-center py-8" style={{ color: MUTED }}>{t.loading}</p>}
+      {!loaded && <SkeletonList count={5} />}
 
       {loaded && filtered.length === 0 && (
         <div className="text-center py-16">
