@@ -128,6 +128,7 @@ export default function App() {
   const {
     authChecked, user, ownerUid, availableOwners, permissionLoading,
     canEdit, isOwnerAccount, members,
+    pendingSignups, isReviewer, reviewSignup, dismissSignup,
     switchOwnerWorkspace, grantAccess, revokeAccess,
   } = useWorkspace({ requireOnline, screen, setScreen, setActiveId });
 
@@ -1160,6 +1161,10 @@ export default function App() {
           isOwnerAccount={isOwnerAccount}
           members={members}
           revokeAccess={revokeAccess}
+          pendingSignups={pendingSignups}
+          isReviewer={isReviewer}
+          reviewSignup={reviewSignup}
+          dismissSignup={dismissSignup}
           confirmAction={confirmAction}
           exportAllToExcel={exportAllToExcel}
           exportFilteredToExcel={exportFilteredToExcel}

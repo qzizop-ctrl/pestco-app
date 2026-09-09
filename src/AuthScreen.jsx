@@ -4,8 +4,9 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
 } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Shield, Languages } from "lucide-react";
-import { auth } from "./firebase";
+import { auth, db } from "./firebase";
 import { PRIMARY } from "./constants";
 
 const BG = "#F7F6F2";
@@ -100,7 +101,18 @@ export default function AuthScreen({ lang, setLang }) {
       if (mode === "login") {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       } else if (mode === "register") {
-        await createUserWithEmailAndPassword(auth, email.trim(), password);
+        const cleanEmail = email.trim().toLowerCase();
+        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        try {
+          await setDoc(doc(db, "signups", cred.user.uid), {
+            email: cleanEmail,
+            createdAt: serverTimestamp(),
+          });
+        } catch (signupLogError) {
+          // Never block account creation over this — it only feeds the
+          // reviewer's "pending accounts" list in Settings.
+          console.error("Failed to record signup:", signupLogError);
+        }
       } else if (mode === "reset") {
         await sendPasswordResetEmail(auth, email.trim());
         setInfo(t.resetSent);
