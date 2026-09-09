@@ -422,8 +422,16 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         <SummaryCard
           icon={DollarSign}
           label={t.dashAvgDealSize}
-          value={avgDealSize === null ? t.dashNoOffersYet : `${fmtMoney(avgDealSize, t.locale)} ${t.dashCurrency}`}
-          subValue={avgDealSizeUSD !== null ? `${fmtMoney(avgDealSizeUSD, t.locale)} ${t.currencies.USD}` : undefined}
+          value={
+  avgDealSize === null
+    ? t.dashNoOffersYet
+    : `${fmtMoney(avgDealSize, `${t.locale}-u-nu-latn`)} ${t.dashCurrency}`
+}
+subValue={
+  avgDealSizeUSD !== null
+    ? `${fmtMoney(avgDealSizeUSD, `${t.locale}-u-nu-latn`)} ${t.currencies.USD}`
+    : undefined
+}
           delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
           t={t}
         />
