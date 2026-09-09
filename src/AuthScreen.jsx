@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -75,7 +75,7 @@ const STRINGS = {
   },
 };
 
-export default function AuthScreen({ lang, setLang }) {
+export default function AuthScreen({ lang, setLang, authError, onClearAuthError }) {
   const t = STRINGS[lang];
   const [mode, setMode] = useState("login"); // login | register | reset
   const [email, setEmail] = useState("");
@@ -85,6 +85,19 @@ export default function AuthScreen({ lang, setLang }) {
   const [busy, setBusy] = useState(false);
 
   const errMsg = (code) => t.errors[code] || t.errors.default;
+
+  // The account authenticated fine, but has no access to the app (never
+  // granted, still pending owner review, or a dismissed/removed signup) —
+  // useWorkspace already signed it back out. Show the same "no account
+  // with this email" message Firebase itself uses for a bad login, then
+  // clear the flag so it doesn't resurface on an unrelated later attempt.
+  useEffect(() => {
+    if (authError) {
+      setError(errMsg("auth/user-not-found"));
+      onClearAuthError && onClearAuthError();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authError]);
 
   const switchMode = (next) => {
     setMode(next);

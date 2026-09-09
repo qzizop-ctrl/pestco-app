@@ -126,7 +126,7 @@ export default function App() {
   }, [isOnline, t, showAlert]);
 
   const {
-    authChecked, user, ownerUid, availableOwners, permissionLoading,
+    authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
     canEdit, isOwnerAccount, members,
     pendingSignups, isReviewer, reviewSignup, dismissSignup,
     switchOwnerWorkspace, grantAccess, revokeAccess,
@@ -953,7 +953,14 @@ export default function App() {
   }
 
   if (!user) {
-    return <AuthScreen lang={lang} setLang={setLang} />;
+    return (
+      <AuthScreen
+        lang={lang}
+        setLang={setLang}
+        authError={authError}
+        onClearAuthError={clearAuthError}
+      />
+    );
   }
 
   return (
