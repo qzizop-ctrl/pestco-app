@@ -63,6 +63,7 @@ export default function App() {
   const [stageFilter, setStageFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [missingDataOnly, setMissingDataOnly] = useState(false);
+  const [noVisitsOnly, setNoVisitsOnly] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [activeId, setActiveId] = useState(null);
   const [errors, setErrors] = useState({});
@@ -1085,6 +1086,10 @@ export default function App() {
     () => visibleVisits.filter((v) => !v.phone || !v.email).length,
     [visibleVisits]
   );
+  const noVisitsCount = useMemo(
+    () => visibleVisits.filter((v) => getVisitEvents(v).length === 0).length,
+    [visibleVisits]
+  );
 
   const filtered = useMemo(
     () =>
@@ -1093,6 +1098,7 @@ export default function App() {
         .filter((v) => stageFilter === "all" || v.stage === stageFilter)
         .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
         .filter((v) => !missingDataOnly || !v.phone || !v.email)
+        .filter((v) => !noVisitsOnly || getVisitEvents(v).length === 0)
         .filter((v) => {
           const q = debouncedQuery.trim().toLowerCase();
           if (!q) return true;
@@ -1121,7 +1127,7 @@ export default function App() {
           if (!db) return -1;
           return db - da;
         }),
-    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, debouncedQuery, t.locale]
+    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly, debouncedQuery, t.locale]
   );
 
   // All unique product tags across every supplier, used to populate the
@@ -1319,6 +1325,9 @@ export default function App() {
           missingDataOnly={missingDataOnly}
           setMissingDataOnly={setMissingDataOnly}
           missingDataCount={missingDataCount}
+          noVisitsOnly={noVisitsOnly}
+          setNoVisitsOnly={setNoVisitsOnly}
+          noVisitsCount={noVisitsCount}
           loaded={loaded}
           filtered={filtered}
           togglePin={togglePin}
