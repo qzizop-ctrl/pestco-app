@@ -131,7 +131,7 @@ export default function App() {
     switchOwnerWorkspace, grantAccess, revokeAccess,
   } = useWorkspace({ requireOnline, screen, setScreen, setActiveId });
 
-  const { visits, loaded, suppliers, suppliersLoaded } = useLiveData(user, ownerUid);
+  const { visits, loaded, visitsError, suppliers, suppliersLoaded } = useLiveData(user, ownerUid);
 
   const active = visits.find((v) => v.id === activeId) || null;
 
@@ -149,6 +149,24 @@ export default function App() {
     },
   });
 
+  // Surfaces a *read* failure on the customer list itself — previously this
+  // was swallowed entirely by useLiveData, so an account without real
+  // server-side access just saw an empty list forever with zero indication
+  // why. Alerts once per failed ownerUid, not on every re-render.
+  const reportedVisitsErrorRef = useRef(null);
+  useEffect(() => {
+    if (!visitsError || reportedVisitsErrorRef.current === ownerUid) return;
+    reportedVisitsErrorRef.current = ownerUid;
+    const isPermissionError = visitsError.code === "permission-denied";
+    showAlert(
+      isPermissionError
+        ? (lang === "ar"
+            ? "معنديش صلاحية أشوف البيانات دي. تأكد إن الإيميل بتاعك مضاف صح في Settings عند صاحب الحساب."
+            : "You don't have permission to read this data. Confirm your email is correctly added in the owner's Settings.")
+        : (lang === "ar" ? `حصل خطأ أثناء تحميل العملاء: ${visitsError.message}` : `Failed to load customers: ${visitsError.message}`)
+    );
+  }, [visitsError, ownerUid, lang, showAlert]);
+
   // Surfaces a save failure to the user instead of swallowing it silently.
   // A "permission-denied" here almost always means the signed-in account's
   // role in Firestore doesn't actually match what Settings shows (e.g. it's
@@ -165,6 +183,7 @@ export default function App() {
         : (lang === "ar" ? `حصل خطأ أثناء الحفظ: ${e && e.message ? e.message : e}` : `Save failed: ${e && e.message ? e.message : e}`)
     );
   };
+
 
   // Appends one entry to a visit's activity timeline without overwriting the rest of the log.
   const appendActivity = async (visitId, activity) => {
