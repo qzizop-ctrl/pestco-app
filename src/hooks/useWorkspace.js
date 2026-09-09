@@ -41,6 +41,9 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
       setAvailableOwners([]);
       setPermissionLoading(false);
       previousResolvedOwnerRef.current = null;
+      try {
+        localStorage.removeItem("pestco_selected_owner");
+      } catch (e) {}
       return;
     }
 
@@ -61,6 +64,18 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
     const unsub = onSnapshot(
       lookupRef,
       (snap) => {
+        // A snapshot can arrive from the local cache before Firestore has
+        // confirmed the real answer with the server (e.g. cold start on a
+        // slow/offline connection). If that cache happens to be empty, we
+        // must NOT treat it as "no external access" — doing so previously
+        // caused the app to wrongly conclude the user owns their own empty
+        // workspace and persist that mistake to localStorage, permanently
+        // hiding the real shared workspace on that device. So: an empty
+        // result is only trusted once it's confirmed by the server.
+        if (snap.metadata.fromCache && !snap.exists()) {
+          return;
+        }
+
         const ownersMap = snap.exists() ? snap.data().owners || {} : {};
         const externalOwners = Object.entries(ownersMap)
           .filter(([, role]) => role === "editor" || role === "viewer")
