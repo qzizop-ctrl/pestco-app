@@ -37,6 +37,9 @@ export default function CustomerListScreen({
   missingDataOnly,
   setMissingDataOnly,
   missingDataCount,
+  noVisitsOnly,
+  setNoVisitsOnly,
+  noVisitsCount,
   loaded,
   filtered,
   togglePin,
@@ -333,6 +336,20 @@ export default function CustomerListScreen({
           }}
         >
           <ListFilter size={12} /> {t.missingDataFilter} ({missingDataCount})
+        </button>
+        <button
+          onClick={() => setNoVisitsOnly((m) => !m)}
+          className="btn-press font-bold text-xs flex items-center gap-1"
+          style={{
+            flexShrink: 0,
+            padding: "8px 16px",
+            borderRadius: 999,
+            border: `1.4px solid ${noVisitsOnly ? GOLD : LINE}`,
+            background: noVisitsOnly ? GOLD : SURFACE,
+            color: noVisitsOnly ? "#fff" : MUTED,
+          }}
+        >
+          <Clock size={12} /> {t.noVisitsYetFilter} ({noVisitsCount})
         </button>
       </div>
 
