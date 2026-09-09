@@ -257,6 +257,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
   const avgDealSize = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "EGP"), [stats]);
   const prevAvgDealSize = useMemo(() => (prevStats ? computeAvgDealSizeForCurrency(prevStats.offersInRange, "EGP") : null), [prevStats]);
   const avgDealSizeUSD = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "USD"), [stats]);
+  const hasEGPOffers = useMemo(() => stats.offersInRange.some((o) => (o.currency || "EGP") === "EGP"), [stats]);
   const hasUSDOffers = useMemo(() => stats.offersInRange.some((o) => o.currency === "USD"), [stats]);
   const winRate = useMemo(() => computeWinRate(stats.offersByStatus), [stats]);
   const winRateDecidedCount = useMemo(() => computeDecidedCount(stats.offersByStatus), [stats]);
@@ -461,24 +462,28 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
         </div>
       </div>
 
-      {/* Offers value trend */}
-      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
-        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashOffersValueTrend}</p>
-        <div style={{ width: "100%", height: 180 }}>
-          <ResponsiveContainer>
-            <BarChart data={offersChartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={month === "all" ? 0 : "preserveStartEnd"} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValue]} />
-              <Tooltip
-                formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.dashCurrency}`, t.dashCardOffersValue]}
-                contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-              />
-              <Bar dataKey="value" fill={PRIMARY_MID} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+      {/* Offers value trend (EGP) — hidden entirely when there are no EGP
+          offers in the selected period, same as the USD chart below,
+          instead of rendering an empty/flat chart with nothing to show. */}
+      {hasEGPOffers && (
+        <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
+          <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashOffersValueTrend}</p>
+          <div style={{ width: "100%", height: 180 }}>
+            <ResponsiveContainer>
+              <BarChart data={offersChartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={month === "all" ? 0 : "preserveStartEnd"} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValue]} />
+                <Tooltip
+                  formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.dashCurrency}`, t.dashCardOffersValue]}
+                  contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
+                />
+                <Bar dataKey="value" fill={PRIMARY_MID} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-      </div>
+      )}
 
       {hasUSDOffers && (
         <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
