@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, collection, onSnapshot, runTransaction, deleteDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
@@ -25,7 +25,13 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
   const [myRole, setMyRole] = useState(null);
   const [availableOwners, setAvailableOwners] = useState([]);
   const [permissionLoading, setPermissionLoading] = useState(true);
+  // Set when a signed-in account turns out to have no usable access at all
+  // (never granted, still pending review, or a dismissed/removed signup) —
+  // AuthScreen surfaces this as an "email not registered" style message
+  // once we've signed the account back out. Cleared by clearAuthError().
+  const [authError, setAuthError] = useState(false);
   const previousResolvedOwnerRef = useRef(null);
+  const clearAuthError = () => setAuthError(false);
 
   // Permission flags derived from myRole (set from the access_by_email lookup).
   const canEdit = !permissionLoading && (myRole === "owner" || myRole === "editor");
@@ -95,13 +101,24 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
         // in the workspace they were granted, never in a phantom empty
         // "Owner" workspace of their own. A revoked external user must also
         // NOT be converted into a new owner workspace.
+        //
+        // Self-provisioning into an "owner" workspace is further restricted
+        // to REVIEWER_EMAIL only. This is a single-owner app: anyone else
+        // who signs up writes a `signups/{uid}` doc and must be explicitly
+        // granted editor/viewer access from Settings first. Without this
+        // check, any brand-new registration (or a dismissed/removed one)
+        // fell through to "no other access found" and was silently made
+        // owner of its own empty workspace — which is exactly what let an
+        // un-reviewed or dismissed account see the Settings screen and
+        // still use the app.
         const previousOwner = previousResolvedOwnerRef.current;
         const hasKnownExternalAccess = Boolean(previousOwner && previousOwner !== user.uid);
+        const isReviewerEmail = emailKey === REVIEWER_EMAIL;
 
         let nextOwners = externalOwners;
         if (externalOwners.some((x) => x.uid === user.uid)) {
           nextOwners = externalOwners.map((x) => x.uid === user.uid ? { ...x, role: "owner" } : x);
-        } else if (!hasKnownExternalAccess && externalOwners.length === 0) {
+        } else if (isReviewerEmail && !hasKnownExternalAccess && externalOwners.length === 0) {
           nextOwners = [{ uid: user.uid, role: "owner" }, ...externalOwners];
         }
 
@@ -121,6 +138,15 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
           setScreen("list");
           setActiveId(null);
           setPermissionLoading(false);
+          // Not the reviewer and not granted access by anyone: this account
+          // has nothing to do in the app (still pending review, dismissed,
+          // or revoked). Sign it back out and let AuthScreen show an
+          // "email not registered" style message instead of leaving it
+          // signed in with no data and no way forward.
+          if (!isReviewerEmail) {
+            setAuthError(true);
+            signOut(auth).catch((e) => console.error("Sign-out for unauthorized account failed:", e));
+          }
           return;
         }
 
@@ -325,6 +351,8 @@ export function useWorkspace({ requireOnline, screen, setScreen, setActiveId }) 
   return {
     authChecked,
     user,
+    authError,
+    clearAuthError,
     ownerUid,
     availableOwners,
     permissionLoading,
