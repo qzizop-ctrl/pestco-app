@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, Suspense, lazy } from "react";
 import {
   ChevronRight, Languages, LogOut, Settings,
   Wifi, WifiOff, Moon, Sun,
@@ -20,7 +20,6 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import AuthScreen from "./AuthScreen";
-import Dashboard from "./Dashboard";
 import {
   requestNotificationPermission, scheduleCallReminder, cancelCallReminder,
 } from "./notifications";
@@ -37,6 +36,11 @@ import {
 
 const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
 
+// Loaded lazily: the app's default screen is the customer list, not the
+// Dashboard, so most sessions never need this chart-heavy screen (and its
+// recharts dependency) in the initial bundle at all.
+const Dashboard = lazy(() => import("./Dashboard"));
+
 export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
@@ -45,6 +49,15 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [screen, setScreen] = useState("list"); // dashboard | list | form | detail | settings
   const [query, setQuery] = useState("");
+  // The input stays bound to `query` directly so typing feels instant; the
+  // list filter below reads `debouncedQuery` instead, which only updates
+  // 250ms after the user stops typing. That avoids re-filtering the full
+  // customer list on every single keystroke.
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(id);
+  }, [query]);
   const [sectorFilter, setSectorFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
@@ -81,6 +94,14 @@ export default function App() {
   const [suppliers, setSuppliers] = useState([]);
   const [suppliersLoaded, setSuppliersLoaded] = useState(false);
   const [supplierQuery, setSupplierQuery] = useState("");
+  // Same pattern as the customer search: the input stays bound to
+  // supplierQuery directly for instant typing feedback, while filtering
+  // reads the debounced value 250ms after the user stops typing.
+  const [debouncedSupplierQuery, setDebouncedSupplierQuery] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSupplierQuery(supplierQuery), 250);
+    return () => clearTimeout(id);
+  }, [supplierQuery]);
   const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
   const [activeSupplierId, setActiveSupplierId] = useState(null);
   const [supplierErrors, setSupplierErrors] = useState({});
@@ -1036,7 +1057,7 @@ export default function App() {
         .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
         .filter((v) => !missingDataOnly || !v.phone || !v.email)
         .filter((v) => {
-          const q = query.trim().toLowerCase();
+          const q = debouncedQuery.trim().toLowerCase();
           if (!q) return true;
           return (
             v.companyName.toLowerCase().includes(q) ||
@@ -1063,32 +1084,36 @@ export default function App() {
           if (!db) return -1;
           return db - da;
         }),
-    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, query, t.locale]
+    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, debouncedQuery, t.locale]
   );
 
   // All unique product tags across every supplier, used to populate the
   // "filter by product" chip row on the Suppliers list.
-  const allSupplierTags = collectSupplierTags(suppliers);
+  const allSupplierTags = useMemo(() => collectSupplierTags(suppliers), [suppliers]);
 
-  const filteredSuppliers = suppliers
-    .filter((s) => supplierTagFilter === "all" || (s.tags || []).includes(supplierTagFilter))
-    .filter((s) => {
-      const q = supplierQuery.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        (s.name || "").toLowerCase().includes(q) ||
-        (s.contactName || "").toLowerCase().includes(q) ||
-        (s.phone || "").toLowerCase().includes(q) ||
-        (s.email || "").toLowerCase().includes(q) ||
-        (s.category || "").toLowerCase().includes(q) ||
-        (s.notes || "").toLowerCase().includes(q) ||
-        (s.tags || []).some((tag) => tag.toLowerCase().includes(q))
-      );
-    })
-    .sort((a, b) => {
-      if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
-      return (a.name || "").localeCompare(b.name || "", "ar");
-    });
+  const filteredSuppliers = useMemo(
+    () =>
+      suppliers
+        .filter((s) => supplierTagFilter === "all" || (s.tags || []).includes(supplierTagFilter))
+        .filter((s) => {
+          const q = debouncedSupplierQuery.trim().toLowerCase();
+          if (!q) return true;
+          return (
+            (s.name || "").toLowerCase().includes(q) ||
+            (s.contactName || "").toLowerCase().includes(q) ||
+            (s.phone || "").toLowerCase().includes(q) ||
+            (s.email || "").toLowerCase().includes(q) ||
+            (s.category || "").toLowerCase().includes(q) ||
+            (s.notes || "").toLowerCase().includes(q) ||
+            (s.tags || []).some((tag) => tag.toLowerCase().includes(q))
+          );
+        })
+        .sort((a, b) => {
+          if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
+          return (a.name || "").localeCompare(b.name || "", "ar");
+        }),
+    [suppliers, supplierTagFilter, debouncedSupplierQuery]
+  );
 
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
   const activityLog = active ? [...(active.activityLog || [])].sort((a, b) => (a.at < b.at ? 1 : -1)) : [];
@@ -1229,7 +1254,9 @@ export default function App() {
       </div>
 
       {screen === "dashboard" && (
-        <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} />
+        <Suspense fallback={<p className="text-sm text-center py-8" style={{ color: MUTED }}>{t.loading}</p>}>
+          <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} />
+        </Suspense>
       )}
 
       {screen === "list" && (
