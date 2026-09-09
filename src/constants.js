@@ -69,6 +69,7 @@ export const STRINGS = {
 
     // Missing-data filter
     missingDataFilter: "بيانات ناقصة",
+    noVisitsYetFilter: "بدون زيارات",
     missingPhoneBadge: "بدون رقم",
     missingEmailBadge: "بدون إيميل",
 
@@ -81,7 +82,7 @@ export const STRINGS = {
     similarNameReason: "اسم شركة متشابه",
 
     // Stale / inactive customer indicator
-    staleBadge: "محتاج مراجعة",
+    staleBadge: "متوقف النشاط",
     staleHint: (days) => `مفيش أي نشاط من ${days} يوم`,
 
     // Today's customers
@@ -89,8 +90,8 @@ export const STRINGS = {
     noTodaysCustomers: "مفيش عملاء مجدولين النهاردة",
 
     // Pin / favorite
-    pinBtn: "تثبيت",
-    unpinBtn: "إلغاء التثبيت",
+    pinBtn: "تفضيل",
+    unpinBtn: "إلغاء التفضيل",
     pinnedLabel: "مثبّت",
     callDateLabel: "موعد المتابعة القادم (اختياري)",
     callDateHint: "في نسخة الأندرويد: التطبيق هيبعتلك تنبيه حقيقي في المعاد ده حتى لو التطبيق مقفول. في نسخة المتصفح: لازم التطبيق يكون شغال.",
@@ -135,7 +136,7 @@ export const STRINGS = {
     statusOverdue: "متأخرة",
     statusToday: "اليوم",
     statusUpcoming: "قادمة",
-    statusNone: "بدون موعد",
+    statusNone: "بدون تذكير",
     whatsapp: "واتساب",
     excelTitle: "استيراد / تصدير إكسيل",
     exportBtn: "تصدير كل الزيارات (إكسيل)",
@@ -343,6 +344,7 @@ export const STRINGS = {
 
     // Missing-data filter
     missingDataFilter: "Missing Data",
+    noVisitsYetFilter: "No Visits Yet",
     missingPhoneBadge: "No phone",
     missingEmailBadge: "No email",
 
