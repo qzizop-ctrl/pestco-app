@@ -211,6 +211,43 @@ service cloud.firestore {
 
 
     // ============================================================
+    // SIGNUPS
+    //
+    // signups/{uid}
+    //
+    // {
+    //   email: "person@email.com",
+    //   createdAt: <server timestamp>
+    // }
+    //
+    // Written once by a user right after they create their account, so
+    // the single hardcoded reviewer account below can see every new
+    // signup and grant them a role without typing their email manually.
+    // Deleted by the reviewer once handled (granted or dismissed).
+    //
+    // This is intentionally a single hardcoded reviewer, matching the
+    // app's current single-company/single-team usage — not a general
+    // multi-tenant admin model.
+    // ============================================================
+
+    function isReviewer() {
+      return myEmail() == 'qzizop@gmail.com';
+    }
+
+    match /signups/{uid} {
+
+      allow read, delete: if isReviewer();
+
+      allow create: if hasEmail()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'createdAt'])
+        && request.resource.data.email == myEmail();
+
+      allow update: if false;
+    }
+
+
+    // ============================================================
     // DENY EVERYTHING ELSE
     // ============================================================
 
