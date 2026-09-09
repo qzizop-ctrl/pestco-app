@@ -218,6 +218,9 @@ export const STRINGS = {
     rejectionModalPlaceholder: "اكتب السبب هنا (اختياري)...",
     rejectionModalConfirm: "تأكيد الرفض",
     rejectionModalCancel: "إلغاء",
+    confirmModalConfirm: "تأكيد",
+    confirmModalCancel: "إلغاء",
+    confirmModalOk: "حسنًا",
     rejectionReasonRow: "سبب الرفض:",
     changeStatusLabel: "تغيير حالة الأوفر:",
 
@@ -485,6 +488,9 @@ export const STRINGS = {
     rejectionModalPlaceholder: "Type the reason here (optional)...",
     rejectionModalConfirm: "Confirm Rejection",
     rejectionModalCancel: "Cancel",
+    confirmModalConfirm: "Confirm",
+    confirmModalCancel: "Cancel",
+    confirmModalOk: "OK",
     rejectionReasonRow: "Rejection reason:",
     changeStatusLabel: "Change offer status:",
 

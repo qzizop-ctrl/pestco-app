@@ -3,13 +3,14 @@ import {
   ChevronRight, Languages, LogOut, Settings,
   Wifi, WifiOff, Moon, Sun,
 } from "lucide-react";
-import { Logo, TagChip, VisitCard, BottomNav, beep } from "./components/Shared";
+import { Logo, TagChip, VisitCard, BottomNav, beep, SkeletonList } from "./components/Shared";
 import { SuppliersListScreen, SupplierFormScreen } from "./components/Suppliers";
 import SettingsScreen from "./components/Settings";
 import CustomerListScreen from "./components/CustomerList";
 import CustomerFormScreen from "./components/CustomerForm";
 import CustomerDetailScreen from "./components/CustomerDetail";
 import RejectionReasonModal from "./components/RejectionReasonModal";
+import ConfirmModal from "./components/ConfirmModal";
 // xlsx is loaded lazily (dynamic import) only when Export/Import is
 // actually used from Settings, instead of top-level here — it's a sizeable
 // library that most sessions never touch, so this keeps it out of the
@@ -28,6 +29,7 @@ import { useAppPrefs } from "./hooks/useAppPrefs";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useLiveData } from "./hooks/useLiveData";
 import { useReminders } from "./hooks/useReminders";
+import { useAndroidBackButton } from "./hooks/useAndroidBackButton";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD,
   STRINGS, SECTOR_IDS, STAGE_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
@@ -79,6 +81,19 @@ export default function App() {
   // Drives the in-app rejection-reason modal (replaces window.prompt).
   // { initialReason, onConfirm(reason) } while the modal is open, else null.
   const [rejectionPrompt, setRejectionPrompt] = useState(null);
+  // Drives the generic in-app confirm/alert modal (replaces window.confirm
+  // and window.alert). { message, variant: "confirm"|"alert", danger, onConfirm }
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  // Replacement for `if (!window.confirm(msg)) return; doThing();` — pass the
+  // message and a callback to run only if the user confirms.
+  const confirmAction = useCallback((message, onConfirm, { danger = false } = {}) => {
+    setConfirmDialog({ message, variant: "confirm", danger, onConfirm });
+  }, []);
+  // Replacement for window.alert(msg) — shows the same message, but as a
+  // dismissible in-app modal instead of a blocking native dialog.
+  const showAlert = useCallback((message) => {
+    setConfirmDialog({ message, variant: "alert", onConfirm: () => setConfirmDialog(null) });
+  }, []);
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [expandedOfferId, setExpandedOfferId] = useState(null);
 
@@ -104,11 +119,11 @@ export default function App() {
   // Blocks any write attempt while offline instead of queueing it for later sync.
   const requireOnline = useCallback(() => {
     if (!isOnline) {
-      alert(t.requireOnlineMsg);
+      showAlert(t.requireOnlineMsg);
       return false;
     }
     return true;
-  }, [isOnline, t]);
+  }, [isOnline, t, showAlert]);
 
   const {
     authChecked, user, ownerUid, availableOwners, permissionLoading,
@@ -122,6 +137,18 @@ export default function App() {
 
   useReminders({ visits, user, ownerUid, canEdit, t });
 
+  useAndroidBackButton({
+    screen,
+    setScreen,
+    form,
+    isRootScreen,
+    hasOpenModal: !!rejectionPrompt || !!confirmDialog,
+    closeModal: () => {
+      setRejectionPrompt(null);
+      setConfirmDialog(null);
+    },
+  });
+
   // Surfaces a save failure to the user instead of swallowing it silently.
   // A "permission-denied" here almost always means the signed-in account's
   // role in Firestore doesn't actually match what Settings shows (e.g. it's
@@ -130,7 +157,7 @@ export default function App() {
   const reportSaveError = (e) => {
     console.error("Save failed:", e);
     const isPermissionError = e && (e.code === "permission-denied" || String(e.code || "").includes("permission-denied"));
-    alert(
+    showAlert(
       isPermissionError
         ? (lang === "ar"
             ? "معنديش صلاحية أكتب في البيانات دي. تأكد إن الدور بتاعك مضبوط 'يشوف ويعدل' فعليًا."
@@ -150,15 +177,16 @@ export default function App() {
   };
 
   // Removes one entry from a visit's activity timeline (with confirmation).
-  const deleteActivity = async (entry) => {
+  const deleteActivity = (entry) => {
     if (!canEdit || !active || !ownerUid) return;
     if (!requireOnline()) return;
-    if (!window.confirm(t.deleteActivityConfirm)) return;
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
-        activityLog: arrayRemove(entry),
-      });
-    } catch (e) {}
+    confirmAction(t.deleteActivityConfirm, async () => {
+      try {
+        await updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
+          activityLog: arrayRemove(entry),
+        });
+      } catch (e) {}
+    }, { danger: true });
   };
 
   // ---- Offers CRUD (stored as an array field on the customer document, same
@@ -216,15 +244,16 @@ export default function App() {
     await saveStatus("");
   };
 
-  const deleteOffer = async (visit, offer) => {
+  const deleteOffer = (visit, offer) => {
     if (!canEdit || !visit || !ownerUid) return;
     if (!requireOnline()) return;
-    if (!window.confirm(t.deleteOfferConfirm)) return;
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
-        offers: arrayRemove(offer),
-      });
-    } catch (e) {}
+    confirmAction(t.deleteOfferConfirm, async () => {
+      try {
+        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
+          offers: arrayRemove(offer),
+        });
+      } catch (e) {}
+    }, { danger: true });
   };
 
   const openNew = () => {
@@ -322,15 +351,16 @@ export default function App() {
     }
   };
 
-  const deleteSupplier = async (id) => {
+  const deleteSupplier = (id) => {
     if (!canEdit) return;
     if (!requireOnline()) return;
     if (!user || !ownerUid) return;
-    if (!window.confirm(t.deleteSupplierConfirm)) return;
-    try {
-      await deleteDoc(doc(db, "users", ownerUid, "suppliers", id));
-      setScreen("suppliers");
-    } catch (e) {}
+    confirmAction(t.deleteSupplierConfirm, async () => {
+      try {
+        await deleteDoc(doc(db, "users", ownerUid, "suppliers", id));
+        setScreen("suppliers");
+      } catch (e) {}
+    }, { danger: true });
   };
 
   const togglePinSupplier = async (supplier) => {
@@ -367,87 +397,101 @@ export default function App() {
     setForm({ ...form, tagsInput: remaining.join(", ") });
   };
 
-  const saveForm = async () => {
+  const saveForm = () => {
     // Defense in depth: even if the UI hid the buttons, never let a
     // viewer's client write. The Firestore rules enforce this too.
     if (!canEdit) return;
     if (!requireOnline()) return;
     if (!validate() || !user || !ownerUid) return;
 
-    if (!form.phone.trim()) {
-      if (!window.confirm(t.phoneMissingWarning)) return;
-    }
+    const proceedSave = async () => {
+      const { id, tagsInput, activityLog, offers, visitHistory, ...rest } = form;
+      const data = { ...rest, tags: parseTagsCell(tagsInput) };
+      const original = id ? visits.find((v) => v.id === id) : null;
 
-    const duplicate = form.phone ? findDuplicatePhone(form.phone, form.id) : null;
-    if (duplicate) {
-      const proceed = window.confirm(t.duplicatePhoneWarning(duplicate.companyName));
-      if (!proceed) return;
-    }
-
-    const { id, tagsInput, activityLog, offers, visitHistory, ...rest } = form;
-    const data = { ...rest, tags: parseTagsCell(tagsInput) };
-    const original = id ? visits.find((v) => v.id === id) : null;
-
-    try {
-      let savedId = id;
-      if (id) {
-        const updatePayload = { ...data };
-        if (original && original.visitDate !== data.visitDate && data.visitDate) {
-          updatePayload.visitHistory = arrayUnion(buildVisitEntry(data.visitDate));
+      try {
+        let savedId = id;
+        if (id) {
+          const updatePayload = { ...data };
+          if (original && original.visitDate !== data.visitDate && data.visitDate) {
+            updatePayload.visitHistory = arrayUnion(buildVisitEntry(data.visitDate));
+          }
+          await updateDoc(doc(db, "users", ownerUid, "visits", id), updatePayload);
+        } else {
+          const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
+            ...data,
+            activityLog: [],
+            offers: [],
+            visitHistory: data.visitDate ? [buildVisitEntry(data.visitDate)] : [],
+            createdAt: serverTimestamp(),
+          });
+          savedId = ref.id;
         }
-        await updateDoc(doc(db, "users", ownerUid, "visits", id), updatePayload);
-      } else {
-        const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
-          ...data,
-          activityLog: [],
-          offers: [],
-          visitHistory: data.visitDate ? [buildVisitEntry(data.visitDate)] : [],
-          createdAt: serverTimestamp(),
-        });
-        savedId = ref.id;
-      }
 
-      if (!id) {
-        await appendActivity(savedId, buildActivity("created", t.activityCreated));
-      } else {
-        if (original && original.stage !== data.stage) {
-          await appendActivity(
+        if (!id) {
+          await appendActivity(savedId, buildActivity("created", t.activityCreated));
+        } else {
+          if (original && original.stage !== data.stage) {
+            await appendActivity(
+              savedId,
+              buildActivity(
+                "stage",
+                data.stage ? t.activityStageChanged(t.stages[data.stage] || data.stage) : t.activityStageCleared
+              )
+            );
+          }
+          if (original && original.callDateTime !== data.callDateTime && data.callDateTime) {
+            await appendActivity(savedId, buildActivity("call", t.activityCallSet(fmtReminder(data.callDateTime, t.locale))));
+          }
+        }
+
+        if (data.callDateTime) {
+          await scheduleCallReminder(
             savedId,
-            buildActivity(
-              "stage",
-              data.stage ? t.activityStageChanged(t.stages[data.stage] || data.stage) : t.activityStageCleared
-            )
+            data.callDateTime,
+            `${t.reminderTitle} ${data.companyName}`,
+            t.reminderBody(data.contactName)
           );
+        } else {
+          await cancelCallReminder(savedId);
         }
-        if (original && original.callDateTime !== data.callDateTime && data.callDateTime) {
-          await appendActivity(savedId, buildActivity("call", t.activityCallSet(fmtReminder(data.callDateTime, t.locale))));
-        }
+        setScreen("list");
+      } catch (e) {
+        reportSaveError(e);
       }
+    };
 
-      if (data.callDateTime) {
-        await scheduleCallReminder(
-          savedId,
-          data.callDateTime,
-          `${t.reminderTitle} ${data.companyName}`,
-          t.reminderBody(data.contactName)
-        );
-      } else {
-        await cancelCallReminder(savedId);
+    // Chain: phone-missing warning -> duplicate-phone warning -> actual save.
+    // Each step only runs once the previous one's confirm modal is accepted.
+    const checkDuplicateThenSave = () => {
+      const duplicate = form.phone ? findDuplicatePhone(form.phone, form.id) : null;
+      if (duplicate) {
+        confirmAction(t.duplicatePhoneWarning(duplicate.companyName), proceedSave);
+        return;
       }
-      setScreen("list");
-    } catch (e) {
-      reportSaveError(e);
+      proceedSave();
+    };
+
+    if (!form.phone.trim()) {
+      confirmAction(t.phoneMissingWarning, checkDuplicateThenSave);
+      return;
     }
+    checkDuplicateThenSave();
   };
 
-  const deleteVisit = async (id) => {
+  const deleteVisit = (id) => {
     if (!canEdit) return;
     if (!requireOnline()) return;
     if (!user || !ownerUid) return;
     const confirmMsg = lang === "ar"
       ? "هل أنت متأكد من حذف هذا العميل؟"
       : "Are you sure you want to delete this customer?";
-    if (!window.confirm(confirmMsg)) return;
+    confirmAction(confirmMsg, () => {
+      proceedDeleteVisit(id);
+    }, { danger: true });
+  };
+
+  const proceedDeleteVisit = async (id) => {
 
     const visit = visits.find((v) => v.id === id);
     setScreen("list");
@@ -662,9 +706,9 @@ export default function App() {
         }
         count++;
       }
-      alert(t.importSuccess(count));
+      showAlert(t.importSuccess(count));
     } catch (err) {
-      alert(t.importError);
+      showAlert(t.importError);
     } finally {
       setImporting(false);
     }
@@ -854,28 +898,6 @@ export default function App() {
         color: TEXT,
       }}
     >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
-        .btn-press:active { transform: scale(0.98); }
-        input, textarea, select {
-          font-family: 'Tajawal', sans-serif;
-          width: 100%;
-          background: var(--surface);
-          border: 0.5px solid var(--line);
-          border-radius: 10px;
-          padding: 10px 12px;
-          font-size: 14px;
-          color: ${TEXT};
-          box-sizing: border-box;
-        }
-        input:focus, textarea:focus, select:focus {
-          outline: none;
-          border-color: ${PRIMARY_MID};
-        }
-        label { font-size: 13px; font-weight: 700; color: ${MUTED}; display:block; margin-bottom:4px; }
-        button:focus-visible { outline: 2px solid ${PRIMARY_MID}; outline-offset: 2px; }
-      `}</style>
-
       <div
         className="flex items-center gap-2 px-4 py-3"
         style={{ background: PRIMARY, position: "sticky", top: 0, zIndex: 10 }}
@@ -943,8 +965,9 @@ export default function App() {
         </button>
       </div>
 
+      <div key={screen} className="animate-screen-in">
       {screen === "dashboard" && (
-        <Suspense fallback={<p className="text-sm text-center py-8" style={{ color: MUTED }}>{t.loading}</p>}>
+        <Suspense fallback={<div className="px-4 pt-4"><SkeletonList count={3} /></div>}>
           <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} />
         </Suspense>
       )}
@@ -1068,6 +1091,7 @@ export default function App() {
           isOwnerAccount={isOwnerAccount}
           members={members}
           revokeAccess={revokeAccess}
+          confirmAction={confirmAction}
           exportAllToExcel={exportAllToExcel}
           exportFilteredToExcel={exportFilteredToExcel}
           filteredCount={filtered.length}
@@ -1082,6 +1106,7 @@ export default function App() {
           grantAccess={grantAccess}
         />
       )}
+      </div>
 
       {pendingDelete && (
         <div
@@ -1122,6 +1147,21 @@ export default function App() {
             onConfirm(reason);
           }}
           onCancel={() => setRejectionPrompt(null)}
+        />
+      )}
+
+      {confirmDialog && (
+        <ConfirmModal
+          t={t}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          danger={confirmDialog.danger}
+          onConfirm={() => {
+            const { onConfirm } = confirmDialog;
+            setConfirmDialog(null);
+            onConfirm();
+          }}
+          onCancel={() => setConfirmDialog(null)}
         />
       )}
     </div>

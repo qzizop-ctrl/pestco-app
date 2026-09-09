@@ -123,23 +123,6 @@ export default function AuthScreen({ lang, setLang }) {
         flexDirection: "column",
       }}
     >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
-        .auth-input {
-          font-family: 'Tajawal', sans-serif;
-          width: 100%;
-          background: #fff;
-          border: 0.5px solid #D8D5C8;
-          border-radius: 10px;
-          padding: 12px 14px;
-          font-size: 14px;
-          color: ${TEXT};
-          box-sizing: border-box;
-        }
-        .auth-input:focus { outline: none; border-color: ${PRIMARY}; }
-        .btn-press:active { transform: scale(0.98); }
-      `}</style>
-
       <div style={{ display: "flex", justifyContent: "flex-end", padding: 16 }}>
         <button
           onClick={() => setLang(lang === "ar" ? "en" : "ar")}

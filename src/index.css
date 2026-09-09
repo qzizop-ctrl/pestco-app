@@ -5,3 +5,83 @@
 html, body, #root {
   height: 100%;
 }
+
+body {
+  font-family: 'Tajawal', sans-serif;
+}
+
+/* Shared form field styling (used across all forms in the app) */
+input, textarea, select {
+  font-family: 'Tajawal', sans-serif;
+  width: 100%;
+  background: var(--surface);
+  border: 0.5px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text);
+  box-sizing: border-box;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #2A5FA8;
+}
+label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 4px;
+}
+button:focus-visible {
+  outline: 2px solid #2A5FA8;
+  outline-offset: 2px;
+}
+
+/* Auth screen uses its own light input style (always-light background,
+   regardless of app theme, since the auth screen doesn't switch to dark mode). */
+.auth-input {
+  font-family: 'Tajawal', sans-serif;
+  width: 100%;
+  background: #fff;
+  border: 0.5px solid #D8D5C8;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--text);
+  box-sizing: border-box;
+}
+.auth-input:focus {
+  outline: none;
+  border-color: #0F2E5E;
+}
+
+/* Tap feedback on any pressable element */
+.btn-press {
+  transition: transform 120ms ease;
+}
+.btn-press:active {
+  transform: scale(0.98);
+}
+
+/* Skeleton loading placeholders */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-subtle) 25%,
+    var(--line) 37%,
+    var(--surface-subtle) 63%
+  );
+  background-size: 400px 100%;
+  border-radius: 8px;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .btn-press,
+  .animate-screen-in,
+  .skeleton {
+    animation: none !important;
+    transition: none !important;
+  }
+}
