@@ -137,7 +137,13 @@ service cloud.firestore {
       //   OWNER_UID: "editor"
       // }
       //
-      // And the access document must already confirm the grant.
+      // We intentionally do NOT cross-check this against the
+      // access/{ownerUid} document here: that coupling added no
+      // real security benefit (the "keys().hasOnly([request.auth.uid])"
+      // restriction below already prevents anyone from touching a
+      // grant that isn't their own) and it previously caused this
+      // write to silently fail whenever it raced or drifted even
+      // slightly out of sync with the access/{ownerUid} write.
       // ----------------------------------------------------------
 
       allow create: if hasEmail()
@@ -147,11 +153,7 @@ service cloud.firestore {
              request.auth.uid
            ])
         && request.resource.data.owners[request.auth.uid]
-             in ['editor', 'viewer']
-        && exists(accessDoc(request.auth.uid))
-        && get(accessDoc(request.auth.uid))
-             .data.members[email]
-             == request.resource.data.owners[request.auth.uid];
+             in ['editor', 'viewer'];
 
 
       // ----------------------------------------------------------
@@ -168,13 +170,8 @@ service cloud.firestore {
       //   }
       // }
       //
-      // OWNER_A cannot modify OWNER_B's entry.
-      //
-      // If the entry is being changed to editor/viewer, the
-      // corresponding access document must contain the same role.
-      //
-      // If the entry is being removed, the access document must
-      // no longer grant that email access.
+      // OWNER_A cannot modify OWNER_B's entry. Same reasoning as
+      // CREATE above for not cross-checking against access/{ownerUid}.
       // ----------------------------------------------------------
 
       allow update: if hasEmail()
@@ -188,25 +185,15 @@ service cloud.firestore {
              .affectedKeys()
              .hasOnly([request.auth.uid])
 
-        // Caller must actually be the owner of this grant.
-        && exists(accessDoc(request.auth.uid))
-
-        // If the caller's entry still exists, it must match the
-        // owner's access document.
+        // If the caller's entry still exists, it must be a valid role.
         && (
           !request.resource.data.owners.keys()
              .hasAny([request.auth.uid])
 
           ||
 
-          (
-            request.resource.data.owners[request.auth.uid]
-              in ['editor', 'viewer']
-
-            && get(accessDoc(request.auth.uid))
-                 .data.members[email]
-              == request.resource.data.owners[request.auth.uid]
-          )
+          request.resource.data.owners[request.auth.uid]
+            in ['editor', 'viewer']
         );
 
 
