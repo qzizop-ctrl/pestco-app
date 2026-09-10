@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, Percent, DollarSign, FileDown, CheckCircle2, BadgeDollarSign } from "lucide-react";
+import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, Percent, DollarSign, FileDown } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -64,6 +64,27 @@ function computeDecidedCount(offersByStatus) {
   const purchased = (offersByStatus.purchased || {}).count || 0;
   const rejected = (offersByStatus.rejected || {}).count || 0;
   return purchased + rejected;
+}
+
+// Groups per-status offer stats into the three buckets shown by the split
+// bars on the Offers summary cards: converted, still pending, and rejected.
+// "Converted to sale" = purchased AND installed — an installed offer was
+// necessarily bought first, so excluding it would silently undercount
+// actual sales. Pending and rejected are kept as their own segments since
+// "still open" and "lost" mean very different things for follow-up.
+function buildOfferBreakdown(offersByStatus) {
+  const pending = offersByStatus.pending || { count: 0, totals: {} };
+  const rejected = offersByStatus.rejected || { count: 0, totals: {} };
+  const purchased = offersByStatus.purchased || { count: 0, totals: {} };
+  const installed = offersByStatus.installed || { count: 0, totals: {} };
+  return {
+    convertedCount: purchased.count + installed.count,
+    convertedValueEGP: (purchased.totals.EGP || 0) + (installed.totals.EGP || 0),
+    pendingCount: pending.count,
+    pendingValueEGP: pending.totals.EGP || 0,
+    rejectedCount: rejected.count,
+    rejectedValueEGP: rejected.totals.EGP || 0,
+  };
 }
 
 // Builds a per-day (specific month) or per-month ("all") bucket array of
@@ -176,7 +197,37 @@ function computePeriodStats(visits, year, month, sector) {
   };
 }
 
-function SummaryCard({ icon: Icon, label, value, delta, subValue, t }) {
+// A thin horizontal bar split into colored segments by proportion, plus a
+// small legend row underneath. Used on the Offers cards to show converted
+// vs. still-pending vs. rejected at a glance, without adding more cards.
+function SplitBar({ segments }) {
+  const total = segments.reduce((sum, s) => sum + s.amount, 0);
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div
+        className="flex"
+        style={{ height: 6, borderRadius: 999, overflow: "hidden", background: SURFACE_SUBTLE }}
+      >
+        {total > 0 &&
+          segments
+            .filter((s) => s.amount > 0)
+            .map((s) => (
+              <div key={s.key} style={{ width: `${(s.amount / total) * 100}%`, background: s.color }} />
+            ))}
+      </div>
+      <div className="flex flex-wrap items-center" style={{ gap: 10, marginTop: 6 }}>
+        {segments.map((s) => (
+          <div key={s.key} className="flex items-center" style={{ gap: 4 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: s.color, flexShrink: 0 }} />
+            <span className="text-xs font-bold" style={{ color: MUTED }}>{s.label}: {s.display}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ icon: Icon, label, value, delta, subValue, extra, t }) {
   return (
     <div
       style={{
@@ -201,6 +252,7 @@ function SummaryCard({ icon: Icon, label, value, delta, subValue, t }) {
       {subValue && (
         <p className="text-xs font-bold" style={{ margin: "2px 0 0", color: MUTED }}>{subValue}</p>
       )}
+      {extra}
       {delta !== undefined && (
         <div className="flex items-center gap-1 mt-1">
           {delta === null ? (
@@ -264,12 +316,32 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   const winRateDecidedCount = useMemo(() => computeDecidedCount(stats.offersByStatus), [stats]);
   const prevWinRate = useMemo(() => (prevStats ? computeWinRate(prevStats.offersByStatus) : null), [prevStats]);
 
-  // Offers that actually converted into a sale ("purchased"), kept separate
-  // from the total offers count/value above — those totals blend pending,
-  // rejected, and installed offers together, which overstates how much was
-  // actually sold. These two feed a dedicated "converted to sale" card.
-  const salesInfo = stats.offersByStatus.purchased || { count: 0, totals: {} };
-  const prevSalesInfo = prevStats ? (prevStats.offersByStatus.purchased || { count: 0, totals: {} }) : null;
+  // Offer status breakdown used by the split bars on the Offers cards below.
+  const offerBreakdown = useMemo(() => buildOfferBreakdown(stats.offersByStatus), [stats]);
+
+  const offersCountSegments = useMemo(() => ([
+    { key: "converted", label: t.dashOffersConverted, color: "#2F9E58", amount: offerBreakdown.convertedCount, display: offerBreakdown.convertedCount },
+    { key: "pending", label: t.offerStatuses.pending, color: "#C7A24A", amount: offerBreakdown.pendingCount, display: offerBreakdown.pendingCount },
+    { key: "rejected", label: t.offerStatuses.rejected, color: "#C4443A", amount: offerBreakdown.rejectedCount, display: offerBreakdown.rejectedCount },
+  ]), [offerBreakdown, t]);
+
+  const offersValueSegments = useMemo(() => ([
+    {
+      key: "converted", label: t.dashOffersConverted, color: "#2F9E58",
+      amount: offerBreakdown.convertedValueEGP,
+      display: `${fmtMoney(offerBreakdown.convertedValueEGP, t.locale)} ${t.dashCurrency}`,
+    },
+    {
+      key: "pending", label: t.offerStatuses.pending, color: "#C7A24A",
+      amount: offerBreakdown.pendingValueEGP,
+      display: `${fmtMoney(offerBreakdown.pendingValueEGP, t.locale)} ${t.dashCurrency}`,
+    },
+    {
+      key: "rejected", label: t.offerStatuses.rejected, color: "#C4443A",
+      amount: offerBreakdown.rejectedValueEGP,
+      display: `${fmtMoney(offerBreakdown.rejectedValueEGP, t.locale)} ${t.dashCurrency}`,
+    },
+  ]), [offerBreakdown, t]);
 
   const customersAddedLabel = useMemo(() => {
     return month === "all"
@@ -469,6 +541,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
           label={t.dashCardOffersCount}
           value={stats.offersCount}
           delta={compare ? (prevStats ? pctChange(stats.offersCount, prevStats.offersCount) : null) : undefined}
+          extra={<SplitBar segments={offersCountSegments} />}
           t={t}
         />
         <SummaryCard
@@ -476,20 +549,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
           label={t.dashCardOffersValue}
           value={fmtOffersTotals(stats.offersValueTotals, t) || `0 ${t.dashCurrency}`}
           delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
-          t={t}
-        />
-        <SummaryCard
-          icon={CheckCircle2}
-          label={t.dashCardSalesCount}
-          value={salesInfo.count}
-          delta={compare ? (prevSalesInfo ? pctChange(salesInfo.count, prevSalesInfo.count) : null) : undefined}
-          t={t}
-        />
-        <SummaryCard
-          icon={BadgeDollarSign}
-          label={t.dashCardSalesValue}
-          value={fmtOffersTotals(salesInfo.totals, t) || `0 ${t.dashCurrency}`}
-          delta={compare ? (prevSalesInfo ? pctChange(salesInfo.totals.EGP || 0, prevSalesInfo.totals.EGP || 0) : null) : undefined}
+          extra={<SplitBar segments={offersValueSegments} />}
           t={t}
         />
         <SummaryCard
