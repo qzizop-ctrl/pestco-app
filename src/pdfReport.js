@@ -266,31 +266,16 @@ export async function generateDashboardPdf(opts) {
   }
 }
 
-// Writes the PDF to disk and opens the OS share/save sheet — the path that
-// actually works inside the Capacitor Android WebView (see note above).
+// Writes the PDF to the device (straight into Download/ where Android still
+// allows it, otherwise the app cache) and, when it couldn't go straight into
+// Download/, opens the OS share/save sheet so the user can place it
+// themselves — see nativeFileSave.js for why both paths exist.
 async function saveAndSharePdfNative(pdf, fileName, t) {
-  const { Filesystem, Directory } = await import("@capacitor/filesystem");
-  const { Share } = await import("@capacitor/share");
+  const { saveFileNative } = await import("./nativeFileSave");
 
   // Raw base64 (no "data:application/pdf;base64," prefix) — that's what
   // Filesystem.writeFile expects.
   const base64Data = pdf.output("datauristring").split(",")[1];
 
-  const written = await Filesystem.writeFile({
-    path: fileName,
-    data: base64Data,
-    directory: Directory.Cache,
-  });
-
-  try {
-    await Share.share({
-      title: fileName,
-      url: written.uri,
-      dialogTitle: t.dashPdfShareTitle,
-    });
-  } catch (e) {
-    // The file itself was written successfully — this only fails/rejects
-    // when the user dismisses the OS share sheet without picking an app,
-    // which isn't a real error and shouldn't surface the failure toast.
-  }
+  await saveFileNative(fileName, base64Data);
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
+import { Capacitor } from "@capacitor/core";
 import {
   ChevronRight, Languages, LogOut, Settings,
   Wifi, WifiOff, Moon, Sun,
@@ -673,7 +674,19 @@ export default function App() {
     const ws = XLSX.utils.json_to_sheet(visitsToRows(rows));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Visits");
-    XLSX.writeFile(wb, `pestco_visits_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const fileName = `pestco_visits_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    if (Capacitor.isNativePlatform()) {
+      // XLSX.writeFile() is a plain browser Blob download under the hood,
+      // which has no native handler inside the Android WebView (same issue
+      // as the PDF export — see pdfReport.js). Write the bytes to disk via
+      // Capacitor Filesystem instead.
+      const { saveFileNative } = await import("./nativeFileSave");
+      const base64Data = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+      await saveFileNative(fileName, base64Data);
+    } else {
+      XLSX.writeFile(wb, fileName);
+    }
   };
 
   // The live listener already holds every customer (no pagination limit),
