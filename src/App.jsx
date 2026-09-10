@@ -835,25 +835,6 @@ export default function App() {
     [visibleVisits, nowBucket]
   );
 
-  // Customers with a follow-up call scheduled for today specifically (same
-  // calendar day), used for the always-visible "Today's Customers" panel.
-  const todaysCustomers = useMemo(
-    () =>
-      visibleVisits
-        .filter((v) => {
-          if (!v.callDateTime) return false;
-          const d = new Date(v.callDateTime);
-          const n = new Date(now);
-          return (
-            d.getFullYear() === n.getFullYear() &&
-            d.getMonth() === n.getMonth() &&
-            d.getDate() === n.getDate()
-          );
-        })
-        .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime)),
-    [visibleVisits, nowBucket]
-  );
-
   // Customers with no recent activity (visit, call, or note) — a nudge to
   // follow up before they go completely cold.
   const staleCustomers = useMemo(
@@ -1099,7 +1080,6 @@ export default function App() {
           openDetail={openDetail}
           query={query}
           setQuery={setQuery}
-          todaysCustomers={todaysCustomers}
           totalCustomers={totalCustomers}
           sectorCounts={sectorCounts}
           sectorFilter={sectorFilter}

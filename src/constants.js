@@ -85,10 +85,6 @@ export const STRINGS = {
     staleBadge: "متوقف النشاط",
     staleHint: (days) => `مفيش أي نشاط من ${days} يوم`,
 
-    // Today's customers
-    todaysCustomersTitle: "عملاء اليوم",
-    noTodaysCustomers: "مفيش عملاء مجدولين النهاردة",
-
     // Pin / favorite
     pinBtn: "تفضيل",
     unpinBtn: "إلغاء التفضيل",
@@ -291,6 +287,8 @@ export const STRINGS = {
     dashCardVisits: "إجمالي الزيارات",
     dashCardOffersCount: "عدد الأوفرات",
     dashCardOffersValue: "إجمالي قيمة الأوفرات",
+    dashCardSalesCount: "عدد اللي اتحول لبيع",
+    dashCardSalesValue: "قيمة اللي اتحول لبيع",
     dashVisitsPerformance: "أداء الزيارات",
     dashOffersSection: "الأوفرات",
     dashOffersTotalLabel: "عدد الأوفرات",
@@ -410,10 +408,6 @@ export const STRINGS = {
     // Stale / inactive customer indicator
     staleBadge: "Needs review",
     staleHint: (days) => `No activity in ${days} days`,
-
-    // Today's customers
-    todaysCustomersTitle: "Today's Customers",
-    noTodaysCustomers: "No customers scheduled today",
 
     // Pin / favorite
     pinBtn: "Pin",
@@ -609,6 +603,8 @@ export const STRINGS = {
     dashCardVisits: "Total Visits",
     dashCardOffersCount: "Offers",
     dashCardOffersValue: "Total Offers Value",
+    dashCardSalesCount: "Converted to Sales",
+    dashCardSalesValue: "Sales Value",
     dashVisitsPerformance: "Visits Performance",
     dashOffersSection: "Offers",
     dashOffersTotalLabel: "Offers",
