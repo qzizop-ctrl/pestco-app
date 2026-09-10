@@ -11,10 +11,22 @@
 // approach most web apps use to export right-to-left PDFs without shipping
 // a custom embedded font.
 //
-// Both libraries are dynamically imported (see generateDashboardPdf) so
-// their weight — html2canvas especially — never lands in the app's initial
-// bundle, matching the lazy-loading already used for xlsx and the Dashboard
-// screen itself.
+// Implementation note on chunking: html2canvas clones the ENTIRE target
+// element into a hidden iframe before it rasterizes anything, even when
+// you only ask it to capture a small x/y/width/height slice of it. That
+// means a single giant off-screen container holding every offer and every
+// customer for a report period gets fully laid out and cloned again on
+// EVERY page iteration — for a big "all months" report that repeated
+// full-height layout is what was exhausting WebView memory and hard
+// -crashing the app, even though the same code worked fine for a
+// single-month report with few rows. The fix here is to never build one
+// container holding the whole report: the fixed-size sections (header,
+// summary, pipeline, sales performance) render once in their own small
+// container, and the offers/customers tables are split into fixed-size
+// row batches (see ROWS_PER_CHUNK), each rendered in its own small
+// container and added as its own PDF page(s). No single html2canvas call
+// ever has to lay out more than one batch's worth of rows, regardless of
+// how long the overall report is.
 //
 // Implementation note on saving the file: jsPDF's pdf.save() works by
 // creating a Blob URL and programmatically clicking a hidden <a download>
@@ -23,10 +35,10 @@
 // packaged Android app the export silently does nothing (no error, no
 // file) even though the exact same code produces a real download in a
 // desktop/mobile browser tab or the Electron build. On a native platform
-// this instead writes the PDF bytes straight to disk via the Capacitor
-// Filesystem plugin and hands the file off to the OS share/save sheet via
-// the Capacitor Share plugin, which is the supported way to get a
-// generated file out of a Capacitor WebView.
+// this instead writes the PDF bytes straight to disk via a native
+// MediaStore-backed plugin method (see nativeFileSave.js) which lands the
+// file directly in the public Downloads folder with no dialog on
+// Android 10+.
 // ============================================================================
 
 import { Capacitor } from "@capacitor/core";
@@ -45,6 +57,14 @@ const TEXT_HEX = "#1B241F";
 const MUTED_HEX = "#6B7168";
 const LINE_HEX = "#E7E2D6";
 const SUBTLE_HEX = "#F8F6F0";
+
+// How many table rows go into a single off-screen container / html2canvas
+// call. Keeping this fixed and small is what keeps memory use flat no
+// matter how many months' worth of offers/customers are in the report.
+const ROWS_PER_CHUNK = 25;
+
+const CONTAINER_WIDTH_PX = 800;
+const RENDER_SCALE = 2;
 
 function esc(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({
@@ -70,10 +90,19 @@ function simpleTable({ headers, rows, align }) {
   `;
 }
 
-function buildReportHtml({
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks.length > 0 ? chunks : [[]];
+}
+
+// Front-matter HTML: header, summary cards, pipeline, sales-performance
+// table. Size of this is fixed by the app's own fixed set of stages/status
+// values — it never grows with how much data is in the selected period, so
+// it's always safe to render as a single container.
+function buildFrontMatterHtml({
   t, stats, year, month, sectorLabel,
   avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
-  offersList, customersList,
 }) {
   const align = t.dir === "rtl" ? "right" : "left";
   const periodLine = month === "all" ? t.dashPdfPeriodAll(year) : t.dashPdfPeriodMonth(t.months[month], year);
@@ -117,21 +146,6 @@ function buildReportHtml({
     return [t.offerStatuses[id], String(info.count), valueText];
   });
 
-  const offersListRows = offersList.map((o) => [
-    o.customerName || t.noCompanyName,
-    o.name || "",
-    `${fmtMoney(o.amount)} ${t.currencies[o.currency] || t.currencies.EGP}`,
-    t.offerStatuses[o.status] || o.status,
-    o.offerDate || "",
-  ]);
-
-  const customersRows = customersList.map((v) => [
-    v.companyName || t.noCompanyName,
-    t.sectors[v.sector] || t.sectors.private,
-    v.stage ? (t.stages[v.stage] || "") : t.stageNone,
-    v.visitDate || t.noVisitYet,
-  ]);
-
   return `
     <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;color:${TEXT_HEX};">
       <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid ${PRIMARY};padding-bottom:14px;margin-bottom:14px;">
@@ -154,26 +168,55 @@ function buildReportHtml({
 
       ${sectionTitle(t.dashSalesPerformance)}
       ${simpleTable({ headers: [t.dashOffersTotalLabel, "#", t.dashOffersTotalValueLabel], rows: offersByStatusRows, align })}
+    </div>
+  `;
+}
 
-      ${sectionTitle(t.dashPdfOffersListSection)}
-      ${offersListRows.length > 0
-        ? simpleTable({
-            headers: [t.dashPdfColCompany, t.dashPdfColOffer, t.dashPdfColAmount, t.dashPdfColStatus, t.dashPdfColDate],
-            rows: offersListRows,
-            align,
-          })
-        : `<div style="font-size:12px;color:${MUTED_HEX};padding:10px 0;">${esc(t.dashPdfNoOffers)}</div>`}
+// One chunk of the offers list (ROWS_PER_CHUNK rows or fewer), as its own
+// small, self-contained container.
+function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk }) {
+  const align = t.dir === "rtl" ? "right" : "left";
+  const title = isFirstChunk ? t.dashPdfOffersListSection : `${t.dashPdfOffersListSection} (${t.dashPdfContinued || "تابع"})`;
+  const body = rows.length > 0
+    ? simpleTable({
+        headers: [t.dashPdfColCompany, t.dashPdfColOffer, t.dashPdfColAmount, t.dashPdfColStatus, t.dashPdfColDate],
+        rows,
+        align,
+      })
+    : `<div style="font-size:12px;color:${MUTED_HEX};padding:10px 0;">${esc(t.dashPdfNoOffers)}</div>`;
 
-      ${sectionTitle(t.dashPdfCustomersSection)}
-      ${customersRows.length > 0
-        ? simpleTable({
-            headers: [t.dashPdfColCompany, t.dashPdfColSector, t.dashPdfColStage, t.visitDateRow],
-            rows: customersRows,
-            align,
-          })
-        : `<div style="font-size:12px;color:${MUTED_HEX};padding:10px 0;">${esc(t.dashPdfNoCustomers)}</div>`}
+  return `
+    <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;color:${TEXT_HEX};">
+      ${sectionTitle(title)}
+      ${body}
+    </div>
+  `;
+}
 
-      <div style="margin-top:24px;padding-top:12px;border-top:1px solid ${LINE_HEX};font-size:10px;color:${MUTED_HEX};text-align:center;">
+// One chunk of the customers list, same idea as offers above.
+function buildCustomersChunkHtml({ t, rows, isFirstChunk }) {
+  const align = t.dir === "rtl" ? "right" : "left";
+  const title = isFirstChunk ? t.dashPdfCustomersSection : `${t.dashPdfCustomersSection} (${t.dashPdfContinued || "تابع"})`;
+  const body = rows.length > 0
+    ? simpleTable({
+        headers: [t.dashPdfColCompany, t.dashPdfColSector, t.dashPdfColStage, t.visitDateRow],
+        rows,
+        align,
+      })
+    : `<div style="font-size:12px;color:${MUTED_HEX};padding:10px 0;">${esc(t.dashPdfNoCustomers)}</div>`;
+
+  return `
+    <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;color:${TEXT_HEX};">
+      ${sectionTitle(title)}
+      ${body}
+    </div>
+  `;
+}
+
+function buildFooterHtml({ t }) {
+  return `
+    <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;">
+      <div style="padding-top:12px;border-top:1px solid ${LINE_HEX};font-size:10px;color:${MUTED_HEX};text-align:center;">
         ${esc(t.dashPdfFooterNote)}
       </div>
     </div>
@@ -185,96 +228,132 @@ function buildReportHtml({
 // so this never re-derives its own numbers — the report always matches
 // exactly what's on screen for the selected year/month/sector.
 export async function generateDashboardPdf(opts) {
-  const { t } = opts;
-  const container = document.createElement("div");
-  container.setAttribute("dir", t.dir);
-  // Attached to the document (required for html2canvas to read real layout
-  // and computed styles) but pushed far off-screen so nothing flashes on
-  // screen while it renders.
-  container.style.position = "fixed";
-  container.style.top = "0";
-  container.style.left = "-10000px";
-  container.style.width = "800px";
-  container.style.zIndex = "-1";
-  container.innerHTML = buildReportHtml(opts);
-  document.body.appendChild(container);
+  const { t, offersList = [], customersList = [] } = opts;
+
+  const [{ default: html2canvas }, jspdfModule] = await Promise.all([
+    import("html2canvas"),
+    import("jspdf"),
+  ]);
+  const { jsPDF } = jspdfModule;
+
+  const pdf = new jsPDF({ unit: "pt", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  // How many CSS pixels of an 800px-wide off-screen container correspond
+  // to one A4 page once that width is scaled up to fill pageWidth.
+  const cssPxPerPage = pageHeight * (CONTAINER_WIDTH_PX / pageWidth);
+
+  let anyPageAdded = false;
+
+  // Renders one small, self-contained HTML string as one or more PDF
+  // pages. Each call gets its own fresh container that's removed right
+  // after — nothing from a previous chunk stays in the DOM, so memory use
+  // never accumulates across chunks regardless of total report length.
+  async function renderHtmlChunk(html) {
+    const container = document.createElement("div");
+    container.setAttribute("dir", t.dir);
+    container.style.position = "fixed";
+    container.style.top = "0";
+    container.style.left = "-10000px";
+    container.style.width = `${CONTAINER_WIDTH_PX}px`;
+    container.style.zIndex = "-1";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    try {
+      const totalHeightPx = container.scrollHeight;
+      const pageCount = Math.max(1, Math.ceil(totalHeightPx / cssPxPerPage));
+
+      for (let page = 0; page < pageCount; page++) {
+        const sliceY = page * cssPxPerPage;
+        const sliceHeightPx = Math.min(cssPxPerPage, totalHeightPx - sliceY);
+
+        const canvas = await html2canvas(container, {
+          scale: RENDER_SCALE,
+          backgroundColor: "#FFFFFF",
+          useCORS: true,
+          x: 0,
+          y: sliceY,
+          width: CONTAINER_WIDTH_PX,
+          height: sliceHeightPx,
+          windowWidth: CONTAINER_WIDTH_PX,
+          windowHeight: totalHeightPx,
+        });
+
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const imgData = canvas.toDataURL("image/png");
+
+        if (anyPageAdded) pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+        anyPageAdded = true;
+      }
+    } finally {
+      document.body.removeChild(container);
+    }
+  }
 
   try {
-    const [{ default: html2canvas }, jspdfModule] = await Promise.all([
-      import("html2canvas"),
-      import("jspdf"),
+    // 1) Fixed-size front matter — always safe as a single container.
+    await renderHtmlChunk(buildFrontMatterHtml(opts));
+
+    // 2) Offers list, split into fixed-size row batches.
+    const offerRows = offersList.map((o) => [
+      o.customerName || t.noCompanyName,
+      o.name || "",
+      `${fmtMoney(o.amount)} ${t.currencies[o.currency] || t.currencies.EGP}`,
+      t.offerStatuses[o.status] || o.status,
+      o.offerDate || "",
     ]);
-    const { jsPDF } = jspdfModule;
-
-    const CONTAINER_WIDTH_PX = 800; // matches container.style.width above
-    const RENDER_SCALE = 2;
-
-    const pdf = new jsPDF({ unit: "pt", format: "a4" });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-
-    // How many CSS pixels of the off-screen container correspond to one
-    // A4 page, given the container is rendered at CONTAINER_WIDTH_PX wide
-    // and that width is scaled to fill pageWidth in the PDF.
-    const cssPxPerPage = pageHeight * (CONTAINER_WIDTH_PX / pageWidth);
-    const totalHeightPx = container.scrollHeight;
-    const pageCount = Math.max(1, Math.ceil(totalHeightPx / cssPxPerPage));
-
-    // Renders and adds one page at a time instead of rasterizing the whole
-    // report into a single giant canvas. A long customers/offers table can
-    // make the full report thousands of CSS pixels tall; at scale 2 that
-    // single canvas can be large enough to exhaust WebView memory and hard
-    // -crash the app (no JS error, no dialog — just kicks back to the home
-    // screen). Capturing one page-worth of height at a time keeps every
-    // canvas roughly the same small size regardless of report length.
-    for (let page = 0; page < pageCount; page++) {
-      const sliceY = page * cssPxPerPage;
-      const sliceHeightPx = Math.min(cssPxPerPage, totalHeightPx - sliceY);
-
-      const canvas = await html2canvas(container, {
-        scale: RENDER_SCALE,
-        backgroundColor: "#FFFFFF",
-        useCORS: true,
-        x: 0,
-        y: sliceY,
-        width: CONTAINER_WIDTH_PX,
-        height: sliceHeightPx,
-        windowWidth: CONTAINER_WIDTH_PX,
-        windowHeight: totalHeightPx,
-      });
-
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const imgData = canvas.toDataURL("image/png");
-
-      if (page > 0) pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+    const offerChunks = chunkArray(offerRows, ROWS_PER_CHUNK);
+    for (let i = 0; i < offerChunks.length; i++) {
+      await renderHtmlChunk(buildOffersChunkHtml({
+        t, rows: offerChunks[i], isFirstChunk: i === 0, isLastChunk: i === offerChunks.length - 1,
+      }));
     }
+
+    // 3) Customers list, same batching.
+    const customerRows = customersList.map((v) => [
+      v.companyName || t.noCompanyName,
+      t.sectors[v.sector] || t.sectors.private,
+      v.stage ? (t.stages[v.stage] || "") : t.stageNone,
+      v.visitDate || t.noVisitYet,
+    ]);
+    const customerChunks = chunkArray(customerRows, ROWS_PER_CHUNK);
+    for (let i = 0; i < customerChunks.length; i++) {
+      await renderHtmlChunk(buildCustomersChunkHtml({
+        t, rows: customerChunks[i], isFirstChunk: i === 0,
+      }));
+    }
+
+    // 4) Footer note, on its own small final page.
+    await renderHtmlChunk(buildFooterHtml({ t }));
 
     const dateSuffix = new Date().toISOString().slice(0, 10);
     const fileName = `pestco_report_${dateSuffix}.pdf`;
 
     if (Capacitor.isNativePlatform()) {
-      await saveAndSharePdfNative(pdf, fileName, opts.t);
+      await saveAndSharePdfNative(pdf, fileName);
     } else {
       // Plain browser tab / Electron: the standard Blob-download path
       // works fine here, no native file handoff needed.
       pdf.save(fileName);
     }
-  } finally {
-    document.body.removeChild(container);
+  } catch (err) {
+    // Surface generation/save failures to the caller instead of letting
+    // them disappear silently — see the Dashboard button's try/catch.
+    throw err;
   }
 }
 
-// Writes the PDF to the device (straight into Download/ where Android still
-// allows it, otherwise the app cache) and, when it couldn't go straight into
-// Download/, opens the OS share/save sheet so the user can place it
-// themselves — see nativeFileSave.js for why both paths exist.
-async function saveAndSharePdfNative(pdf, fileName, t) {
+// Writes the PDF to the device (straight into Downloads on Android 10+ via
+// MediaStore, no dialog) and, if that fails, falls back to the app cache
+// plus the OS share/save sheet — see nativeFileSave.js.
+async function saveAndSharePdfNative(pdf, fileName) {
   const { saveFileNative } = await import("./nativeFileSave");
 
   // Raw base64 (no "data:application/pdf;base64," prefix) — that's what
-  // Filesystem.writeFile expects.
+  // the native save plugin expects.
   const base64Data = pdf.output("datauristring").split(",")[1];
 
   await saveFileNative(fileName, base64Data);
