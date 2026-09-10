@@ -81,179 +81,179 @@ jobs:
           # Create StorageAccessPlugin.java
           # -----------------------------------------
 
-          cat > android/app/src/main/java/com/pestco/app/StorageAccessPlugin.java <<'EOF'
-          package com.pestco.app;
+          cat > android/app/src/main/java/com/pestco/app/StorageAccessPlugin.java <<-'EOF'
+          	package com.pestco.app;
 
-          import android.content.ContentResolver;
-          import android.content.ContentValues;
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.os.Build;
-          import android.os.Environment;
-          import android.provider.MediaStore;
-          import android.provider.Settings;
-          import android.util.Base64;
+          	import android.content.ContentResolver;
+          	import android.content.ContentValues;
+          	import android.content.Intent;
+          	import android.net.Uri;
+          	import android.os.Build;
+          	import android.os.Environment;
+          	import android.provider.MediaStore;
+          	import android.provider.Settings;
+          	import android.util.Base64;
 
-          import java.io.File;
-          import java.io.FileOutputStream;
-          import java.io.OutputStream;
+          	import java.io.File;
+          	import java.io.FileOutputStream;
+          	import java.io.OutputStream;
 
-          import com.getcapacitor.JSObject;
-          import com.getcapacitor.Plugin;
-          import com.getcapacitor.PluginCall;
-          import com.getcapacitor.annotation.CapacitorPlugin;
+          	import com.getcapacitor.JSObject;
+          	import com.getcapacitor.Plugin;
+          	import com.getcapacitor.PluginCall;
+          	import com.getcapacitor.annotation.CapacitorPlugin;
 
-          @CapacitorPlugin(name = "StorageAccess")
-          public class StorageAccessPlugin extends Plugin {
+          	@CapacitorPlugin(name = "StorageAccess")
+          	public class StorageAccessPlugin extends Plugin {
 
-              // ------------------------------------------------------------------
-              // Writes a base64 file straight into the public Downloads folder.
-              //
-              // On Android 10+ (API 29+) this uses MediaStore, which lets an app
-              // create new files in Downloads WITHOUT any storage permission at
-              // all. No settings redirect, no permission dialog, fully silent.
-              //
-              // On Android 9 and older MediaStore.Downloads doesn't exist, so this
-              // falls back to writing the file directly, which requires the legacy
-              // WRITE_EXTERNAL_STORAGE runtime permission (requested from the JS
-              // side before calling this).
-              // ------------------------------------------------------------------
-              @com.getcapacitor.PluginMethod
-              public void saveToDownloads(PluginCall call) {
-                  String fileName = call.getString("fileName");
-                  String base64Data = call.getString("base64Data");
-                  String mimeType = call.getString("mimeType", "application/octet-stream");
+          	    // ------------------------------------------------------------------
+          	    // Writes a base64 file straight into the public Downloads folder.
+          	    //
+          	    // On Android 10+ (API 29+) this uses MediaStore, which lets an app
+          	    // create new files in Downloads WITHOUT any storage permission at
+          	    // all. No settings redirect, no permission dialog, fully silent.
+          	    //
+          	    // On Android 9 and older MediaStore.Downloads doesn't exist, so this
+          	    // falls back to writing the file directly, which requires the legacy
+          	    // WRITE_EXTERNAL_STORAGE runtime permission (requested from the JS
+          	    // side before calling this).
+          	    // ------------------------------------------------------------------
+          	    @com.getcapacitor.PluginMethod
+          	    public void saveToDownloads(PluginCall call) {
+          	        String fileName = call.getString("fileName");
+          	        String base64Data = call.getString("base64Data");
+          	        String mimeType = call.getString("mimeType", "application/octet-stream");
 
-                  if (fileName == null || base64Data == null) {
-                      call.reject("fileName and base64Data are required");
-                      return;
-                  }
+          	        if (fileName == null || base64Data == null) {
+          	            call.reject("fileName and base64Data are required");
+          	            return;
+          	        }
 
-                  byte[] bytes;
-                  try {
-                      bytes = Base64.decode(base64Data, Base64.DEFAULT);
-                  } catch (Exception e) {
-                      call.reject("Invalid base64Data", e);
-                      return;
-                  }
+          	        byte[] bytes;
+          	        try {
+          	            bytes = Base64.decode(base64Data, Base64.DEFAULT);
+          	        } catch (Exception e) {
+          	            call.reject("Invalid base64Data", e);
+          	            return;
+          	        }
 
-                  try {
-                      String uriString;
+          	        try {
+          	            String uriString;
 
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                          ContentResolver resolver = getContext().getContentResolver();
+          	            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          	                ContentResolver resolver = getContext().getContentResolver();
 
-                          ContentValues values = new ContentValues();
-                          values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
-                          values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
-                          values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+          	                ContentValues values = new ContentValues();
+          	                values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+          	                values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+          	                values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
 
-                          Uri itemUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                          if (itemUri == null) {
-                              call.reject("Could not create file in Downloads");
-                              return;
-                          }
+          	                Uri itemUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+          	                if (itemUri == null) {
+          	                    call.reject("Could not create file in Downloads");
+          	                    return;
+          	                }
 
-                          OutputStream out = resolver.openOutputStream(itemUri);
-                          if (out == null) {
-                              call.reject("Could not open output stream for Downloads file");
-                              return;
-                          }
-                          out.write(bytes);
-                          out.flush();
-                          out.close();
+          	                OutputStream out = resolver.openOutputStream(itemUri);
+          	                if (out == null) {
+          	                    call.reject("Could not open output stream for Downloads file");
+          	                    return;
+          	                }
+          	                out.write(bytes);
+          	                out.flush();
+          	                out.close();
 
-                          uriString = itemUri.toString();
+          	                uriString = itemUri.toString();
 
-                      } else {
-                          File downloadsDir = Environment.getExternalStoragePublicDirectory(
-                              Environment.DIRECTORY_DOWNLOADS
-                          );
-                          if (!downloadsDir.exists()) {
-                              downloadsDir.mkdirs();
-                          }
+          	            } else {
+          	                File downloadsDir = Environment.getExternalStoragePublicDirectory(
+          	                    Environment.DIRECTORY_DOWNLOADS
+          	                );
+          	                if (!downloadsDir.exists()) {
+          	                    downloadsDir.mkdirs();
+          	                }
 
-                          File outFile = new File(downloadsDir, fileName);
-                          FileOutputStream fos = new FileOutputStream(outFile);
-                          fos.write(bytes);
-                          fos.flush();
-                          fos.close();
+          	                File outFile = new File(downloadsDir, fileName);
+          	                FileOutputStream fos = new FileOutputStream(outFile);
+          	                fos.write(bytes);
+          	                fos.flush();
+          	                fos.close();
 
-                          uriString = Uri.fromFile(outFile).toString();
-                      }
+          	                uriString = Uri.fromFile(outFile).toString();
+          	            }
 
-                      JSObject ret = new JSObject();
-                      ret.put("uri", uriString);
-                      call.resolve(ret);
+          	            JSObject ret = new JSObject();
+          	            ret.put("uri", uriString);
+          	            call.resolve(ret);
 
-                  } catch (Exception e) {
-                      call.reject("Failed to save file to Downloads", e);
-                  }
-              }
+          	        } catch (Exception e) {
+          	            call.reject("Failed to save file to Downloads", e);
+          	        }
+          	    }
 
-              // ------------------------------------------------------------------
-              // Kept in case other parts of the app still check/request "All
-              // files access" for other features. Not needed for saveToDownloads.
-              // ------------------------------------------------------------------
-              @com.getcapacitor.PluginMethod
-              public void checkAllFilesAccess(PluginCall call) {
-                  boolean granted;
+          	    // ------------------------------------------------------------------
+          	    // Kept in case other parts of the app still check/request "All
+          	    // files access" for other features. Not needed for saveToDownloads.
+          	    // ------------------------------------------------------------------
+          	    @com.getcapacitor.PluginMethod
+          	    public void checkAllFilesAccess(PluginCall call) {
+          	        boolean granted;
 
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                      granted = Environment.isExternalStorageManager();
-                  } else {
-                      granted = true;
-                  }
+          	        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          	            granted = Environment.isExternalStorageManager();
+          	        } else {
+          	            granted = true;
+          	        }
 
-                  JSObject ret = new JSObject();
-                  ret.put("granted", granted);
-                  call.resolve(ret);
-              }
+          	        JSObject ret = new JSObject();
+          	        ret.put("granted", granted);
+          	        call.resolve(ret);
+          	    }
 
-              @com.getcapacitor.PluginMethod
-              public void requestAllFilesAccess(PluginCall call) {
-                  try {
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                          Intent intent = new Intent(
-                              Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
-                          );
-                          intent.setData(Uri.parse("package:" + getContext().getPackageName()));
-                          getActivity().startActivity(intent);
-                      }
-                      call.resolve();
-                  } catch (Exception e) {
-                      try {
-                          Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                          getActivity().startActivity(intent);
-                          call.resolve();
-                      } catch (Exception e2) {
-                          call.reject("Unable to open storage access settings", e2);
-                      }
-                  }
-              }
-          }
-          EOF
+          	    @com.getcapacitor.PluginMethod
+          	    public void requestAllFilesAccess(PluginCall call) {
+          	        try {
+          	            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+          	                Intent intent = new Intent(
+          	                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
+          	                );
+          	                intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+          	                getActivity().startActivity(intent);
+          	            }
+          	            call.resolve();
+          	        } catch (Exception e) {
+          	            try {
+          	                Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+          	                getActivity().startActivity(intent);
+          	                call.resolve();
+          	            } catch (Exception e2) {
+          	                call.reject("Unable to open storage access settings", e2);
+          	            }
+          	        }
+          	    }
+          	}
+          	EOF
 
           # -----------------------------------------
           # Register plugin in MainActivity
           # -----------------------------------------
 
-          cat > android/app/src/main/java/com/pestco/app/MainActivity.java <<'EOF'
-          package com.pestco.app;
+          cat > android/app/src/main/java/com/pestco/app/MainActivity.java <<-'EOF'
+          	package com.pestco.app;
 
-          import android.os.Bundle;
+          	import android.os.Bundle;
 
-          import com.getcapacitor.BridgeActivity;
+          	import com.getcapacitor.BridgeActivity;
 
-          public class MainActivity extends BridgeActivity {
+          	public class MainActivity extends BridgeActivity {
 
-              @Override
-              public void onCreate(Bundle savedInstanceState) {
-                  registerPlugin(StorageAccessPlugin.class);
-                  super.onCreate(savedInstanceState);
-              }
-          }
-          EOF
+          	    @Override
+          	    public void onCreate(Bundle savedInstanceState) {
+          	        registerPlugin(StorageAccessPlugin.class);
+          	        super.onCreate(savedInstanceState);
+          	    }
+          	}
+          	EOF
 
           echo "======================================"
           echo "Android storage access setup complete"
