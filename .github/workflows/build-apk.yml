@@ -1,31 +1,115 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # =========================
+      # 1. Checkout
+      # =========================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # =========================
+      # 2. Node.js
+      # =========================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # =========================
+      # 3. Java / Android build
+      # =========================
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # =========================
+      # 4. Install dependencies
+      # =========================
+      - name: Install dependencies
+        run: npm install
+
+      # =========================
+      # 5. Build Web App
+      # =========================
+      - name: Build web app
+        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+      # =========================
+      # 6. Generate Android project
+      # =========================
+      - name: Add Android platform
+        run: npx cap add android
+
+      # =========================
+      # 7. Setup Android storage access
+      # =========================
       - name: Setup Android storage access
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          # ---------- Manifest ----------
-          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          # ==========================================================
+          # MANIFEST
+          # ==========================================================
+
+          manifest = Path(
+              "android/app/src/main/AndroidManifest.xml"
+          )
+
           text = manifest.read_text()
 
-          permission = '<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />'
+          permission = (
+              '<uses-permission '
+              'android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />'
+          )
 
           if permission not in text:
               text = text.replace(
-                  '<application',
-                  permission + '\n    <application',
+                  "<application",
+                  permission + "\n    <application",
                   1
               )
 
           manifest.write_text(text)
 
-          # ---------- StorageAccessPlugin ----------
+          print("MANAGE_EXTERNAL_STORAGE added.")
+
+
+          # ==========================================================
+          # StorageAccessPlugin.java
+          # ==========================================================
+
           plugin = Path(
-              "android/app/src/main/java/com/pestco/app/StorageAccessPlugin.java"
+              "android/app/src/main/java/com/pestco/app/"
+              "StorageAccessPlugin.java"
           )
 
-          plugin.parent.mkdir(parents=True, exist_ok=True)
+          plugin.parent.mkdir(
+              parents=True,
+              exist_ok=True
+          )
 
-          plugin.write_text(r'''package com.pestco.app;
+          plugin.write_text(
+          r'''package com.pestco.app;
 
           import android.content.Intent;
           import android.net.Uri;
@@ -33,6 +117,7 @@
           import android.os.Environment;
           import android.provider.Settings;
 
+          import com.getcapacitor.JSObject;
           import com.getcapacitor.Plugin;
           import com.getcapacitor.PluginCall;
           import com.getcapacitor.annotation.CapacitorPlugin;
@@ -40,84 +125,18 @@
           @CapacitorPlugin(name = "StorageAccess")
           public class StorageAccessPlugin extends Plugin {
 
-              @PluginMethod
+              @com.getcapacitor.PluginMethod
               public void checkAllFilesAccess(PluginCall call) {
+
                   boolean granted;
 
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                      granted = Environment.isExternalStorageManager();
+                      granted =
+                          Environment.isExternalStorageManager();
                   } else {
                       granted = true;
                   }
 
-                  call.resolve(
-                      new com.getcapacitor.JSObject()
-                          .put("granted", granted)
-                  );
-              }
+                  JSObject ret = new JSObject();
 
-              @PluginMethod
-              public void requestAllFilesAccess(PluginCall call) {
-                  try {
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                          Intent intent = new Intent(
-                              Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
-                          );
-
-                          intent.setData(
-                              Uri.parse("package:" + getContext().getPackageName())
-                          );
-
-                          getActivity().startActivity(intent);
-                      }
-
-                      call.resolve();
-                  } catch (Exception e) {
-                      try {
-                          Intent intent = new Intent(
-                              Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
-                          );
-
-                          getActivity().startActivity(intent);
-                          call.resolve();
-                      } catch (Exception e2) {
-                          call.reject(
-                              "Unable to open storage access settings",
-                              e2
-                          );
-                      }
-                  }
-              }
-          }
-          ''')
-
-          # ---------- MainActivity registration ----------
-          activity = Path(
-              "android/app/src/main/java/com/pestco/app/MainActivity.java"
-          )
-
-          text = activity.read_text()
-
-          if "StorageAccessPlugin" not in text:
-              text = text.replace(
-                  "package com.pestco.app;",
-                  """package com.pestco.app;
-
-          import android.os.Bundle;
-          import com.getcapacitor.BridgeActivity;"""
-              )
-
-              text = text.replace(
-                  "public class MainActivity extends BridgeActivity {",
-                  """public class MainActivity extends BridgeActivity {
-              @Override
-              public void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  registerPlugin(StorageAccessPlugin.class);
-              }"""
-              )
-
-          activity.write_text(text)
-
-          print("Android storage access setup complete.")
-          PY
+                  ret.put("granted
