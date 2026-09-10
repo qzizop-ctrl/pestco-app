@@ -40,6 +40,29 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Add Android storage permissions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          text = manifest.read_text()
+
+          permissions = [
+              '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />',
+              '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />',
+              '    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />',
+          ]
+
+          marker = '<application'
+
+          for permission in permissions:
+              if permission not in text:
+                  text = text.replace(marker, permission + '\n    ' + marker)
+
+          manifest.write_text(text)
+          PY
+          
       - name: Generate Android app icons from resources/
         run: npx @capacitor/assets generate --android
 
