@@ -206,30 +206,49 @@ export async function generateDashboardPdf(opts) {
     ]);
     const { jsPDF } = jspdfModule;
 
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      backgroundColor: "#FFFFFF",
-      useCORS: true,
-    });
+    const CONTAINER_WIDTH_PX = 800; // matches container.style.width above
+    const RENDER_SCALE = 2;
 
     const pdf = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const imgData = canvas.toDataURL("image/png");
 
-    // Slices the single tall rendered image across as many A4 pages as
-    // needed, shifting it up by one page height each time.
-    let heightLeft = imgHeight;
-    let position = 0;
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+    // How many CSS pixels of the off-screen container correspond to one
+    // A4 page, given the container is rendered at CONTAINER_WIDTH_PX wide
+    // and that width is scaled to fill pageWidth in the PDF.
+    const cssPxPerPage = pageHeight * (CONTAINER_WIDTH_PX / pageWidth);
+    const totalHeightPx = container.scrollHeight;
+    const pageCount = Math.max(1, Math.ceil(totalHeightPx / cssPxPerPage));
+
+    // Renders and adds one page at a time instead of rasterizing the whole
+    // report into a single giant canvas. A long customers/offers table can
+    // make the full report thousands of CSS pixels tall; at scale 2 that
+    // single canvas can be large enough to exhaust WebView memory and hard
+    // -crash the app (no JS error, no dialog — just kicks back to the home
+    // screen). Capturing one page-worth of height at a time keeps every
+    // canvas roughly the same small size regardless of report length.
+    for (let page = 0; page < pageCount; page++) {
+      const sliceY = page * cssPxPerPage;
+      const sliceHeightPx = Math.min(cssPxPerPage, totalHeightPx - sliceY);
+
+      const canvas = await html2canvas(container, {
+        scale: RENDER_SCALE,
+        backgroundColor: "#FFFFFF",
+        useCORS: true,
+        x: 0,
+        y: sliceY,
+        width: CONTAINER_WIDTH_PX,
+        height: sliceHeightPx,
+        windowWidth: CONTAINER_WIDTH_PX,
+        windowHeight: totalHeightPx,
+      });
+
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const imgData = canvas.toDataURL("image/png");
+
+      if (page > 0) pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
     }
 
     const dateSuffix = new Date().toISOString().slice(0, 10);
