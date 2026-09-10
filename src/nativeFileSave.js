@@ -1,42 +1,85 @@
 // ============================================================================
-// Shared helper for saving generated files (PDF reports, Excel exports) to
-// the device when running as the packaged Android app.
-//
-// Why this isn't a single one-liner: Android's storage rules changed a lot.
-// On Android 11+ (API 30+) an app can no longer write straight into the
-// public Download/ folder just by holding storage permission — that's
-// "scoped storage", and it applies no matter what the user grants. The one
-// permission that restores full access (MANAGE_EXTERNAL_STORAGE / "All
-// files access") is reviewed and heavily restricted by Google Play and
-// isn't appropriate for an app like this one.
-//
-// So this helper does the best available thing on every version:
-//   - Where the OS still allows it (Android 9 and older), it asks for
-//     storage permission and writes the file straight into Download/.
-//   - Everywhere else (Android 10+, permission denied, or anything else
-//     goes wrong), it writes the file to the app's private cache and hands
-//     it to the OS share/save sheet, where the user picks "Save to
-//     device" / a Files app to place it wherever they want, Downloads
-//     included.
+// Native file saving for the Android/iOS packaged app and the web fallback.
+// On Android 11+ the app can optionally request Android's special
+// "All files access" permission so generated PDF/Excel files can be written
+// directly to the public Download folder. This is a special Android setting,
+// not a normal runtime permission.
 // ============================================================================
 
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+import { App } from "@capacitor/app";
+
+const StorageAccess = registerPlugin("StorageAccess");
+
+async function ensureAndroidAllFilesAccess() {
+  if (Capacitor.getPlatform() !== "android") return false;
+
+  try {
+    const status = await StorageAccess.checkAllFilesAccess();
+    if (status?.granted) return true;
+
+    // Opens Android Settings > Special app access > All files access.
+    await StorageAccess.requestAllFilesAccess();
+
+    // The native method returns before the user finishes in Settings. Wait for
+    // the app to become active again, then check the setting one more time.
+    return await new Promise(async (resolve) => {
+      let settled = false;
+      let listener;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        if (listener) listener.remove();
+        resolve(value);
+      };
+
+      const timeout = setTimeout(() => finish(false), 5 * 60 * 1000);
+      listener = await App.addListener("appStateChange", async ({ isActive }) => {
+        if (!isActive) return;
+        clearTimeout(timeout);
+        try {
+          const after = await StorageAccess.checkAllFilesAccess();
+          finish(!!after?.granted);
+        } catch {
+          finish(false);
+        }
+      });
+    });
+  } catch (e) {
+    // The native plugin is only present in the patched Android project.
+    // Falling through keeps the normal share/save sheet available.
+    return false;
+  }
+}
 
 // data must be a raw base64 string (no "data:...;base64," prefix).
-// Returns { uri, savedToDownloads } — savedToDownloads tells the caller
-// whether the file already landed in Download/ or the user still needs to
-// pick a destination in the share sheet.
+// Returns { uri, savedToDownloads }.
 export async function saveFileNative(fileName, base64Data) {
   const { Filesystem, Directory } = await import("@capacitor/filesystem");
   const { Share } = await import("@capacitor/share");
 
   if (Capacitor.getPlatform() === "android") {
     try {
-      let perm = await Filesystem.checkPermissions();
-      if (perm.publicStorage !== "granted") {
-        perm = await Filesystem.requestPermissions();
+      const hasAllFilesAccess = await ensureAndroidAllFilesAccess();
+
+      if (hasAllFilesAccess) {
+        const written = await Filesystem.writeFile({
+          path: `Download/${fileName}`,
+          data: base64Data,
+          directory: Directory.ExternalStorage,
+          recursive: true,
+        });
+        return { uri: written.uri, savedToDownloads: true };
       }
-      if (perm.publicStorage === "granted") {
+
+      // Android 9 and older can still use the Filesystem public-storage
+      // permission model. Keep this compatibility path for older devices.
+      const perm = await Filesystem.checkPermissions();
+      const granted = perm.publicStorage === "granted"
+        ? perm
+        : await Filesystem.requestPermissions();
+
+      if (granted.publicStorage === "granted") {
         const written = await Filesystem.writeFile({
           path: `Download/${fileName}`,
           data: base64Data,
@@ -46,8 +89,7 @@ export async function saveFileNative(fileName, base64Data) {
         return { uri: written.uri, savedToDownloads: true };
       }
     } catch (e) {
-      // Expected on Android 11+, where Directory.ExternalStorage throws
-      // regardless of permission state. Fall through to the share sheet.
+      // If Android blocks direct public storage, use the OS share/save sheet.
     }
   }
 
@@ -60,8 +102,8 @@ export async function saveFileNative(fileName, base64Data) {
   try {
     await Share.share({ title: fileName, url: written.uri });
   } catch (e) {
-    // The file itself was written successfully — this only fails/rejects
-    // when the user dismisses the OS share sheet without picking an app.
+    // The file was still created in cache; this only means the share sheet
+    // was dismissed or unavailable.
   }
 
   return { uri: written.uri, savedToDownloads: false };
