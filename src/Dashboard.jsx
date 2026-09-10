@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, Percent, DollarSign, FileDown } from "lucide-react";
+import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, Percent, DollarSign, FileDown, CheckCircle2, BadgeDollarSign } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -264,6 +264,13 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   const winRateDecidedCount = useMemo(() => computeDecidedCount(stats.offersByStatus), [stats]);
   const prevWinRate = useMemo(() => (prevStats ? computeWinRate(prevStats.offersByStatus) : null), [prevStats]);
 
+  // Offers that actually converted into a sale ("purchased"), kept separate
+  // from the total offers count/value above — those totals blend pending,
+  // rejected, and installed offers together, which overstates how much was
+  // actually sold. These two feed a dedicated "converted to sale" card.
+  const salesInfo = stats.offersByStatus.purchased || { count: 0, totals: {} };
+  const prevSalesInfo = prevStats ? (prevStats.offersByStatus.purchased || { count: 0, totals: {} }) : null;
+
   const customersAddedLabel = useMemo(() => {
     return month === "all"
       ? t.dashCustomersAddedAllLabel(year)
@@ -469,6 +476,20 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
           label={t.dashCardOffersValue}
           value={fmtOffersTotals(stats.offersValueTotals, t) || `0 ${t.dashCurrency}`}
           delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
+          t={t}
+        />
+        <SummaryCard
+          icon={CheckCircle2}
+          label={t.dashCardSalesCount}
+          value={salesInfo.count}
+          delta={compare ? (prevSalesInfo ? pctChange(salesInfo.count, prevSalesInfo.count) : null) : undefined}
+          t={t}
+        />
+        <SummaryCard
+          icon={BadgeDollarSign}
+          label={t.dashCardSalesValue}
+          value={fmtOffersTotals(salesInfo.totals, t) || `0 ${t.dashCurrency}`}
+          delta={compare ? (prevSalesInfo ? pctChange(salesInfo.totals.EGP || 0, prevSalesInfo.totals.EGP || 0) : null) : undefined}
           t={t}
         />
         <SummaryCard
