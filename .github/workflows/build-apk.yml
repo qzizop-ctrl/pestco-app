@@ -78,6 +78,16 @@ jobs:
             android/app/src/main/AndroidManifest.xml
 
           # -----------------------------------------
+          # Raise the Dalvik/ART heap ceiling — this app renders
+          # PDF report pages via off-screen html2canvas + jsPDF,
+          # which needs more headroom than the WebView's default
+          # heap allows for large multi-month reports.
+          # -----------------------------------------
+
+          sed -i 's/<application/<application\n        android:largeHeap="true"/' \
+            android/app/src/main/AndroidManifest.xml
+
+          # -----------------------------------------
           # Create StorageAccessPlugin.java
           # -----------------------------------------
 
