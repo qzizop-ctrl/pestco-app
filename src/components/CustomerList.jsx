@@ -3,16 +3,18 @@
 // itself), extracted from App.jsx. Presentational only.
 // ============================================================================
 
-import React from "react";
+import React, { useState } from "react";
 import {
-  Search, WifiOff, Bell, AlertTriangle, Clock, Phone, MessageCircle,
-  Tag, ListFilter, Building2, Plus,
+  Search, Clock, Phone, MessageCircle,
+  SlidersHorizontal, Building2, Plus,
 } from "lucide-react";
 import { VisitCard, SkeletonList } from "./Shared";
+import AlertsCenter from "./AlertsCenter";
+import FilterSheet from "./FilterSheet";
 import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, STATUS_COLORS,
-  SECTOR_IDS, STAGE_IDS, STALE_ACTIVITY_DAYS,
-  sectorColor, stageColor, fmtReminder,
+  PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD, LINE, SURFACE,
+  SECTOR_IDS,
+  sectorColor, fmtReminder,
 } from "../constants";
 
 export default function CustomerListScreen({
@@ -46,127 +48,88 @@ export default function CustomerListScreen({
   canEdit,
   openNew,
 }) {
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const activeFilterCount =
+    (sectorFilter !== "all" ? 1 : 0) +
+    (stageFilter !== "all" ? 1 : 0) +
+    (tagFilter !== "all" ? 1 : 0) +
+    (missingDataOnly ? 1 : 0) +
+    (noVisitsOnly ? 1 : 0);
+
   return (
     <div className="px-4 pt-4 pb-24">
-      {!isOnline && (
-        <div
-          className="flex items-center gap-2"
-          style={{
-            background: "rgba(219,154,44,.12)",
-            border: "1px solid rgba(219,154,44,.4)",
-            borderRadius: 12,
-            padding: "8px 12px",
-            marginBottom: 12,
-          }}
-        >
-          <WifiOff size={14} color={STATUS_COLORS.today} />
-          <span className="text-xs font-bold" style={{ color: "#8C6110" }}>{t.offlineBanner}</span>
-        </div>
-      )}
+      <AlertsCenter
+        t={t}
+        isOnline={isOnline}
+        dueReminders={dueReminders}
+        staleOffers={staleOffers}
+        staleCustomers={staleCustomers}
+        openDetail={openDetail}
+      />
 
-      {dueReminders.length > 0 && (
-        <div
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            color={MUTED}
+            style={{ position: "absolute", [t.dir === "rtl" ? "right" : "left"]: 12, top: "50%", transform: "translateY(-50%)" }}
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t.searchPlaceholder}
+            style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
+          />
+        </div>
+        <button
+          onClick={() => setFilterSheetOpen(true)}
+          className="btn-press flex items-center justify-center gap-1 font-bold text-xs flex-shrink-0"
           style={{
-            background: "rgba(196,68,58,.1)",
-            border: "1px solid rgba(196,68,58,.35)",
+            position: "relative",
+            border: `1.4px solid ${activeFilterCount > 0 ? PRIMARY : LINE}`,
+            background: activeFilterCount > 0 ? PRIMARY : SURFACE,
+            color: activeFilterCount > 0 ? "#fff" : MUTED,
             borderRadius: 14,
-            padding: 12,
-            marginBottom: 14,
+            padding: "0 14px",
+            height: 44,
           }}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <Bell size={16} color={STATUS_COLORS.overdue} />
-            <span className="text-sm font-bold" style={{ color: STATUS_COLORS.overdue }}>
-              {t.dueCalls(dueReminders.length)}
-            </span>
-          </div>
-          {dueReminders.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => openDetail(v)}
-              className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-              style={{ padding: "6px 0" }}
+          <SlidersHorizontal size={15} />
+          {t.filtersBtn}
+          {activeFilterCount > 0 && (
+            <span
+              className="text-xs font-extrabold flex items-center justify-center"
+              style={{
+                background: GOLD, color: "#fff", borderRadius: 999,
+                minWidth: 16, height: 16, padding: "0 4px",
+              }}
             >
-              <span className="text-sm font-bold" style={{ color: TEXT }}>{v.companyName}</span>
-              <span className="text-xs" style={{ color: MUTED }}>{fmtReminder(v.callDateTime, t.locale)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {staleOffers.length > 0 && (
-        <div
-          style={{
-            background: "rgba(219,154,44,.1)",
-            border: "1px solid rgba(219,154,44,.35)",
-            borderRadius: 14,
-            padding: 12,
-            marginBottom: 14,
-          }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle size={16} color={STATUS_COLORS.today} />
-            <span className="text-sm font-bold" style={{ color: "#8C6110" }}>
-              {t.staleOffersBanner(staleOffers.length)}
+              {activeFilterCount}
             </span>
-          </div>
-          {staleOffers.map((o) => (
-            <button
-              key={o.id}
-              onClick={() => openDetail(o.customer)}
-              className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-              style={{ padding: "6px 0" }}
-            >
-              <span className="text-sm font-bold" style={{ color: TEXT }}>{o.customer.companyName}</span>
-              <span className="text-xs" style={{ color: MUTED }}>{o.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {staleCustomers.length > 0 && (
-        <div
-          style={{
-            background: "rgba(219,154,44,.1)",
-            border: "1px solid rgba(219,154,44,.35)",
-            borderRadius: 14,
-            padding: 12,
-            marginBottom: 14,
-          }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle size={16} color={STATUS_COLORS.today} />
-            <span className="text-sm font-bold" style={{ color: "#8C6110" }}>
-              {t.staleBadge} ({staleCustomers.length})
-            </span>
-          </div>
-          {staleCustomers.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => openDetail(v)}
-              className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-              style={{ padding: "6px 0" }}
-            >
-              <span className="text-sm font-bold" style={{ color: TEXT }}>{v.companyName}</span>
-              <span className="text-xs" style={{ color: MUTED }}>{t.staleHint(STALE_ACTIVITY_DAYS)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="relative mb-4">
-        <Search
-          size={16}
-          color={MUTED}
-          style={{ position: "absolute", [t.dir === "rtl" ? "right" : "left"]: 12, top: "50%", transform: "translateY(-50%)" }}
-        />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t.searchPlaceholder}
-          style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
-        />
+          )}
+        </button>
       </div>
+
+      <FilterSheet
+        t={t}
+        open={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        totalCustomers={totalCustomers}
+        sectorCounts={sectorCounts}
+        sectorFilter={sectorFilter}
+        setSectorFilter={setSectorFilter}
+        stageFilter={stageFilter}
+        setStageFilter={setStageFilter}
+        allTags={allTags}
+        tagFilter={tagFilter}
+        setTagFilter={setTagFilter}
+        missingDataOnly={missingDataOnly}
+        setMissingDataOnly={setMissingDataOnly}
+        missingDataCount={missingDataCount}
+        noVisitsOnly={noVisitsOnly}
+        setNoVisitsOnly={setNoVisitsOnly}
+        noVisitsCount={noVisitsCount}
+      />
 
       <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
         <div className="flex items-center gap-2 mb-2">
@@ -231,126 +194,6 @@ export default function CustomerListScreen({
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 mb-2" style={{ overflowX: "auto" }}>
-        {["all", ...SECTOR_IDS].map((id) => {
-          const isActive = sectorFilter === id;
-          const label = id === "all" ? t.sectorAll : t.sectors[id];
-          const count = id === "all" ? totalCustomers : sectorCounts[id];
-          return (
-            <button
-              key={id}
-              onClick={() => setSectorFilter(id)}
-              className="btn-press font-bold text-xs"
-              style={{
-                flexShrink: 0,
-                padding: "8px 16px",
-                borderRadius: 999,
-                border: `1.4px solid ${isActive ? PRIMARY : LINE}`,
-                background: isActive ? PRIMARY : SURFACE,
-                color: isActive ? "#fff" : MUTED,
-              }}
-            >
-              {label} ({count})
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex items-center gap-2 mb-2" style={{ overflowX: "auto" }}>
-        {["all", ...STAGE_IDS].map((id) => {
-          const isActive = stageFilter === id;
-          const label = id === "all" ? t.pipelineAll : t.stages[id];
-          const bg = id === "all" ? (isActive ? PRIMARY : SURFACE) : (isActive ? stageColor(id) : SURFACE);
-          return (
-            <button
-              key={id}
-              onClick={() => setStageFilter(id)}
-              className="btn-press font-bold text-xs"
-              style={{
-                flexShrink: 0,
-                padding: "8px 16px",
-                borderRadius: 999,
-                border: `1.4px solid ${isActive ? bg : LINE}`,
-                background: bg,
-                color: isActive ? "#fff" : MUTED,
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      {allTags.length > 0 && (
-        <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
-          <button
-            onClick={() => setTagFilter("all")}
-            className="btn-press font-bold text-xs flex items-center gap-1"
-            style={{
-              flexShrink: 0,
-              padding: "8px 16px",
-              borderRadius: 999,
-              border: `1.4px solid ${tagFilter === "all" ? PRIMARY : LINE}`,
-              background: tagFilter === "all" ? PRIMARY : SURFACE,
-              color: tagFilter === "all" ? "#fff" : MUTED,
-            }}
-          >
-            <Tag size={12} /> {t.tagsAll}
-          </button>
-          {allTags.map((tag) => {
-            const isActive = tagFilter === tag;
-            return (
-              <button
-                key={tag}
-                onClick={() => setTagFilter(tag)}
-                className="btn-press font-bold text-xs"
-                style={{
-                  flexShrink: 0,
-                  padding: "8px 16px",
-                  borderRadius: 999,
-                  border: `1.4px solid ${isActive ? GOLD : LINE}`,
-                  background: isActive ? GOLD : SURFACE,
-                  color: isActive ? "#fff" : MUTED,
-                }}
-              >
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
-        <button
-          onClick={() => setMissingDataOnly((m) => !m)}
-          className="btn-press font-bold text-xs flex items-center gap-1"
-          style={{
-            flexShrink: 0,
-            padding: "8px 16px",
-            borderRadius: 999,
-            border: `1.4px solid ${missingDataOnly ? DANGER : LINE}`,
-            background: missingDataOnly ? DANGER : SURFACE,
-            color: missingDataOnly ? "#fff" : MUTED,
-          }}
-        >
-          <ListFilter size={12} /> {t.missingDataFilter} ({missingDataCount})
-        </button>
-        <button
-          onClick={() => setNoVisitsOnly((m) => !m)}
-          className="btn-press font-bold text-xs flex items-center gap-1"
-          style={{
-            flexShrink: 0,
-            padding: "8px 16px",
-            borderRadius: 999,
-            border: `1.4px solid ${noVisitsOnly ? GOLD : LINE}`,
-            background: noVisitsOnly ? GOLD : SURFACE,
-            color: noVisitsOnly ? "#fff" : MUTED,
-          }}
-        >
-          <Clock size={12} /> {t.noVisitsYetFilter} ({noVisitsCount})
-        </button>
       </div>
 
       {!loaded && <SkeletonList count={5} />}
