@@ -64,7 +64,7 @@ const SUBTLE_HEX = "#F8F6F0";
 const ROWS_PER_CHUNK = 25;
 
 const CONTAINER_WIDTH_PX = 800;
-const RENDER_SCALE = 2;
+const RENDER_SCALE = 1.5;
 
 function esc(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({
@@ -236,7 +236,7 @@ export async function generateDashboardPdf(opts) {
   ]);
   const { jsPDF } = jspdfModule;
 
-  const pdf = new jsPDF({ unit: "pt", format: "a4" });
+  const pdf = new jsPDF({ unit: "pt", format: "a4", compress: true });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   // How many CSS pixels of an 800px-wide off-screen container correspond
@@ -282,10 +282,10 @@ export async function generateDashboardPdf(opts) {
 
         const imgWidth = pageWidth;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        const imgData = canvas.toDataURL("image/png");
+        const imgData = canvas.toDataURL("image/jpeg", 0.85);
 
         if (anyPageAdded) pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", 0, 0, imgWidth, imgHeight);
         anyPageAdded = true;
       }
     } finally {
