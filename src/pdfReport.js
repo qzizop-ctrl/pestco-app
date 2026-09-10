@@ -15,8 +15,21 @@
 // their weight — html2canvas especially — never lands in the app's initial
 // bundle, matching the lazy-loading already used for xlsx and the Dashboard
 // screen itself.
+//
+// Implementation note on saving the file: jsPDF's pdf.save() works by
+// creating a Blob URL and programmatically clicking a hidden <a download>
+// link — a plain browser download. That mechanism has no native handler
+// inside the Android WebView that Capacitor renders the app in, so on the
+// packaged Android app the export silently does nothing (no error, no
+// file) even though the exact same code produces a real download in a
+// desktop/mobile browser tab or the Electron build. On a native platform
+// this instead writes the PDF bytes straight to disk via the Capacitor
+// Filesystem plugin and hands the file off to the OS share/save sheet via
+// the Capacitor Share plugin, which is the supported way to get a
+// generated file out of a Capacitor WebView.
 // ============================================================================
 
+import { Capacitor } from "@capacitor/core";
 import {
   fmtMoney, fmtOffersTotals,
   STAGE_IDS, OFFER_STATUS_IDS, stageColor,
@@ -220,8 +233,45 @@ export async function generateDashboardPdf(opts) {
     }
 
     const dateSuffix = new Date().toISOString().slice(0, 10);
-    pdf.save(`pestco_report_${dateSuffix}.pdf`);
+    const fileName = `pestco_report_${dateSuffix}.pdf`;
+
+    if (Capacitor.isNativePlatform()) {
+      await saveAndSharePdfNative(pdf, fileName, opts.t);
+    } else {
+      // Plain browser tab / Electron: the standard Blob-download path
+      // works fine here, no native file handoff needed.
+      pdf.save(fileName);
+    }
   } finally {
     document.body.removeChild(container);
+  }
+}
+
+// Writes the PDF to disk and opens the OS share/save sheet — the path that
+// actually works inside the Capacitor Android WebView (see note above).
+async function saveAndSharePdfNative(pdf, fileName, t) {
+  const { Filesystem, Directory } = await import("@capacitor/filesystem");
+  const { Share } = await import("@capacitor/share");
+
+  // Raw base64 (no "data:application/pdf;base64," prefix) — that's what
+  // Filesystem.writeFile expects.
+  const base64Data = pdf.output("datauristring").split(",")[1];
+
+  const written = await Filesystem.writeFile({
+    path: fileName,
+    data: base64Data,
+    directory: Directory.Cache,
+  });
+
+  try {
+    await Share.share({
+      title: fileName,
+      url: written.uri,
+      dialogTitle: t.dashPdfShareTitle,
+    });
+  } catch (e) {
+    // The file itself was written successfully — this only fails/rejects
+    // when the user dismisses the OS share sheet without picking an app,
+    // which isn't a real error and shouldn't surface the failure toast.
   }
 }

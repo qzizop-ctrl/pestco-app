@@ -36,7 +36,7 @@ export const STRINGS = {
   ar: {
     dir: "rtl",
     locale: "ar-EG",
-    appTitle: "Pest.Co — بيانات العملاء",
+    appTitle: "Pest.Co — CRM",
     titleEdit: "تعديل العميل",
     titleNew: "عميل جديد",
     titleDetail: "تفاصيل العميل",
@@ -350,6 +350,7 @@ export const STRINGS = {
     dashPdfNoCustomers: "لا يوجد عملاء جدد في هذه الفترة",
     dashPdfFooterNote: "تم إصدار هذا التقرير تلقائيًا من تطبيق Pest.Co",
     dashPdfError: "حصل خطأ أثناء إنشاء ملف PDF",
+    dashPdfShareTitle: "حفظ أو مشاركة التقرير",
     dashPdfColCompany: "الشركة",
     dashPdfColOffer: "الأوفر",
     dashPdfColAmount: "القيمة",
@@ -361,7 +362,7 @@ export const STRINGS = {
   en: {
     dir: "ltr",
     locale: "en-US",
-    appTitle: "Pest.Co — Client Data",
+    appTitle: "Pest.Co — CRM",
     titleEdit: "Edit Customer",
     titleNew: "New Customer",
     titleDetail: "Customer Details",
@@ -667,6 +668,7 @@ export const STRINGS = {
     dashPdfNoCustomers: "No new customers in this period",
     dashPdfFooterNote: "This report was generated automatically by the Pest.Co app",
     dashPdfError: "An error occurred while generating the PDF",
+    dashPdfShareTitle: "Save or share report",
     dashPdfColCompany: "Company",
     dashPdfColOffer: "Offer",
     dashPdfColAmount: "Amount",
@@ -956,21 +958,30 @@ export function fmtActivityDate(dt, locale) {
 // Always renders Western (Latin) digits, even under the "ar-EG" locale,
 // which would otherwise switch to Arabic-Indic numerals (٠١٢٣...) and mix
 // with the plain Western digits used elsewhere in the app (e.g. raw counts
-// rendered without toLocaleString). Keeping every on-screen number in the
-// same digit system avoids that inconsistency.
-// Always formats using Western digits AND Western punctuation (comma
-// thousands separator, period decimal point), regardless of the app's
-// display language or the device's ICU data. Forcing numberingSystem
-// alone (Latin digits under an Arabic locale) isn't reliable across every
-// Android WebView version for the punctuation itself — some still render
-// the Arabic decimal separator (٫) instead of a period for non-whole
-// numbers, which only becomes visible once a value has a fraction (like
-// an average). Using "en-US" outright sidesteps that inconsistency
-// entirely; the `locale` param is kept for call-site compatibility but no
-// longer affects the output.
+// rendered without formatting). Keeping every on-screen number in the same
+// digit system avoids that inconsistency.
+//
+// This is done with plain string manipulation instead of
+// Number.toLocaleString(), even with "en-US" forced. Some Android WebView
+// builds (notably the stripped-down ICU shipped with certain Capacitor/
+// Android combinations) ignore the locale argument entirely and fall back
+// to the device's system language — so on an Arabic-language phone,
+// toLocaleString("en-US") can still silently produce Arabic-Indic digits
+// and an Arabic decimal separator. Building the string by hand (digits,
+// comma, period — nothing else) sidesteps ICU/locale behavior altogether
+// and guarantees the same output on every device. The `locale` param is
+// kept for call-site compatibility but no longer affects the output.
 export function fmtMoney(n, locale) {
   try {
-    return Number(n || 0).toLocaleString("en-US");
+    let num = Number(n);
+    if (!isFinite(num)) num = 0;
+    const negative = num < 0;
+    num = Math.abs(num);
+    // Match toLocaleString's default rounding (up to 3 fraction digits).
+    num = Math.round(num * 1000) / 1000;
+    const [intPart, decPart] = num.toString().split(".");
+    const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return (negative ? "-" : "") + withThousands + (decPart ? "." + decPart : "");
   } catch (e) {
     return String(n || 0);
   }
