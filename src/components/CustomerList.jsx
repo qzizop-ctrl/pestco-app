@@ -5,16 +5,16 @@
 
 import React, { useState } from "react";
 import {
-  Search, Clock, Phone, MessageCircle,
+  Search,
   SlidersHorizontal, Building2, Plus,
 } from "lucide-react";
 import { VisitCard, SkeletonList } from "./Shared";
 import AlertsCenter from "./AlertsCenter";
 import FilterSheet from "./FilterSheet";
 import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD, LINE, SURFACE,
+  PRIMARY, TEXT, MUTED, GOLD, LINE, SURFACE,
   SECTOR_IDS,
-  sectorColor, fmtReminder,
+  sectorColor,
 } from "../constants";
 
 export default function CustomerListScreen({
@@ -26,7 +26,6 @@ export default function CustomerListScreen({
   openDetail,
   query,
   setQuery,
-  todaysCustomers,
   totalCustomers,
   sectorCounts,
   sectorFilter,
@@ -130,56 +129,6 @@ export default function CustomerListScreen({
         setNoVisitsOnly={setNoVisitsOnly}
         noVisitsCount={noVisitsCount}
       />
-
-      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
-        <div className="flex items-center gap-2 mb-2">
-          <Clock size={15} color={PRIMARY_MID} />
-          <span className="text-sm font-bold" style={{ color: TEXT }}>{t.todaysCustomersTitle}</span>
-        </div>
-        {todaysCustomers.length === 0 ? (
-          <p className="text-xs text-center py-2" style={{ color: MUTED }}>{t.noTodaysCustomers}</p>
-        ) : (
-          todaysCustomers.map((v) => (
-            <div
-              key={v.id}
-              className="flex items-center justify-between"
-              style={{ padding: "8px 0", borderTop: `1px dashed ${LINE}` }}
-            >
-              <button
-                onClick={() => openDetail(v)}
-                className={`btn-press flex-1 ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-              >
-                <p className="text-sm font-bold" style={{ margin: 0, color: TEXT }}>{v.companyName}</p>
-                <p className="text-xs" style={{ margin: 0, color: MUTED }}>{fmtReminder(v.callDateTime, t.locale)}</p>
-              </button>
-              <div className="flex items-center gap-2">
-                {v.phone && (
-                  <a
-                    href={`tel:${v.phone}`}
-                    className="btn-press flex items-center justify-center"
-                    style={{ width: 30, height: 30, borderRadius: 9, background: "#E5F1EA", color: "#2F9E58" }}
-                    aria-label={t.phoneRow}
-                  >
-                    <Phone size={13} />
-                  </a>
-                )}
-                {v.phone && (
-                  <a
-                    href={`https://wa.me/${v.phone.replace(/[^0-9]/g, "")}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-press flex items-center justify-center"
-                    style={{ width: 30, height: 30, borderRadius: 9, background: "#E4F5EA", color: "#25A245" }}
-                    aria-label={t.whatsapp}
-                  >
-                    <MessageCircle size={13} />
-                  </a>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
 
       <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
         <div className="flex items-center justify-between mb-2">
