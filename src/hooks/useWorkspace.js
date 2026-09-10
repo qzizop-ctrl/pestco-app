@@ -261,26 +261,26 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     const lookupRef = doc(db, "access_by_email", cleanEmail);
 
     try {
-      // Transaction prevents concurrent owner changes from overwriting each
-      // other when multiple clients edit the same members/owners maps.
+      // Transaction keeps the members-map write atomic with the
+      // owners-map write. We deliberately do NOT tx.get(lookupRef) here:
+      // access_by_email/{granteeEmail} belongs to the grantee, and the
+      // security rules correctly only let a user read their OWN email's
+      // lookup doc — reading someone else's, even just to merge in prior
+      // data, was being denied and aborting the whole transaction before
+      // the write ever ran. Since this app is single-owner only, the
+      // grantee can only ever have one owner entry anyway, so we can
+      // overwrite it directly instead of reading-then-merging.
       await runTransaction(db, async (tx) => {
-        const [accessSnap, lookupSnap] = await Promise.all([
-          tx.get(accessRef),
-          tx.get(lookupRef),
-        ]);
+        const accessSnap = await tx.get(accessRef);
 
         const members = accessSnap.exists()
           ? { ...(accessSnap.data().members || {}) }
           : {};
-        const owners = lookupSnap.exists()
-          ? { ...(lookupSnap.data().owners || {}) }
-          : {};
 
         members[cleanEmail] = role;
-        owners[user.uid] = role;
 
         tx.set(accessRef, { members }, { merge: true });
-        tx.set(lookupRef, { owners }, { merge: true });
+        tx.set(lookupRef, { owners: { [user.uid]: role } });
       });
     } catch (e) {
       console.error("grantAccess failed:", e);
@@ -306,26 +306,24 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     const lookupRef = doc(db, "access_by_email", cleanEmail);
 
     try {
+      // Same reasoning as grantAccess: don't tx.get(lookupRef) for
+      // someone else's email — the security rules deny that read and
+      // it was aborting the whole transaction. Overwrite directly
+      // instead (single-owner app, so an empty owners map is correct
+      // once revoked).
       await runTransaction(db, async (tx) => {
-        const [accessSnap, lookupSnap] = await Promise.all([
-          tx.get(accessRef),
-          tx.get(lookupRef),
-        ]);
+        const accessSnap = await tx.get(accessRef);
 
         const members = accessSnap.exists()
           ? { ...(accessSnap.data().members || {}) }
           : {};
-        const owners = lookupSnap.exists()
-          ? { ...(lookupSnap.data().owners || {}) }
-          : {};
 
         delete members[cleanEmail];
-        delete owners[user.uid];
 
         tx.set(accessRef, { members }, { merge: false });
         // Keep the reverse-index document instead of deleting it, because
         // delete is intentionally disallowed by the security rules.
-        tx.set(lookupRef, { owners }, { merge: false });
+        tx.set(lookupRef, { owners: {} }, { merge: false });
       });
     } catch (e) {
       console.error("revokeAccess failed:", e);
