@@ -1,89 +1,123 @@
-name: Build Android APK
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    tags: ["v*"]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build web app
-        run: npm run build
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-
-      - name: Add Android platform
-        run: npx cap add android
-
-      - name: Add Android storage permissions
+      - name: Setup Android storage access
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
+          # ---------- Manifest ----------
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text()
 
-          permissions = [
-              '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />',
-              '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />',
-              '    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />',
-          ]
+          permission = '<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />'
 
-          marker = '<application'
-
-          for permission in permissions:
-              if permission not in text:
-                  text = text.replace(marker, permission + '\n    ' + marker)
+          if permission not in text:
+              text = text.replace(
+                  '<application',
+                  permission + '\n    <application',
+                  1
+              )
 
           manifest.write_text(text)
+
+          # ---------- StorageAccessPlugin ----------
+          plugin = Path(
+              "android/app/src/main/java/com/pestco/app/StorageAccessPlugin.java"
+          )
+
+          plugin.parent.mkdir(parents=True, exist_ok=True)
+
+          plugin.write_text(r'''package com.pestco.app;
+
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Environment;
+          import android.provider.Settings;
+
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          @CapacitorPlugin(name = "StorageAccess")
+          public class StorageAccessPlugin extends Plugin {
+
+              @PluginMethod
+              public void checkAllFilesAccess(PluginCall call) {
+                  boolean granted;
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                      granted = Environment.isExternalStorageManager();
+                  } else {
+                      granted = true;
+                  }
+
+                  call.resolve(
+                      new com.getcapacitor.JSObject()
+                          .put("granted", granted)
+                  );
+              }
+
+              @PluginMethod
+              public void requestAllFilesAccess(PluginCall call) {
+                  try {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                          Intent intent = new Intent(
+                              Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
+                          );
+
+                          intent.setData(
+                              Uri.parse("package:" + getContext().getPackageName())
+                          );
+
+                          getActivity().startActivity(intent);
+                      }
+
+                      call.resolve();
+                  } catch (Exception e) {
+                      try {
+                          Intent intent = new Intent(
+                              Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+                          );
+
+                          getActivity().startActivity(intent);
+                          call.resolve();
+                      } catch (Exception e2) {
+                          call.reject(
+                              "Unable to open storage access settings",
+                              e2
+                          );
+                      }
+                  }
+              }
+          }
+          ''')
+
+          # ---------- MainActivity registration ----------
+          activity = Path(
+              "android/app/src/main/java/com/pestco/app/MainActivity.java"
+          )
+
+          text = activity.read_text()
+
+          if "StorageAccessPlugin" not in text:
+              text = text.replace(
+                  "package com.pestco.app;",
+                  """package com.pestco.app;
+
+          import android.os.Bundle;
+          import com.getcapacitor.BridgeActivity;"""
+              )
+
+              text = text.replace(
+                  "public class MainActivity extends BridgeActivity {",
+                  """public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  registerPlugin(StorageAccessPlugin.class);
+              }"""
+              )
+
+          activity.write_text(text)
+
+          print("Android storage access setup complete.")
           PY
-          
-      - name: Generate Android app icons from resources/
-        run: npx @capacitor/assets generate --android
-
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
-
-      - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK as build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pestco-app-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Create GitHub Release with APK
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: android/app/build/outputs/apk/debug/app-debug.apk
