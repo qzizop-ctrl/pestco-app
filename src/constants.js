@@ -316,6 +316,47 @@ export const STRINGS = {
       "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
       "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
     ],
+
+    // Location / maps (GPS at time of logging a visit)
+    openInMaps: "افتح آخر موقع على الخريطة",
+    lastVisitLocationLabel: "موقع آخر زيارة",
+    locationDeniedHint: "تم تسجيل الزيارة، لكن الموقع لم يتم تحديده (الإذن غير مفعّل أو الجهاز لا يدعمه)",
+    visitLocationPin: "الموقع",
+
+    // Alerts center (collapsible banner group on the customer list)
+    alertsCenterTitle: "التنبيهات",
+    noAlertsHint: "لا توجد تنبيهات حاليًا",
+
+    // Filter bottom sheet
+    filtersBtn: "فلاتر",
+    filtersTitle: "الفلاتر",
+    otherFiltersLabel: "فلاتر أخرى",
+    applyFiltersBtn: "تطبيق",
+    clearFiltersBtn: "مسح الكل",
+
+    // PDF report export
+    dashExportPdfBtn: "تصدير تقرير PDF",
+    dashPdfGenerating: "جارِ تجهيز التقرير...",
+    dashPdfReportTitle: "تقرير الأداء",
+    dashPdfGeneratedAt: (date) => `تاريخ إصدار التقرير: ${date}`,
+    dashPdfPeriodAll: (year) => `الفترة: كل شهور ${year}`,
+    dashPdfPeriodMonth: (month, year) => `الفترة: ${month} ${year}`,
+    dashPdfSectorLine: (sector) => `القطاع: ${sector}`,
+    dashPdfSummarySection: "ملخص الأداء",
+    dashPdfPipelineSection: "توزيع مسار المبيعات",
+    dashPdfOffersListSection: "تفاصيل الأوفرات",
+    dashPdfCustomersSection: "العملاء المُضافون خلال الفترة",
+    dashPdfNoOffers: "لا توجد أوفرات في هذه الفترة",
+    dashPdfNoCustomers: "لا يوجد عملاء جدد في هذه الفترة",
+    dashPdfFooterNote: "تم إصدار هذا التقرير تلقائيًا من تطبيق Pest.Co",
+    dashPdfError: "حصل خطأ أثناء إنشاء ملف PDF",
+    dashPdfColCompany: "الشركة",
+    dashPdfColOffer: "الأوفر",
+    dashPdfColAmount: "القيمة",
+    dashPdfColStatus: "الحالة",
+    dashPdfColDate: "التاريخ",
+    dashPdfColSector: "القطاع",
+    dashPdfColStage: "المرحلة",
   },
   en: {
     dir: "ltr",
@@ -592,6 +633,47 @@ export const STRINGS = {
       "January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December",
     ],
+
+    // Location / maps (GPS at time of logging a visit)
+    openInMaps: "Open last location on map",
+    lastVisitLocationLabel: "Last visit location",
+    locationDeniedHint: "Visit logged, but location wasn't captured (permission denied or unsupported device)",
+    visitLocationPin: "Location",
+
+    // Alerts center (collapsible banner group on the customer list)
+    alertsCenterTitle: "Alerts",
+    noAlertsHint: "No alerts right now",
+
+    // Filter bottom sheet
+    filtersBtn: "Filters",
+    filtersTitle: "Filters",
+    otherFiltersLabel: "Other filters",
+    applyFiltersBtn: "Apply",
+    clearFiltersBtn: "Clear all",
+
+    // PDF report export
+    dashExportPdfBtn: "Export PDF Report",
+    dashPdfGenerating: "Preparing report...",
+    dashPdfReportTitle: "Performance Report",
+    dashPdfGeneratedAt: (date) => `Generated on: ${date}`,
+    dashPdfPeriodAll: (year) => `Period: All of ${year}`,
+    dashPdfPeriodMonth: (month, year) => `Period: ${month} ${year}`,
+    dashPdfSectorLine: (sector) => `Sector: ${sector}`,
+    dashPdfSummarySection: "Performance Summary",
+    dashPdfPipelineSection: "Sales Pipeline Breakdown",
+    dashPdfOffersListSection: "Offers Detail",
+    dashPdfCustomersSection: "Customers Added in Period",
+    dashPdfNoOffers: "No offers in this period",
+    dashPdfNoCustomers: "No new customers in this period",
+    dashPdfFooterNote: "This report was generated automatically by the Pest.Co app",
+    dashPdfError: "An error occurred while generating the PDF",
+    dashPdfColCompany: "Company",
+    dashPdfColOffer: "Offer",
+    dashPdfColAmount: "Amount",
+    dashPdfColStatus: "Status",
+    dashPdfColDate: "Date",
+    dashPdfColSector: "Sector",
+    dashPdfColStage: "Stage",
   },
 };
 
@@ -748,11 +830,18 @@ export function buildActivity(type, text) {
 // Builds a unique visit-history entry, used to track that an actual visit
 // happened on a given date (as opposed to just "the current visitDate"),
 // so the Dashboard can count real visit events per customer over time.
-export function buildVisitEntry(date) {
+//
+// `location`, when provided, is a plain { lat, lng } object captured from
+// the device's GPS at the moment the visit was logged (see src/geo.js).
+// It's optional and stored as `null` when unavailable (permission denied,
+// unsupported device, or timed out) — older entries simply don't have this
+// field at all, which every reader here already treats as "no location".
+export function buildVisitEntry(date, location) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     date: date || new Date().toISOString().slice(0, 10),
     at: new Date().toISOString(),
+    location: location || null,
   };
 }
 

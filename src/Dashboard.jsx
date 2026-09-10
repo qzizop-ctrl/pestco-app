@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, Percent, DollarSign } from "lucide-react";
+import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, Percent, DollarSign, FileDown } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -9,6 +9,7 @@ import {
   parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, getVisitEvents, toJsDate,
   PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE, SURFACE_SUBTLE,
 } from "./constants";
+import { generateDashboardPdf } from "./pdfReport";
 
 // Builds the [start, end] Date range for a given year + month filter.
 // month === "all" covers the whole year.
@@ -227,7 +228,7 @@ function SummaryCard({ icon: Icon, label, value, delta, subValue, t }) {
   );
 }
 
-export default function Dashboard({ visits, lang, onOpenCustomer }) {
+export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   const t = STRINGS[lang];
   const now = new Date();
 
@@ -332,6 +333,38 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
   const maxOffersChartValue = Math.max(1, ...offersChartData.map((b) => b.value));
   const maxOffersChartValueUSD = Math.max(1, ...offersChartDataUSD.map((b) => b.value));
 
+  // ---- PDF report export ----
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const handleExportPdf = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      // Full offers list for the period (not limited by the on-screen
+      // status-filter tabs — a manager report should show everything),
+      // sorted the same way the on-screen list is.
+      const allOffersInPeriod = [...stats.offersInRange].sort((a, b) => {
+        const da = parseVisitDate(a.offerDate);
+        const db = parseVisitDate(b.offerDate);
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return db - da;
+      });
+      await generateDashboardPdf({
+        t, stats, year, month,
+        sectorLabel: sector === "all" ? null : t.sectors[sector],
+        avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
+        offersList: allOffersInPeriod,
+        customersList: periodCustomersList,
+      });
+    } catch (e) {
+      console.error("PDF export failed:", e);
+      if (showAlert) showAlert(t.dashPdfError);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   return (
     <div className="px-4 pt-4 pb-24" style={{ direction: t.dir }}>
       {/* Filters */}
@@ -365,19 +398,38 @@ export default function Dashboard({ visits, lang, onOpenCustomer }) {
           </select>
         </div>
 
-        <button
-          onClick={() => setCompare((c) => !c)}
-          className="btn-press flex items-center justify-center gap-2 font-bold text-xs"
-          style={{
-            border: `1.4px solid ${compare ? PRIMARY : LINE}`,
-            background: compare ? PRIMARY : SURFACE,
-            color: compare ? "#fff" : MUTED,
-            borderRadius: 12,
-            padding: "9px 0",
-          }}
-        >
-          <TrendingUp size={14} /> {t.dashCompareToggle}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCompare((c) => !c)}
+            className="btn-press flex items-center justify-center gap-2 font-bold text-xs"
+            style={{
+              flex: 1,
+              border: `1.4px solid ${compare ? PRIMARY : LINE}`,
+              background: compare ? PRIMARY : SURFACE,
+              color: compare ? "#fff" : MUTED,
+              borderRadius: 12,
+              padding: "9px 0",
+            }}
+          >
+            <TrendingUp size={14} /> {t.dashCompareToggle}
+          </button>
+          <button
+            onClick={handleExportPdf}
+            disabled={pdfBusy}
+            className="btn-press flex items-center justify-center gap-2 font-bold text-xs"
+            style={{
+              flex: 1,
+              border: `1.4px solid ${GOLD}`,
+              background: pdfBusy ? SURFACE_SUBTLE : GOLD,
+              color: pdfBusy ? MUTED : "#fff",
+              borderRadius: 12,
+              padding: "9px 0",
+              opacity: pdfBusy ? 0.7 : 1,
+            }}
+          >
+            <FileDown size={14} /> {pdfBusy ? t.dashPdfGenerating : t.dashExportPdfBtn}
+          </button>
+        </div>
       </div>
 
       {stats.visitsCount === 0 && (

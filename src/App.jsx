@@ -30,6 +30,7 @@ import { useWorkspace } from "./hooks/useWorkspace";
 import { useLiveData } from "./hooks/useLiveData";
 import { useReminders } from "./hooks/useReminders";
 import { useAndroidBackButton } from "./hooks/useAndroidBackButton";
+import { getCurrentLocation } from "./geo";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD,
   STRINGS, SECTOR_IDS, STAGE_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
@@ -609,10 +610,20 @@ export default function App() {
     if (!canEdit || !visit || !ownerUid) return;
     if (!requireOnline()) return;
     const today = new Date().toISOString().slice(0, 10);
+    // Best-effort GPS capture: never blocks the save. If the user denies the
+    // permission, the browser/WebView doesn't support it, or it times out,
+    // `location` just resolves to null and the visit is logged with no pin
+    // — same as before this feature existed.
+    const location = await getCurrentLocation();
     try {
       await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
         visitDate: today,
-        visitHistory: arrayUnion(buildVisitEntry(today)),
+        visitHistory: arrayUnion(buildVisitEntry(today, location)),
+        // Kept as a top-level field (in addition to living inside the
+        // visitHistory entry above) so the detail screen can show an
+        // "open on map" link for the latest visit without having to scan
+        // the whole history array.
+        lastVisitLocation: location || null,
       });
       await appendActivity(visit.id, buildActivity("visit", t.activityVisitLogged(today)));
     } catch (e) {
@@ -1061,7 +1072,7 @@ export default function App() {
       <div key={screen} className="animate-screen-in">
       {screen === "dashboard" && (
         <Suspense fallback={<div className="px-4 pt-4"><SkeletonList count={3} /></div>}>
-          <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} />
+          <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} showAlert={showAlert} />
         </Suspense>
       )}
 
