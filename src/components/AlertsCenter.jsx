@@ -24,11 +24,9 @@ export default function AlertsCenter({
   t, isOnline, dueReminders, staleOffers, staleCustomers, openDetail,
 }) {
   const totalCount = dueReminders.length + staleOffers.length + staleCustomers.length + (isOnline ? 0 : 1);
-  // Starts open automatically when there's something time-critical (an
-  // overdue/due-today call) so it isn't hidden behind an extra tap; any
-  // other combination (only stale items, or just an offline notice) starts
-  // collapsed since it's informational rather than urgent.
-  const [expanded, setExpanded] = useState(dueReminders.length > 0);
+  // Always starts collapsed by default, regardless of urgency; the user
+  // taps the header to expand and see the details.
+  const [expanded, setExpanded] = useState(false);
 
   if (totalCount === 0) return null;
 
