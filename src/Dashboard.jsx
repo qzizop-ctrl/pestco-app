@@ -524,7 +524,7 @@ function SplitBar({ segments }) {
 }
 
 function SummaryCard({ icon: Icon, label, value, delta, subValue, extra, t }) {
-  // Longer combined values (e.g. two currencies: "12,000 جنيه + 500 دولار")
+  // Longer combined values (e.g. two currencies: "12,000 EG + 500 $")
   // don't fit this card's fixed width at the normal 22px size — whether
   // they end up wrapping onto a second line or just barely fitting on one,
   // scaling the font down by length keeps the card from overflowing or
