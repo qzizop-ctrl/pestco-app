@@ -169,9 +169,16 @@ export default function FilterSheet({
               >
                 <option value="all">{t.dateAddedAllOption} ({totalCustomers})</option>
                 {availableAddedMonths
+                  // Accepts either shape: a plain "YYYY-MM" string (older
+                  // App.jsx) or a { key, count } object (current App.jsx).
+                  // Keeps this screen working even if the two files ever
+                  // drift out of sync between updates.
+                  .map((item) => (typeof item === "string" ? { key: item, count: null } : item))
                   .filter((item) => item && item.key)
                   .map(({ key, count }) => (
-                    <option key={key} value={key}>{monthLabel(key)} ({count})</option>
+                    <option key={key} value={key}>
+                      {monthLabel(key)}{count != null ? ` (${count})` : ""}
+                    </option>
                   ))}
               </select>
             </div>
