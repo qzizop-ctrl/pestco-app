@@ -64,3 +64,4 @@ jobs:
         with:
           name: pestco-app-windows-installer
           path: release/*.exe
+          retention-days: 3
