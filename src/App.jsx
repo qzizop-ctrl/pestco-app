@@ -683,7 +683,11 @@ export default function App() {
       // Capacitor Filesystem instead.
       const { saveFileNative } = await import("./nativeFileSave");
       const base64Data = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
-      await saveFileNative(fileName, base64Data);
+      await saveFileNative(
+        fileName,
+        base64Data,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
     } else {
       XLSX.writeFile(wb, fileName);
     }
