@@ -9,7 +9,7 @@
 // ============================================================================
 
 import React from "react";
-import { X, Tag, ListFilter, Clock } from "lucide-react";
+import { X, Tag, ListFilter, Clock, CalendarDays } from "lucide-react";
 import {
   PRIMARY, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE,
   SECTOR_IDS, STAGE_IDS, sectorColor, stageColor,
@@ -47,6 +47,7 @@ export default function FilterSheet({
   allTags, tagFilter, setTagFilter,
   missingDataOnly, setMissingDataOnly, missingDataCount,
   noVisitsOnly, setNoVisitsOnly, noVisitsCount,
+  dateAddedFilter, setDateAddedFilter, availableAddedMonths,
 }) {
   if (!open) return null;
 
@@ -56,6 +57,18 @@ export default function FilterSheet({
     setTagFilter("all");
     setMissingDataOnly(false);
     setNoVisitsOnly(false);
+    setDateAddedFilter("all");
+  };
+
+  // "YYYY-MM" -> a locale-aware "Month Year" label (e.g. "أغسطس 2026").
+  const monthLabel = (key) => {
+    const [y, m] = key.split("-").map(Number);
+    const d = new Date(y, m - 1, 1);
+    try {
+      return d.toLocaleDateString(t.locale, { month: "long", year: "numeric" });
+    } catch (e) {
+      return key;
+    }
   };
 
   return (
@@ -139,6 +152,23 @@ export default function FilterSheet({
               </Chip>
             </ChipRow>
           </div>
+
+          {availableAddedMonths.length > 0 && (
+            <div>
+              <label className="flex items-center gap-1" style={{ marginBottom: 8 }}>
+                <CalendarDays size={13} /> {t.dateAddedFilterLabel}
+              </label>
+              <select
+                value={dateAddedFilter}
+                onChange={(e) => setDateAddedFilter(e.target.value)}
+              >
+                <option value="all">{t.dateAddedAllOption}</option>
+                {availableAddedMonths.map((key) => (
+                  <option key={key} value={key}>{monthLabel(key)}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 mt-5">

@@ -41,6 +41,9 @@ export default function CustomerListScreen({
   noVisitsOnly,
   setNoVisitsOnly,
   noVisitsCount,
+  dateAddedFilter,
+  setDateAddedFilter,
+  availableAddedMonths,
   loaded,
   filtered,
   togglePin,
@@ -53,7 +56,8 @@ export default function CustomerListScreen({
     (stageFilter !== "all" ? 1 : 0) +
     (tagFilter !== "all" ? 1 : 0) +
     (missingDataOnly ? 1 : 0) +
-    (noVisitsOnly ? 1 : 0);
+    (noVisitsOnly ? 1 : 0) +
+    (dateAddedFilter !== "all" ? 1 : 0);
 
   return (
     <div className="px-4 pt-4 pb-24">
@@ -128,6 +132,9 @@ export default function CustomerListScreen({
         noVisitsOnly={noVisitsOnly}
         setNoVisitsOnly={setNoVisitsOnly}
         noVisitsCount={noVisitsCount}
+        dateAddedFilter={dateAddedFilter}
+        setDateAddedFilter={setDateAddedFilter}
+        availableAddedMonths={availableAddedMonths}
       />
 
       <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>
