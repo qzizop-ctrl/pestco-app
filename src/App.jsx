@@ -884,9 +884,27 @@ export default function App() {
   // together with how many — newest first — used to populate the "date
   // added" filter dropdown so it only ever offers months that have real
   // data behind them, with a count next to each just like the other filters.
+  //
+  // Scoped to whatever the sector/stage/tag/missing-data/no-visits filters
+  // above it currently select (but not to dateAddedFilter itself, since
+  // that's the one being computed here) — so picking e.g. "Contracting"
+  // narrows these counts down to just that sector, the same way the
+  // sector/stage chips already narrow each other.
+  const dateAddedScopeVisits = useMemo(
+    () =>
+      visibleVisits
+        .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
+        .filter((v) => stageFilter === "all" || v.stage === stageFilter)
+        .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
+        .filter((v) => !missingDataOnly || !v.phone || !v.email)
+        .filter((v) => !noVisitsOnly || getVisitEvents(v).length === 0),
+    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly]
+  );
+  const dateAddedScopeTotal = dateAddedScopeVisits.length;
+
   const availableAddedMonths = useMemo(() => {
     const counts = {};
-    visibleVisits.forEach((v) => {
+    dateAddedScopeVisits.forEach((v) => {
       const d = toJsDate(v.createdAt);
       if (!d) return;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -895,7 +913,18 @@ export default function App() {
     return Object.keys(counts)
       .sort((a, b) => (a < b ? 1 : -1))
       .map((key) => ({ key, count: counts[key] }));
-  }, [visibleVisits]);
+  }, [dateAddedScopeVisits]);
+
+  // If the sector/stage/tag/etc. filters above narrow the list so far that
+  // the currently-picked month no longer has any customers in it, fall
+  // back to "all" automatically instead of silently showing zero results
+  // for a month that's no longer even in the dropdown.
+  useEffect(() => {
+    if (dateAddedFilter === "all") return;
+    if (!availableAddedMonths.some((m) => m.key === dateAddedFilter)) {
+      setDateAddedFilter("all");
+    }
+  }, [availableAddedMonths, dateAddedFilter]);
 
   const filtered = useMemo(
     () =>
@@ -1130,6 +1159,7 @@ export default function App() {
           dateAddedFilter={dateAddedFilter}
           setDateAddedFilter={setDateAddedFilter}
           availableAddedMonths={availableAddedMonths}
+          dateAddedScopeTotal={dateAddedScopeTotal}
           loaded={loaded}
           filtered={filtered}
           togglePin={togglePin}
