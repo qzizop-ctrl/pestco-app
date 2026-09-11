@@ -47,7 +47,7 @@ export default function FilterSheet({
   allTags, tagFilter, setTagFilter,
   missingDataOnly, setMissingDataOnly, missingDataCount,
   noVisitsOnly, setNoVisitsOnly, noVisitsCount,
-  dateAddedFilter, setDateAddedFilter, availableAddedMonths,
+  dateAddedFilter, setDateAddedFilter, availableAddedMonths = [],
 }) {
   if (!open) return null;
 
@@ -61,8 +61,13 @@ export default function FilterSheet({
   };
 
   // "YYYY-MM" -> a locale-aware "Month Year" label (e.g. "أغسطس 2026").
+  // Defensively falls back instead of throwing if it's ever handed a
+  // malformed or missing key (e.g. a stale cached bundle mixing old/new
+  // shapes) instead of crashing the whole screen.
   const monthLabel = (key) => {
+    if (!key || typeof key !== "string" || !key.includes("-")) return key || "";
     const [y, m] = key.split("-").map(Number);
+    if (!y || !m) return key;
     const d = new Date(y, m - 1, 1);
     try {
       return d.toLocaleDateString(t.locale, { month: "long", year: "numeric" });
@@ -163,9 +168,11 @@ export default function FilterSheet({
                 onChange={(e) => setDateAddedFilter(e.target.value)}
               >
                 <option value="all">{t.dateAddedAllOption} ({totalCustomers})</option>
-                {availableAddedMonths.map(({ key, count }) => (
-                  <option key={key} value={key}>{monthLabel(key)} ({count})</option>
-                ))}
+                {availableAddedMonths
+                  .filter((item) => item && item.key)
+                  .map(({ key, count }) => (
+                    <option key={key} value={key}>{monthLabel(key)} ({count})</option>
+                  ))}
               </select>
             </div>
           )}
