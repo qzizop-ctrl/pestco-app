@@ -881,16 +881,20 @@ export default function App() {
   );
 
   // Every "YYYY-MM" that at least one customer was actually added in,
-  // newest first — used to populate the "date added" filter dropdown so it
-  // only ever offers months that have real data behind them.
+  // together with how many — newest first — used to populate the "date
+  // added" filter dropdown so it only ever offers months that have real
+  // data behind them, with a count next to each just like the other filters.
   const availableAddedMonths = useMemo(() => {
-    const keys = new Set();
+    const counts = {};
     visibleVisits.forEach((v) => {
       const d = toJsDate(v.createdAt);
       if (!d) return;
-      keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      counts[key] = (counts[key] || 0) + 1;
     });
-    return Array.from(keys).sort((a, b) => (a < b ? 1 : -1));
+    return Object.keys(counts)
+      .sort((a, b) => (a < b ? 1 : -1))
+      .map((key) => ({ key, count: counts[key] }));
   }, [visibleVisits]);
 
   const filtered = useMemo(
