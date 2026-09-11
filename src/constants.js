@@ -62,6 +62,11 @@ export const STRINGS = {
     phonePlaceholder: "01xxxxxxxxx",
     emailLabel: "البريد الإلكتروني",
     emailPlaceholder: "name@company.com",
+    formSectionBasic: "بيانات أساسية",
+    formSectionClassification: "التصنيف",
+    formSectionContact: "التواصل",
+    formSectionSchedule: "الجدولة",
+    formSectionNotes: "ملاحظات",
     visitDateLabel: "تاريخ الزيارة",
     visitDateHint: "اسيبه فاضي لو لسه ما حصلتش الزيارة، وحددّه بس لما تكون فعلاً زرت العميل.",
     noVisitYet: "لسه ما حصلتش زيارة",
@@ -244,6 +249,7 @@ export const STRINGS = {
     supplierContactPlaceholder: "مثال: محمد علي",
     supplierCategoryLabel: "نوع البضاعة / الخدمة",
     supplierCategoryPlaceholder: "مثال: كاميرات مراقبة، كابلات، أجهزة إنذار",
+    supplierCategoryAll: "كل الأنواع",
     saveSupplier: "حفظ مورد",
     supplierNotesLabel: "ملاحظات",
     newSupplierBtn: "مورد جديد",
@@ -394,6 +400,11 @@ export const STRINGS = {
     phonePlaceholder: "01xxxxxxxxx",
     emailLabel: "Email",
     emailPlaceholder: "name@company.com",
+    formSectionBasic: "Basic info",
+    formSectionClassification: "Classification",
+    formSectionContact: "Contact",
+    formSectionSchedule: "Scheduling",
+    formSectionNotes: "Notes",
     visitDateLabel: "Visit Date",
     visitDateHint: "Leave this empty if the visit hasn't happened yet — only set it once you've actually visited the customer.",
     noVisitYet: "No visit yet",
@@ -569,6 +580,7 @@ export const STRINGS = {
     saveSupplier: "Save Supplier",
     supplierCategoryLabel: "Goods / Service Type",
     supplierCategoryPlaceholder: "e.g. CCTV cameras, cabling, alarm systems",
+    supplierCategoryAll: "All Types",
     supplierNotesLabel: "Notes",
     newSupplierBtn: "New Supplier",
     noSuppliers: "No suppliers yet",
@@ -779,6 +791,16 @@ export function collectSupplierTags(suppliers) {
   const set = new Set();
   (suppliers || []).forEach((s) => (s.tags || []).forEach((t) => t && set.add(t)));
   return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+// Distinct, non-empty category values already entered across suppliers
+// (e.g. "مبيدات", "معدات") — used to build the category filter chips on the
+// suppliers list. Free-text like tags, not a fixed enum, so it only ever
+// shows categories someone has actually typed in.
+export function collectSupplierCategories(suppliers) {
+  const set = new Set();
+  (suppliers || []).forEach((s) => s.category && set.add(s.category.trim()));
+  return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b));
 }
 
 // Parses a visitDate/offerDate value that might be stored as ISO (yyyy-mm-dd,

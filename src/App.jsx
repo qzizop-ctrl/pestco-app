@@ -39,7 +39,7 @@ import {
   parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
   buildActivity, buildOffer, buildVisitEntry,
   visitStatus, fmtReminder, fmtOffersTotals, sumOffersByCurrency, corePhoneDigits,
-  findDuplicateGroups, isStaleCustomer, collectSupplierTags, getVisitEvents,
+  findDuplicateGroups, isStaleCustomer, collectSupplierTags, collectSupplierCategories, getVisitEvents,
   emptyForm, emptySupplierForm, toJsDate,
 } from "./constants";
 
@@ -116,6 +116,7 @@ export default function App() {
   const [activeSupplierId, setActiveSupplierId] = useState(null);
   const [supplierErrors, setSupplierErrors] = useState({});
   const [supplierTagFilter, setSupplierTagFilter] = useState("all");
+  const [supplierCategoryFilter, setSupplierCategoryFilter] = useState("all");
   const fileInputRef = useRef(null);
 
   const t = STRINGS[lang];
@@ -977,10 +978,17 @@ export default function App() {
   // "filter by product" chip row on the Suppliers list.
   const allSupplierTags = useMemo(() => collectSupplierTags(suppliers), [suppliers]);
 
+  // All unique "goods/service type" values across every supplier, used to
+  // populate a separate "filter by category" chip row — distinct from the
+  // product tags above, since a supplier's category (e.g. "كاميرات مراقبة")
+  // and its individual product tags aren't the same field.
+  const allSupplierCategories = useMemo(() => collectSupplierCategories(suppliers), [suppliers]);
+
   const filteredSuppliers = useMemo(
     () =>
       suppliers
         .filter((s) => supplierTagFilter === "all" || (s.tags || []).includes(supplierTagFilter))
+        .filter((s) => supplierCategoryFilter === "all" || (s.category || "").trim() === supplierCategoryFilter)
         .filter((s) => {
           const q = debouncedSupplierQuery.trim().toLowerCase();
           if (!q) return true;
@@ -998,7 +1006,7 @@ export default function App() {
           if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
           return (a.name || "").localeCompare(b.name || "", "ar");
         }),
-    [suppliers, supplierTagFilter, debouncedSupplierQuery]
+    [suppliers, supplierTagFilter, supplierCategoryFilter, debouncedSupplierQuery]
   );
 
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
@@ -1217,6 +1225,9 @@ export default function App() {
           allSupplierTags={allSupplierTags}
           supplierTagFilter={supplierTagFilter}
           setSupplierTagFilter={setSupplierTagFilter}
+          allSupplierCategories={allSupplierCategories}
+          supplierCategoryFilter={supplierCategoryFilter}
+          setSupplierCategoryFilter={setSupplierCategoryFilter}
           suppliersLoaded={suppliersLoaded}
           filteredSuppliers={filteredSuppliers}
           togglePinSupplier={togglePinSupplier}
