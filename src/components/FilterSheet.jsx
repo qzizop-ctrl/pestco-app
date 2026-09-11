@@ -162,9 +162,9 @@ export default function FilterSheet({
                 value={dateAddedFilter}
                 onChange={(e) => setDateAddedFilter(e.target.value)}
               >
-                <option value="all">{t.dateAddedAllOption}</option>
-                {availableAddedMonths.map((key) => (
-                  <option key={key} value={key}>{monthLabel(key)}</option>
+                <option value="all">{t.dateAddedAllOption} ({totalCustomers})</option>
+                {availableAddedMonths.map(({ key, count }) => (
+                  <option key={key} value={key}>{monthLabel(key)} ({count})</option>
                 ))}
               </select>
             </div>
