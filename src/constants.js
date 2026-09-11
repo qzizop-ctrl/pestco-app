@@ -184,8 +184,7 @@ export const STRINGS = {
     // with the selected filter so it never implies a "new vs previous
     // period" comparison when it's actually a cumulative count for
     // whatever range (a whole year, or one month) is currently selected.
-    dashCustomersAddedAllLabel: (year) => `إجمالي العملاء المُضافين (${year})`,
-    dashCustomersAddedMonthLabel: (monthName) => `عملاء تم إضافتهم في ${monthName}`,
+    dashCustomersAddedLabel: (rangeLabel) => `عملاء تم إضافتهم: ${rangeLabel}`,
 
     // Dark mode
     darkModeToggle: "الوضع الليلي",
@@ -280,8 +279,17 @@ export const STRINGS = {
 
     // Dashboard
     dashYear: "السنة",
-    dashMonth: "الشهر",
-    dashAllMonths: "كل الشهور",
+    dashPeriodLabel: "الفترة",
+    dashPeriodCurrentMonth: "الشهر الحالي",
+    dashPeriodLast3: "آخر 3 شهور",
+    dashPeriodLast6: "آخر 6 شهور",
+    dashPeriodWholeYear: "كل السنة",
+    dashPeriodCustom: "تحديد يدوي",
+    dashPeriodCustomSingle: "شهر واحد",
+    dashPeriodCustomRange: "فترة",
+    dashPeriodChoose: "اختر الفترة",
+    dashPeriodApply: "تطبيق",
+    dashPeriodTo: "إلى",
     dashSector: "القطاع",
     dashAllSectors: "كل القطاعات",
     dashCardVisits: "إجمالي الزيارات",
@@ -336,8 +344,7 @@ export const STRINGS = {
     dashPdfGenerating: "جارِ تجهيز التقرير...",
     dashPdfReportTitle: "تقرير الأداء",
     dashPdfGeneratedAt: (date) => `تاريخ إصدار التقرير: ${date}`,
-    dashPdfPeriodAll: (year) => `الفترة: كل شهور ${year}`,
-    dashPdfPeriodMonth: (month, year) => `الفترة: ${month} ${year}`,
+    dashPdfPeriod: (label) => `الفترة: ${label}`,
     dashPdfSectorLine: (sector) => `القطاع: ${sector}`,
     dashPdfSummarySection: "ملخص الأداء",
     dashPdfPipelineSection: "توزيع مسار المبيعات",
@@ -499,8 +506,7 @@ export const STRINGS = {
     totalCustomersLabel: "Total Customers",
     dashPeriodCustomersLabel: "Customers in Selected Period",
     dashNewCustomersLabel: "New Customers",
-    dashCustomersAddedAllLabel: (year) => `Total Customers Added (${year})`,
-    dashCustomersAddedMonthLabel: (monthName) => `Customers Added in ${monthName}`,
+    dashCustomersAddedLabel: (rangeLabel) => `Customers Added: ${rangeLabel}`,
 
     // Dark mode
     darkModeToggle: "Dark Mode",
@@ -595,8 +601,17 @@ export const STRINGS = {
 
     // Dashboard
     dashYear: "Year",
-    dashMonth: "Month",
-    dashAllMonths: "All Months",
+    dashPeriodLabel: "Period",
+    dashPeriodCurrentMonth: "Current Month",
+    dashPeriodLast3: "Last 3 Months",
+    dashPeriodLast6: "Last 6 Months",
+    dashPeriodWholeYear: "Whole Year",
+    dashPeriodCustom: "Custom",
+    dashPeriodCustomSingle: "Single Month",
+    dashPeriodCustomRange: "Range",
+    dashPeriodChoose: "Choose Period",
+    dashPeriodApply: "Apply",
+    dashPeriodTo: "to",
     dashSector: "Sector",
     dashAllSectors: "All Sectors",
     dashCardVisits: "Total Visits",
@@ -651,8 +666,7 @@ export const STRINGS = {
     dashPdfGenerating: "Preparing report...",
     dashPdfReportTitle: "Performance Report",
     dashPdfGeneratedAt: (date) => `Generated on: ${date}`,
-    dashPdfPeriodAll: (year) => `Period: All of ${year}`,
-    dashPdfPeriodMonth: (month, year) => `Period: ${month} ${year}`,
+    dashPdfPeriod: (label) => `Period: ${label}`,
     dashPdfSectorLine: (sector) => `Sector: ${sector}`,
     dashPdfSummarySection: "Performance Summary",
     dashPdfPipelineSection: "Sales Pipeline Breakdown",

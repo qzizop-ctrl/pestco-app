@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, Percent, DollarSign, FileDown } from "lucide-react";
+import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, ChevronDown, Percent, DollarSign, FileDown, X } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -8,26 +8,116 @@ import {
   stageColor, offerStatusColor,
   parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, getVisitEvents, toJsDate,
   PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE, SURFACE_SUBTLE,
+  CURRENCY_IDS,
 } from "./constants";
 import { generateDashboardPdf } from "./pdfReport";
 
-// Builds the [start, end] Date range for a given year + month filter.
-// month === "all" covers the whole year.
-function getRange(year, month) {
-  if (month === "all") {
-    return [new Date(year, 0, 1, 0, 0, 0), new Date(year, 11, 31, 23, 59, 59)];
-  }
-  const start = new Date(year, month, 1, 0, 0, 0);
-  const end = new Date(year, month + 1, 0, 23, 59, 59);
-  return [start, end];
+// ---- Period resolution ----
+// The dashboard period used to be just (year, month). Now it can be one of
+// five modes: the current month, a rolling "last N months" window, a whole
+// year, or a custom single month / custom month range. All of them resolve
+// down to the same shape — a concrete [start, end] date range, the
+// equivalent previous range (for the compare toggle), a chart bucketing
+// granularity, and display labels — so everything downstream (stats,
+// charts, PDF export) only ever deals with dates, never with the mode.
+
+// Adds `delta` months to (year, month), wrapping the year as needed.
+function addMonths(year, month, delta) {
+  const total = year * 12 + month + delta;
+  return { year: Math.floor(total / 12), month: ((total % 12) + 12) % 12 };
 }
 
-// Returns the [year, month] pair for "the period right before this one",
-// used for the previous-month/previous-year comparison toggle.
-function getPreviousPeriod(year, month) {
-  if (month === "all") return [year - 1, "all"];
-  if (month === 0) return [year - 1, 11];
-  return [year, month - 1];
+function monthsBetweenInclusive(fromY, fromM, toY, toM) {
+  return (toY * 12 + toM) - (fromY * 12 + fromM) + 1;
+}
+
+function monthRange(year, month) {
+  return [new Date(year, month, 1, 0, 0, 0), new Date(year, month + 1, 0, 23, 59, 59)];
+}
+
+// "أغسطس 2026" for a single month, "يونيو - أغسطس 2026" for a same-year
+// range, "نوفمبر 2025 - فبراير 2026" when the range crosses a year end.
+function formatMonthRangeLabel(fromY, fromM, toY, toM, t) {
+  if (fromY === toY && fromM === toM) return `${t.months[fromM]} ${fromY}`;
+  if (fromY === toY) return `${t.months[fromM]} - ${t.months[toM]} ${fromY}`;
+  return `${t.months[fromM]} ${fromY} - ${t.months[toM]} ${toY}`;
+}
+
+// period: { mode: "month"|"q3"|"q6"|"year"|"custom", year, customType: "single"|"range",
+//           single: {year, month}, from: {year, month}, to: {year, month} }
+function resolvePeriod(period, now, t) {
+  const nowY = now.getFullYear();
+  const nowM = now.getMonth();
+
+  if (period.mode === "q3" || period.mode === "q6") {
+    const span = period.mode === "q3" ? 3 : 6;
+    const from = addMonths(nowY, nowM, -(span - 1));
+    const [start] = monthRange(from.year, from.month);
+    const [, end] = monthRange(nowY, nowM);
+    const prevTo = addMonths(from.year, from.month, -1);
+    const prevFrom = addMonths(prevTo.year, prevTo.month, -(span - 1));
+    const [pStart] = monthRange(prevFrom.year, prevFrom.month);
+    const [, pEnd] = monthRange(prevTo.year, prevTo.month);
+    return {
+      start, end, prevStart: pStart, prevEnd: pEnd, granularity: "month",
+      pillLabel: span === 3 ? t.dashPeriodLast3 : t.dashPeriodLast6,
+      rangeLabel: formatMonthRangeLabel(from.year, from.month, nowY, nowM, t),
+    };
+  }
+
+  if (period.mode === "year") {
+    const y = period.year;
+    const start = new Date(y, 0, 1, 0, 0, 0);
+    const end = new Date(y, 11, 31, 23, 59, 59);
+    const pStart = new Date(y - 1, 0, 1, 0, 0, 0);
+    const pEnd = new Date(y - 1, 11, 31, 23, 59, 59);
+    return {
+      start, end, prevStart: pStart, prevEnd: pEnd, granularity: "month",
+      pillLabel: String(y), rangeLabel: String(y),
+    };
+  }
+
+  if (period.mode === "custom" && period.customType === "range") {
+    const { year: fy, month: fm } = period.from;
+    const { year: ty, month: tm } = period.to;
+    const fromIdx = fy * 12 + fm;
+    const toIdx = ty * 12 + tm;
+    const [lowY, lowM, highY, highM] = fromIdx <= toIdx ? [fy, fm, ty, tm] : [ty, tm, fy, fm];
+    const [start] = monthRange(lowY, lowM);
+    const [, end] = monthRange(highY, highM);
+    const span = monthsBetweenInclusive(lowY, lowM, highY, highM);
+    const prevHigh = addMonths(lowY, lowM, -1);
+    const prevLow = addMonths(prevHigh.year, prevHigh.month, -(span - 1));
+    const [pStart] = monthRange(prevLow.year, prevLow.month);
+    const [, pEnd] = monthRange(prevHigh.year, prevHigh.month);
+    const label = formatMonthRangeLabel(lowY, lowM, highY, highM, t);
+    return {
+      start, end, prevStart: pStart, prevEnd: pEnd,
+      granularity: span > 1 ? "month" : "day",
+      pillLabel: label, rangeLabel: label,
+    };
+  }
+
+  if (period.mode === "custom") {
+    const { year: y, month: m } = period.single;
+    const [start, end] = monthRange(y, m);
+    const prev = addMonths(y, m, -1);
+    const [pStart, pEnd] = monthRange(prev.year, prev.month);
+    const label = `${t.months[m]} ${y}`;
+    return {
+      start, end, prevStart: pStart, prevEnd: pEnd, granularity: "day",
+      pillLabel: label, rangeLabel: label,
+    };
+  }
+
+  // Default / "month": the current calendar month.
+  const [start, end] = monthRange(nowY, nowM);
+  const prev = addMonths(nowY, nowM, -1);
+  const [pStart, pEnd] = monthRange(prev.year, prev.month);
+  return {
+    start, end, prevStart: pStart, prevEnd: pEnd, granularity: "day",
+    pillLabel: t.dashPeriodCurrentMonth, rangeLabel: `${t.months[nowM]} ${nowY}`,
+  };
 }
 
 function pctChange(current, previous) {
@@ -72,6 +162,18 @@ function computeDecidedCount(offersByStatus) {
 // necessarily bought first, so excluding it would silently undercount
 // actual sales. Pending and rejected are kept as their own segments since
 // "still open" and "lost" mean very different things for follow-up.
+//
+// Totals are merged per currency (not just EGP) — an earlier version only
+// looked at the EGP total, so a pending offer priced in USD showed up as
+// "0 جنيه" in the legend even though the card above correctly listed it
+// under the "+ ... دولار" line.
+function mergeTotals(...totalsList) {
+  const merged = {};
+  CURRENCY_IDS.forEach((id) => {
+    merged[id] = totalsList.reduce((sum, t) => sum + ((t && t[id]) || 0), 0);
+  });
+  return merged;
+}
 function buildOfferBreakdown(offersByStatus) {
   const pending = offersByStatus.pending || { count: 0, totals: {} };
   const rejected = offersByStatus.rejected || { count: 0, totals: {} };
@@ -79,37 +181,55 @@ function buildOfferBreakdown(offersByStatus) {
   const installed = offersByStatus.installed || { count: 0, totals: {} };
   return {
     convertedCount: purchased.count + installed.count,
-    convertedValueEGP: (purchased.totals.EGP || 0) + (installed.totals.EGP || 0),
+    convertedTotals: mergeTotals(purchased.totals, installed.totals),
     pendingCount: pending.count,
-    pendingValueEGP: pending.totals.EGP || 0,
+    pendingTotals: mergeTotals(pending.totals),
     rejectedCount: rejected.count,
-    rejectedValueEGP: rejected.totals.EGP || 0,
+    rejectedTotals: mergeTotals(rejected.totals),
   };
 }
 
-// Builds a per-day (specific month) or per-month ("all") bucket array of
-// offer values for one currency, used to feed a value-trend BarChart.
-function buildOffersChartData(offersInRange, currency, month, year, months) {
+// Builds a per-day (single month) or per-month (multi-month range) bucket
+// array of offer values for one currency, used to feed a value-trend
+// BarChart.
+function buildOffersChartData(offersInRange, currency, granularity, start, end, months) {
   const inCurrency = (o) => (o.currency || "EGP") === currency;
-  if (month === "all") {
-    const buckets = Array.from({ length: 12 }, (_, i) => ({ label: months[i].slice(0, 3), value: 0 }));
+
+  if (granularity === "day") {
+    const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+    const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), value: 0 }));
     offersInRange.filter(inCurrency).forEach((o) => {
       const d = parseVisitDate(o.offerDate);
-      if (d) buckets[d.getMonth()].value += Number(o.amount) || 0;
+      if (d) buckets[d.getDate() - 1].value += Number(o.amount) || 0;
     });
     return buckets;
   }
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), value: 0 }));
+
+  const spansMultipleYears = start.getFullYear() !== end.getFullYear();
+  const buckets = [];
+  let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const endCursor = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor <= endCursor) {
+    buckets.push({
+      year: cursor.getFullYear(),
+      month: cursor.getMonth(),
+      label: spansMultipleYears
+        ? `${months[cursor.getMonth()].slice(0, 3)} ${String(cursor.getFullYear()).slice(2)}`
+        : months[cursor.getMonth()].slice(0, 3),
+      value: 0,
+    });
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
   offersInRange.filter(inCurrency).forEach((o) => {
     const d = parseVisitDate(o.offerDate);
-    if (d) buckets[d.getDate() - 1].value += Number(o.amount) || 0;
+    if (!d) return;
+    const bucket = buckets.find((b) => b.year === d.getFullYear() && b.month === d.getMonth());
+    if (bucket) bucket.value += Number(o.amount) || 0;
   });
   return buckets;
 }
 
-function computePeriodStats(visits, year, month, sector) {
-  const [start, end] = getRange(year, month);
+function computePeriodStats(visits, start, end, sector, isSingleMonth) {
   const inSector = (v) => sector === "all" || v.sector === sector;
   const inRange = (dateStr) => {
     const d = parseVisitDate(dateStr);
@@ -133,14 +253,14 @@ function computePeriodStats(visits, year, month, sector) {
   // a brand-new record whose serverTimestamp hasn't finished syncing yet)
   // fall back to visit status: if the customer has never been visited
   // either, there's no reliable date to exclude them by, so they're always
-  // counted rather than disappearing whenever a specific month is
+  // counted rather than disappearing whenever a specific single month is
   // selected. A dateless record that HAS been visited is still only
-  // counted in the "all months" view, since we can't confirm which month
-  // it belongs to.
+  // counted in multi-month views, since we can't confirm which single
+  // month it belongs to.
   const customersAddedInRange = visits.filter((v) => {
     if (!inSector(v)) return false;
     const d = toJsDate(v.createdAt);
-    if (!d) return month === "all" || getVisitEvents(v).length === 0;
+    if (!d) return !isSingleMonth || getVisitEvents(v).length === 0;
     return d >= start && d <= end;
   });
 
@@ -195,6 +315,182 @@ function computePeriodStats(visits, year, month, sector) {
     offersByStatus,
     pipeline,
   };
+}
+
+// Bottom sheet for choosing the dashboard's period. Edits a local draft
+// (mode / custom type / picked months) that's only written back to the
+// parent's committed `period` state when "Apply" is tapped — matches the
+// existing FilterSheet's overlay look so it feels consistent with the rest
+// of the app, but with its own apply step since a half-picked custom range
+// shouldn't affect the numbers on screen until it's confirmed.
+function PeriodSheet({ t, period, availableYears, onApply, onClose }) {
+  const [mode, setMode] = useState(period.mode);
+  const [customType, setCustomType] = useState(period.customType);
+  const [year, setYear] = useState(period.year);
+  const [single, setSingle] = useState(period.single);
+  const [from, setFrom] = useState(period.from);
+  const [to, setTo] = useState(period.to);
+
+  const options = [
+    { id: "month", label: t.dashPeriodCurrentMonth },
+    { id: "q3", label: t.dashPeriodLast3 },
+    { id: "q6", label: t.dashPeriodLast6 },
+    { id: "year", label: t.dashPeriodWholeYear },
+    { id: "custom", label: t.dashPeriodCustom },
+  ];
+
+  function apply() {
+    onApply({ mode, customType, year, single, from, to });
+    onClose();
+  }
+
+  return (
+    <div
+      className="flex items-end justify-center"
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 90 }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: SURFACE,
+          borderRadius: "18px 18px 0 0",
+          padding: "16px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+          width: "100%",
+          maxWidth: 480,
+          maxHeight: "78vh",
+          overflowY: "auto",
+        }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-bold text-base" style={{ color: TEXT }}>{t.dashPeriodChoose}</span>
+          <button onClick={onClose} className="btn-press flex items-center justify-center" style={{ color: MUTED }} aria-label={t.back}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex flex-col">
+          {options.map((opt) => {
+            const isActive = opt.id === mode;
+            return (
+              <button
+                key={opt.id}
+                onClick={() => setMode(opt.id)}
+                className="btn-press flex items-center justify-between"
+                style={{
+                  padding: "12px 4px",
+                  borderBottom: `1px solid ${LINE}`,
+                  background: "transparent",
+                  fontSize: 14,
+                  fontWeight: isActive ? 700 : 500,
+                  color: isActive ? TEXT : MUTED,
+                }}
+              >
+                <span>{opt.label}</span>
+                {isActive && <span style={{ color: PRIMARY, fontWeight: 900 }}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {mode === "year" && (
+          <div style={{ marginTop: 12 }}>
+            <label>{t.dashYear}</label>
+            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {availableYears.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {mode === "custom" && (
+          <div style={{ marginTop: 12 }}>
+            <div className="flex" style={{ gap: 6, marginBottom: 10 }}>
+              {[{ id: "single", label: t.dashPeriodCustomSingle }, { id: "range", label: t.dashPeriodCustomRange }].map((m) => {
+                const isActive = m.id === customType;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setCustomType(m.id)}
+                    className="btn-press font-bold"
+                    style={{
+                      flex: 1,
+                      padding: "7px 0",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      border: `1.4px solid ${isActive ? PRIMARY : LINE}`,
+                      background: isActive ? PRIMARY : SURFACE,
+                      color: isActive ? "#fff" : MUTED,
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {customType === "single" ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <select
+                  value={single.month}
+                  onChange={(e) => setSingle((s) => ({ ...s, month: Number(e.target.value) }))}
+                >
+                  {t.months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                </select>
+                <select
+                  value={single.year}
+                  onChange={(e) => setSingle((s) => ({ ...s, year: Number(e.target.value) }))}
+                >
+                  {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center" style={{ gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
+                  <select
+                    value={from.month}
+                    onChange={(e) => setFrom((f) => ({ ...f, month: Number(e.target.value) }))}
+                  >
+                    {t.months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                  </select>
+                  <select
+                    value={from.year}
+                    onChange={(e) => setFrom((f) => ({ ...f, year: Number(e.target.value) }))}
+                  >
+                    {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <span style={{ color: MUTED, fontSize: 13, fontWeight: 700 }}>{t.dashPeriodTo}</span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, flex: 1 }}>
+                  <select
+                    value={to.month}
+                    onChange={(e) => setTo((tt) => ({ ...tt, month: Number(e.target.value) }))}
+                  >
+                    {t.months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                  </select>
+                  <select
+                    value={to.year}
+                    onChange={(e) => setTo((tt) => ({ ...tt, year: Number(e.target.value) }))}
+                  >
+                    {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <button
+          onClick={apply}
+          className="btn-press w-full font-bold"
+          style={{ marginTop: 16, background: PRIMARY, color: "#fff", borderRadius: 12, padding: "11px 0" }}
+        >
+          {t.dashPeriodApply}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // A thin horizontal bar split into colored segments by proportion, plus a
@@ -293,19 +589,33 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
     return Array.from(years).sort((a, b) => b - a);
   }, [visits]);
 
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState("all"); // number 0-11, or "all"
+  // The committed period selection — the sheet edits a draft copy of this
+  // and only overwrites it when "Apply" is tapped.
+  const [period, setPeriod] = useState({
+    mode: "month",
+    year: now.getFullYear(),
+    customType: "single",
+    single: { year: now.getFullYear(), month: now.getMonth() },
+    from: { year: now.getFullYear(), month: now.getMonth() },
+    to: { year: now.getFullYear(), month: now.getMonth() },
+  });
+  const [periodSheetOpen, setPeriodSheetOpen] = useState(false);
   const [sector, setSector] = useState("all");
   const [compare, setCompare] = useState(false);
   const [offerStatusFilter, setOfferStatusFilter] = useState("all");
 
-  const stats = useMemo(() => computePeriodStats(visits, year, month, sector), [visits, year, month, sector]);
+  const resolved = useMemo(() => resolvePeriod(period, now, t), [period, t]);
+  const isSingleMonth = resolved.granularity === "day";
+
+  const stats = useMemo(
+    () => computePeriodStats(visits, resolved.start, resolved.end, sector, isSingleMonth),
+    [visits, resolved, sector, isSingleMonth]
+  );
 
   const prevStats = useMemo(() => {
     if (!compare) return null;
-    const [py, pm] = getPreviousPeriod(year, month);
-    return computePeriodStats(visits, py, pm, sector);
-  }, [visits, year, month, sector, compare]);
+    return computePeriodStats(visits, resolved.prevStart, resolved.prevEnd, sector, isSingleMonth);
+  }, [visits, resolved, sector, isSingleMonth, compare]);
 
   const avgDealSize = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "EGP"), [stats]);
   const prevAvgDealSize = useMemo(() => (prevStats ? computeAvgDealSizeForCurrency(prevStats.offersInRange, "EGP") : null), [prevStats]);
@@ -328,55 +638,70 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   const offersValueSegments = useMemo(() => ([
     {
       key: "converted", label: t.dashOffersConverted, color: "#2F9E58",
-      amount: offerBreakdown.convertedValueEGP,
-      display: `${fmtMoney(offerBreakdown.convertedValueEGP, t.locale)} ${t.dashCurrency}`,
+      amount: offerBreakdown.convertedCount,
+      display: fmtOffersTotals(offerBreakdown.convertedTotals, t) || `0 ${t.dashCurrency}`,
     },
     {
       key: "pending", label: t.offerStatuses.pending, color: "#C7A24A",
-      amount: offerBreakdown.pendingValueEGP,
-      display: `${fmtMoney(offerBreakdown.pendingValueEGP, t.locale)} ${t.dashCurrency}`,
+      amount: offerBreakdown.pendingCount,
+      display: fmtOffersTotals(offerBreakdown.pendingTotals, t) || `0 ${t.dashCurrency}`,
     },
     {
       key: "rejected", label: t.offerStatuses.rejected, color: "#C4443A",
-      amount: offerBreakdown.rejectedValueEGP,
-      display: `${fmtMoney(offerBreakdown.rejectedValueEGP, t.locale)} ${t.dashCurrency}`,
+      amount: offerBreakdown.rejectedCount,
+      display: fmtOffersTotals(offerBreakdown.rejectedTotals, t) || `0 ${t.dashCurrency}`,
     },
   ]), [offerBreakdown, t]);
 
-  const customersAddedLabel = useMemo(() => {
-    return month === "all"
-      ? t.dashCustomersAddedAllLabel(year)
-      : t.dashCustomersAddedMonthLabel(t.months[month]);
-  }, [t, year, month]);
+  const customersAddedLabel = useMemo(
+    () => t.dashCustomersAddedLabel(resolved.rangeLabel),
+    [t, resolved]
+  );
 
   const chartData = useMemo(() => {
-    if (month === "all") {
-      const buckets = Array.from({ length: 12 }, (_, i) => ({ label: t.months[i].slice(0, 3), count: 0 }));
+    if (resolved.granularity === "month") {
+      const spansMultipleYears = resolved.start.getFullYear() !== resolved.end.getFullYear();
+      const buckets = [];
+      let cursor = new Date(resolved.start.getFullYear(), resolved.start.getMonth(), 1);
+      const endCursor = new Date(resolved.end.getFullYear(), resolved.end.getMonth(), 1);
+      while (cursor <= endCursor) {
+        buckets.push({
+          year: cursor.getFullYear(),
+          month: cursor.getMonth(),
+          label: spansMultipleYears
+            ? `${t.months[cursor.getMonth()].slice(0, 3)} ${String(cursor.getFullYear()).slice(2)}`
+            : t.months[cursor.getMonth()].slice(0, 3),
+          count: 0,
+        });
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      }
       stats.visitEventsInRange.forEach((e) => {
         const d = parseVisitDate(e.date);
-        if (d) buckets[d.getMonth()].count += 1;
+        if (!d) return;
+        const bucket = buckets.find((b) => b.year === d.getFullYear() && b.month === d.getMonth());
+        if (bucket) bucket.count += 1;
       });
       return buckets;
     }
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInMonth = new Date(resolved.start.getFullYear(), resolved.start.getMonth() + 1, 0).getDate();
     const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), count: 0 }));
     stats.visitEventsInRange.forEach((e) => {
       const d = parseVisitDate(e.date);
       if (d) buckets[d.getDate() - 1].count += 1;
     });
     return buckets;
-  }, [stats, month, year, t]);
+  }, [stats, resolved, t]);
 
   // Offers value trend, one chart per currency (mixing currencies into one
   // bar height would be misleading). The USD chart only renders below if
   // there's actually USD data in the selected period.
   const offersChartData = useMemo(
-    () => buildOffersChartData(stats.offersInRange, "EGP", month, year, t.months),
-    [stats, month, year, t]
+    () => buildOffersChartData(stats.offersInRange, "EGP", resolved.granularity, resolved.start, resolved.end, t.months),
+    [stats, resolved, t]
   );
   const offersChartDataUSD = useMemo(
-    () => buildOffersChartData(stats.offersInRange, "USD", month, year, t.months),
-    [stats, month, year, t]
+    () => buildOffersChartData(stats.offersInRange, "USD", resolved.granularity, resolved.start, resolved.end, t.months),
+    [stats, resolved, t]
   );
 
   // Customers behind the "Customers added" card above: the exact same set
@@ -430,7 +755,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
         return db - da;
       });
       await generateDashboardPdf({
-        t, stats, year, month,
+        t, stats, periodLabel: resolved.rangeLabel,
         sectorLabel: sector === "all" ? null : t.sectors[sector],
         avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
         offersList: allOffersInPeriod,
@@ -448,25 +773,30 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
     <div className="px-4 pt-4 pb-24" style={{ direction: t.dir }}>
       {/* Filters */}
       <div className="flex flex-col gap-3 mb-4">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <div>
-            <label>{t.dashYear}</label>
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-              {availableYears.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label>{t.dashMonth}</label>
-            <select value={month} onChange={(e) => setMonth(e.target.value === "all" ? "all" : Number(e.target.value))}>
-              <option value="all">{t.dashAllMonths}</option>
-              {t.months.map((m, i) => (
-                <option key={i} value={i}>{m}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <button
+          onClick={() => setPeriodSheetOpen(true)}
+          className="btn-press flex items-center justify-between"
+          style={{
+            background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12,
+            padding: "12px 14px", width: "100%",
+          }}
+        >
+          <span className="font-bold text-sm" style={{ color: TEXT }}>
+            {t.dashPeriodLabel}: {resolved.pillLabel}
+          </span>
+          <ChevronDown size={18} color={MUTED} />
+        </button>
+
+        {periodSheetOpen && (
+          <PeriodSheet
+            t={t}
+            period={period}
+            availableYears={availableYears}
+            onApply={setPeriod}
+            onClose={() => setPeriodSheetOpen(false)}
+          />
+        )}
+
         <div>
           <label>{t.dashSector}</label>
           <select value={sector} onChange={(e) => setSector(e.target.value)}>
@@ -591,7 +921,7 @@ subValue={
           <ResponsiveContainer>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={month === "all" ? 0 : "preserveStartEnd"} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
               <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxChartCount]} />
               <Tooltip
                 formatter={(v) => [v, t.dashCardVisits]}
@@ -613,7 +943,7 @@ subValue={
             <ResponsiveContainer>
               <BarChart data={offersChartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={month === "all" ? 0 : "preserveStartEnd"} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValue]} />
                 <Tooltip
                   formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.dashCurrency}`, t.dashCardOffersValue]}
@@ -633,7 +963,7 @@ subValue={
             <ResponsiveContainer>
               <BarChart data={offersChartDataUSD} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={month === "all" ? 0 : "preserveStartEnd"} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValueUSD]} />
                 <Tooltip
                   formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.currencies.USD}`, t.dashCardOffersValue]}

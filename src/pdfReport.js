@@ -101,11 +101,11 @@ function chunkArray(arr, size) {
 // values — it never grows with how much data is in the selected period, so
 // it's always safe to render as a single container.
 function buildFrontMatterHtml({
-  t, stats, year, month, sectorLabel,
+  t, stats, periodLabel, sectorLabel,
   avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
 }) {
   const align = t.dir === "rtl" ? "right" : "left";
-  const periodLine = month === "all" ? t.dashPdfPeriodAll(year) : t.dashPdfPeriodMonth(t.months[month], year);
+  const periodLine = t.dashPdfPeriod(periodLabel);
   const generatedAt = new Date().toLocaleString(t.locale, {
     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", numberingSystem: "latn",
   });
