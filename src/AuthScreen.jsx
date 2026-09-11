@@ -18,7 +18,7 @@ const STRINGS = {
   ar: {
     dir: "rtl",
     appTitle: "Pest.Co",
-    subtitle: "زيارات العملاء",
+    subtitle: "CRM",
     langToggle: "English",
     loginTab: "تسجيل الدخول",
     registerTab: "حساب جديد",
@@ -47,7 +47,7 @@ const STRINGS = {
   en: {
     dir: "ltr",
     appTitle: "Pest.Co",
-    subtitle: "Client Visits",
+    subtitle: "CRM",
     langToggle: "عربي",
     loginTab: "Sign In",
     registerTab: "Create Account",
