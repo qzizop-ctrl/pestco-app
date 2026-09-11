@@ -904,9 +904,19 @@ export function sumOffersByCurrency(offers) {
 export function fmtOffersTotals(totals, t, { showAllIfEmpty = false } = {}) {
   const nonZeroIds = CURRENCY_IDS.filter((id) => totals[id]);
   const ids = nonZeroIds.length > 0 ? nonZeroIds : (showAllIfEmpty ? CURRENCY_IDS : []);
-  return ids
+  const joined = ids
     .map((id) => `${fmtMoney(totals[id] || 0, t.locale)} ${t.currencies[id]}`)
     .join(" + ");
+  if (!joined) return joined;
+  // Wrap in Unicode isolate marks (LRI ... PDI) so the amount+currency
+  // sequence is treated as a single left-to-right block by the bidi
+  // algorithm. Without this, joining two currency segments with " + "
+  // (e.g. "0 EG + 0 $") gets visually reordered/scrambled when rendered
+  // inside an RTL (Arabic) container — each segment becomes its own bidi
+  // run and the runs get flipped relative to each other. Isolating the
+  // whole string keeps it left-to-right and in the same order in every
+  // locale.
+  return `\u2066${joined}\u2069`;
 }
 
 export const ACTIVITY_COLORS = {
