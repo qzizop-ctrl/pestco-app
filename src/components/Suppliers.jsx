@@ -9,7 +9,7 @@
 // ============================================================================
 
 import React from "react";
-import { Search, Tag, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2 } from "lucide-react";
+import { Search, Tag, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2, Package } from "lucide-react";
 import { TagChip, SkeletonList } from "./Shared";
 import { FormSection } from "./CustomerForm";
 import {
@@ -25,6 +25,9 @@ export function SuppliersListScreen({
   allSupplierTags,
   supplierTagFilter,
   setSupplierTagFilter,
+  allSupplierCategories,
+  supplierCategoryFilter,
+  setSupplierCategoryFilter,
   suppliersLoaded,
   filteredSuppliers,
   togglePinSupplier,
@@ -80,6 +83,45 @@ export function SuppliersListScreen({
                 }}
               >
                 {tag}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {allSupplierCategories.length > 0 && (
+        <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
+          <button
+            onClick={() => setSupplierCategoryFilter("all")}
+            className="btn-press font-bold text-xs flex items-center gap-1"
+            style={{
+              flexShrink: 0,
+              padding: "8px 16px",
+              borderRadius: 999,
+              border: `1.4px solid ${supplierCategoryFilter === "all" ? PRIMARY_MID : LINE}`,
+              background: supplierCategoryFilter === "all" ? PRIMARY_MID : SURFACE,
+              color: supplierCategoryFilter === "all" ? "#fff" : MUTED,
+            }}
+          >
+            <Package size={12} /> {t.supplierCategoryAll}
+          </button>
+          {allSupplierCategories.map((category) => {
+            const isActive = supplierCategoryFilter === category;
+            return (
+              <button
+                key={category}
+                onClick={() => setSupplierCategoryFilter(category)}
+                className="btn-press font-bold text-xs"
+                style={{
+                  flexShrink: 0,
+                  padding: "8px 16px",
+                  borderRadius: 999,
+                  border: `1.4px solid ${isActive ? PRIMARY_MID : LINE}`,
+                  background: isActive ? PRIMARY_MID : SURFACE,
+                  color: isActive ? "#fff" : MUTED,
+                }}
+              >
+                {category}
               </button>
             );
           })}

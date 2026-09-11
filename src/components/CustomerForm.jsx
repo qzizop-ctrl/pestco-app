@@ -68,6 +68,28 @@ export default function CustomerFormScreen({
         </div>
       </FormSection>
 
+      <FormSection title={t.formSectionContact}>
+        <div>
+          <label>{t.phoneLabel}</label>
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            placeholder={t.phonePlaceholder}
+          />
+        </div>
+
+        <div>
+          <label>{t.emailLabel}</label>
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+            placeholder={t.emailPlaceholder}
+          />
+        </div>
+      </FormSection>
+
       <FormSection title={t.formSectionClassification}>
         <div>
           <label>{t.pipelineLabel}</label>
@@ -111,28 +133,6 @@ export default function CustomerFormScreen({
               ))}
             </div>
           )}
-        </div>
-      </FormSection>
-
-      <FormSection title={t.formSectionContact}>
-        <div>
-          <label>{t.phoneLabel}</label>
-          <input
-            type="tel"
-            value={form.phone}
-            onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            placeholder={t.phonePlaceholder}
-          />
-        </div>
-
-        <div>
-          <label>{t.emailLabel}</label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder={t.emailPlaceholder}
-          />
         </div>
       </FormSection>
 
