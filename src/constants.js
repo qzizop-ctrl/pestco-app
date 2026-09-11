@@ -898,11 +898,14 @@ export function sumOffersByCurrency(offers) {
 
 // Formats a per-currency totals map (from sumOffersByCurrency) into a
 // human-readable string, e.g. "12,000 جنيه + 500 دولار". Omits currencies
-// with a zero total; returns "" if everything is zero.
-export function fmtOffersTotals(totals, t) {
-  return CURRENCY_IDS
-    .filter((id) => totals[id])
-    .map((id) => `${fmtMoney(totals[id], t.locale)} ${t.currencies[id]}`)
+// with a zero total; returns "" if everything is zero — unless
+// showAllIfEmpty is set, in which case an all-zero total renders every
+// currency at 0 (e.g. "0 جنيه + 0 دولار") instead of collapsing to "".
+export function fmtOffersTotals(totals, t, { showAllIfEmpty = false } = {}) {
+  const nonZeroIds = CURRENCY_IDS.filter((id) => totals[id]);
+  const ids = nonZeroIds.length > 0 ? nonZeroIds : (showAllIfEmpty ? CURRENCY_IDS : []);
+  return ids
+    .map((id) => `${fmtMoney(totals[id] || 0, t.locale)} ${t.currencies[id]}`)
     .join(" + ");
 }
 

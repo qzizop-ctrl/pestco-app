@@ -524,6 +524,14 @@ function SplitBar({ segments }) {
 }
 
 function SummaryCard({ icon: Icon, label, value, delta, subValue, extra, t }) {
+  // Longer combined values (e.g. two currencies: "12,000 جنيه + 500 دولار")
+  // don't fit this card's fixed width at the normal 22px size — whether
+  // they end up wrapping onto a second line or just barely fitting on one,
+  // scaling the font down by length keeps the card from overflowing or
+  // looking cramped either way.
+  const valueText = typeof value === "string" ? value : String(value);
+  const valueFontSize = valueText.length > 18 ? 15 : valueText.length > 12 ? 18 : 22;
+
   return (
     <div
       style={{
@@ -544,7 +552,7 @@ function SummaryCard({ icon: Icon, label, value, delta, subValue, extra, t }) {
         </div>
         <span className="text-xs font-bold" style={{ color: MUTED }}>{label}</span>
       </div>
-      <p className="font-extrabold" style={{ margin: 0, fontSize: 22, color: TEXT }}>{value}</p>
+      <p className="font-extrabold" style={{ margin: 0, fontSize: valueFontSize, lineHeight: 1.25, color: TEXT }}>{value}</p>
       {subValue && (
         <p className="text-xs font-bold" style={{ margin: "2px 0 0", color: MUTED }}>{subValue}</p>
       )}
@@ -877,7 +885,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
         <SummaryCard
           icon={Wallet}
           label={t.dashCardOffersValue}
-          value={fmtOffersTotals(stats.offersValueTotals, t) || `0 ${t.dashCurrency}`}
+          value={fmtOffersTotals(stats.offersValueTotals, t, { showAllIfEmpty: true })}
           delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
           extra={<SplitBar segments={offersValueSegments} />}
           t={t}
@@ -1156,7 +1164,7 @@ subValue={
                 {t.dashOffersTotalLabel}: {offersList.length}
               </span>
               <span className="text-sm font-extrabold" style={{ color: TEXT }}>
-                {t.dashOffersTotalValueLabel}: {fmtOffersTotals(offersListValueTotals, t) || `0 ${t.dashCurrency}`}
+                {t.dashOffersTotalValueLabel}: {fmtOffersTotals(offersListValueTotals, t, { showAllIfEmpty: true })}
               </span>
             </div>
           </>
