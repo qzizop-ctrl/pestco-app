@@ -44,6 +44,7 @@ export default function CustomerListScreen({
   dateAddedFilter,
   setDateAddedFilter,
   availableAddedMonths,
+  dateAddedScopeTotal,
   loaded,
   filtered,
   togglePin,
@@ -135,6 +136,7 @@ export default function CustomerListScreen({
         dateAddedFilter={dateAddedFilter}
         setDateAddedFilter={setDateAddedFilter}
         availableAddedMonths={availableAddedMonths}
+        dateAddedScopeTotal={dateAddedScopeTotal}
       />
 
       <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginBottom: 14 }}>

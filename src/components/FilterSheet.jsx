@@ -47,7 +47,7 @@ export default function FilterSheet({
   allTags, tagFilter, setTagFilter,
   missingDataOnly, setMissingDataOnly, missingDataCount,
   noVisitsOnly, setNoVisitsOnly, noVisitsCount,
-  dateAddedFilter, setDateAddedFilter, availableAddedMonths = [],
+  dateAddedFilter, setDateAddedFilter, availableAddedMonths = [], dateAddedScopeTotal,
 }) {
   if (!open) return null;
 
@@ -167,7 +167,7 @@ export default function FilterSheet({
                 value={dateAddedFilter}
                 onChange={(e) => setDateAddedFilter(e.target.value)}
               >
-                <option value="all">{t.dateAddedAllOption} ({totalCustomers})</option>
+                <option value="all">{t.dateAddedAllOption} ({dateAddedScopeTotal ?? totalCustomers})</option>
                 {availableAddedMonths
                   // Accepts either shape: a plain "YYYY-MM" string (older
                   // App.jsx) or a { key, count } object (current App.jsx).
