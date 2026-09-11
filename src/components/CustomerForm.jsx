@@ -13,7 +13,7 @@ import {
 // Small uppercase-ish section header used to group related fields (basic
 // info / classification / contact / scheduling / notes) so the form reads
 // as a few short groups instead of one long list of inputs.
-function FormSection({ title, first, children }) {
+export function FormSection({ title, first, children }) {
   return (
     <div
       style={{

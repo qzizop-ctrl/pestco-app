@@ -11,6 +11,7 @@
 import React from "react";
 import { Search, Tag, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2 } from "lucide-react";
 import { TagChip, SkeletonList } from "./Shared";
+import { FormSection } from "./CustomerForm";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
   parseTagsCell,
@@ -247,84 +248,97 @@ export function SupplierFormScreen({
 }) {
   return (
     <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
-      <div>
-        <label>{t.supplierNameLabel}</label>
-        <input
-          value={supplierForm.name}
-          onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
-          placeholder={t.supplierNamePlaceholder}
-        />
-        {supplierErrors.name && <p className="text-xs mt-1" style={{ color: DANGER }}>{supplierErrors.name}</p>}
-      </div>
+     <div
+      className="flex flex-col gap-4"
+      style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}
+     >
+      <FormSection title={t.formSectionBasic} first>
+        <div>
+          <label>{t.supplierNameLabel}</label>
+          <input
+            value={supplierForm.name}
+            onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
+            placeholder={t.supplierNamePlaceholder}
+          />
+          {supplierErrors.name && <p className="text-xs mt-1" style={{ color: DANGER }}>{supplierErrors.name}</p>}
+        </div>
 
-      <div>
-        <label>{t.supplierContactLabel}</label>
-        <input
-          value={supplierForm.contactName}
-          onChange={(e) => setSupplierForm({ ...supplierForm, contactName: e.target.value })}
-          placeholder={t.supplierContactPlaceholder}
-        />
-      </div>
+        <div>
+          <label>{t.supplierContactLabel}</label>
+          <input
+            value={supplierForm.contactName}
+            onChange={(e) => setSupplierForm({ ...supplierForm, contactName: e.target.value })}
+            placeholder={t.supplierContactPlaceholder}
+          />
+        </div>
+      </FormSection>
 
-      <div>
-        <label>{t.phoneLabel}</label>
-        <input
-          type="tel"
-          value={supplierForm.phone}
-          onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
-          placeholder={t.phonePlaceholder}
-        />
-      </div>
+      <FormSection title={t.formSectionContact}>
+        <div>
+          <label>{t.phoneLabel}</label>
+          <input
+            type="tel"
+            value={supplierForm.phone}
+            onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
+            placeholder={t.phonePlaceholder}
+          />
+        </div>
 
-      <div>
-        <label>{t.emailLabel}</label>
-        <input
-          type="email"
-          value={supplierForm.email}
-          onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })}
-          placeholder={t.emailPlaceholder}
-        />
-      </div>
+        <div>
+          <label>{t.emailLabel}</label>
+          <input
+            type="email"
+            value={supplierForm.email}
+            onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })}
+            placeholder={t.emailPlaceholder}
+          />
+        </div>
+      </FormSection>
 
-      <div>
-        <label>{t.supplierCategoryLabel}</label>
-        <input
-          value={supplierForm.category}
-          onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
-          placeholder={t.supplierCategoryPlaceholder}
-        />
-      </div>
+      <FormSection title={t.formSectionClassification}>
+        <div>
+          <label>{t.supplierCategoryLabel}</label>
+          <input
+            value={supplierForm.category}
+            onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
+            placeholder={t.supplierCategoryPlaceholder}
+          />
+        </div>
 
-      <div>
-        <label>{t.supplierTagsLabel}</label>
-        <input
-          value={supplierForm.tagsInput}
-          onChange={(e) => setSupplierForm({ ...supplierForm, tagsInput: e.target.value })}
-          placeholder={t.supplierTagsPlaceholder}
-        />
-        {parseTagsCell(supplierForm.tagsInput).length > 0 && (
-          <div className="flex items-center flex-wrap gap-1 mt-2">
-            {parseTagsCell(supplierForm.tagsInput).map((tag) => (
-              <TagChip key={tag} label={tag} onRemove={() => removeTagFromSupplierForm(tag)} />
-            ))}
-          </div>
-        )}
-      </div>
+        <div>
+          <label>{t.supplierTagsLabel}</label>
+          <input
+            value={supplierForm.tagsInput}
+            onChange={(e) => setSupplierForm({ ...supplierForm, tagsInput: e.target.value })}
+            placeholder={t.supplierTagsPlaceholder}
+          />
+          {parseTagsCell(supplierForm.tagsInput).length > 0 && (
+            <div className="flex items-center flex-wrap gap-1 mt-2">
+              {parseTagsCell(supplierForm.tagsInput).map((tag) => (
+                <TagChip key={tag} label={tag} onRemove={() => removeTagFromSupplierForm(tag)} />
+              ))}
+            </div>
+          )}
+        </div>
+      </FormSection>
 
-      <div>
-        <label>{t.supplierNotesLabel}</label>
-        <textarea
-          rows={5}
-          value={supplierForm.notes}
-          onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
-          placeholder={t.notesPlaceholder}
-        />
-      </div>
+      <FormSection title={t.formSectionNotes}>
+        <div>
+          <label>{t.supplierNotesLabel}</label>
+          <textarea
+            rows={5}
+            value={supplierForm.notes}
+            onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
+            placeholder={t.notesPlaceholder}
+          />
+        </div>
+      </FormSection>
+     </div>
 
       <button
         onClick={saveSupplierForm}
         className="btn-press font-bold"
-        style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", marginTop: 8 }}
+        style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0" }}
       >
         {t.saveSupplier}
       </button>
