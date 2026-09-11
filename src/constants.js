@@ -70,6 +70,8 @@ export const STRINGS = {
     // Missing-data filter
     missingDataFilter: "بيانات ناقصة",
     noVisitsYetFilter: "بدون زيارات",
+    dateAddedFilterLabel: "تاريخ إضافة العميل",
+    dateAddedAllOption: "كل الفترات",
     missingPhoneBadge: "بدون رقم",
     missingEmailBadge: "بدون إيميل",
 
@@ -400,6 +402,8 @@ export const STRINGS = {
     // Missing-data filter
     missingDataFilter: "Missing Data",
     noVisitsYetFilter: "No Visits Yet",
+    dateAddedFilterLabel: "Date Customer Added",
+    dateAddedAllOption: "All time",
     missingPhoneBadge: "No phone",
     missingEmailBadge: "No email",
 

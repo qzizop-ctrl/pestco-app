@@ -40,7 +40,7 @@ import {
   buildActivity, buildOffer, buildVisitEntry,
   visitStatus, fmtReminder, fmtOffersTotals, sumOffersByCurrency, corePhoneDigits,
   findDuplicateGroups, isStaleCustomer, collectSupplierTags, getVisitEvents,
-  emptyForm, emptySupplierForm,
+  emptyForm, emptySupplierForm, toJsDate,
 } from "./constants";
 
 const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
@@ -69,6 +69,9 @@ export default function App() {
   const [tagFilter, setTagFilter] = useState("all");
   const [missingDataOnly, setMissingDataOnly] = useState(false);
   const [noVisitsOnly, setNoVisitsOnly] = useState(false);
+  // "all" or a "YYYY-MM" key — filters by when the customer record was
+  // created, independent of visit/pipeline status (see availableAddedMonths).
+  const [dateAddedFilter, setDateAddedFilter] = useState("all");
   const [form, setForm] = useState(emptyForm);
   const [activeId, setActiveId] = useState(null);
   const [errors, setErrors] = useState({});
@@ -877,6 +880,19 @@ export default function App() {
     [visibleVisits]
   );
 
+  // Every "YYYY-MM" that at least one customer was actually added in,
+  // newest first — used to populate the "date added" filter dropdown so it
+  // only ever offers months that have real data behind them.
+  const availableAddedMonths = useMemo(() => {
+    const keys = new Set();
+    visibleVisits.forEach((v) => {
+      const d = toJsDate(v.createdAt);
+      if (!d) return;
+      keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    });
+    return Array.from(keys).sort((a, b) => (a < b ? 1 : -1));
+  }, [visibleVisits]);
+
   const filtered = useMemo(
     () =>
       visibleVisits
@@ -885,6 +901,14 @@ export default function App() {
         .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
         .filter((v) => !missingDataOnly || !v.phone || !v.email)
         .filter((v) => !noVisitsOnly || getVisitEvents(v).length === 0)
+        .filter((v) => {
+          // Filters by when the record was added, regardless of visit/
+          // pipeline status — deliberately kept independent of noVisitsOnly.
+          if (dateAddedFilter === "all") return true;
+          const d = toJsDate(v.createdAt);
+          if (!d) return false;
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` === dateAddedFilter;
+        })
         .filter((v) => {
           const q = debouncedQuery.trim().toLowerCase();
           if (!q) return true;
@@ -913,7 +937,7 @@ export default function App() {
           if (!db) return -1;
           return db - da;
         }),
-    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly, debouncedQuery, t.locale]
+    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly, dateAddedFilter, debouncedQuery, t.locale]
   );
 
   // All unique product tags across every supplier, used to populate the
@@ -1099,6 +1123,9 @@ export default function App() {
           noVisitsOnly={noVisitsOnly}
           setNoVisitsOnly={setNoVisitsOnly}
           noVisitsCount={noVisitsCount}
+          dateAddedFilter={dateAddedFilter}
+          setDateAddedFilter={setDateAddedFilter}
+          availableAddedMonths={availableAddedMonths}
           loaded={loaded}
           filtered={filtered}
           togglePin={togglePin}
