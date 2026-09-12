@@ -1260,6 +1260,7 @@ export default function App() {
           active={active}
           ownerUid={ownerUid}
           canEdit={canEdit}
+          isOwnerAccount={isOwnerAccount}
           togglePin={togglePin}
           activeStageIdx={activeStageIdx}
           changeStage={changeStage}
