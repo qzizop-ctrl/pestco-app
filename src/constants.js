@@ -1178,3 +1178,5 @@ export const emptySupplierForm = {
   notes: "",
   isPinned: false,
 };
+
+export const OWNER_EMAIL = "qzizop@gmail.com"; // ضع إيميلك هنا بدقة
