@@ -1,66 +1,71 @@
-name: Build Windows Desktop App
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-
-permissions:
-  contents: write
-
-jobs:
-  build:
-    runs-on: windows-latest
-
-    steps:
-      # =========================
-      # Checkout
-      # =========================
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # =========================
-      # Node.js
-      # =========================
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # =========================
-      # Install dependencies
-      # =========================
-      - name: Install dependencies
-        run: npm install
-
-      # =========================
-      # Build Web App & Electron
-      # =========================
-      - name: Build Web App and Electron
-        run: npm run build
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-
-      # =========================
-      # Package Windows App
-      # =========================
-      - name: Package Windows App (Electron Builder)
-        run: npx electron-builder --win --publish never
-
-      # =========================
-      # GitHub Release for Windows
-      # =========================
-      - name: Create GitHub Release with Windows App
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "win-v1.0.${{ github.run_number }}"
-          name: "Windows Release v1.0.${{ github.run_number }}"
-          files: |
-            release/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+{
+  "name": "pestco-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "تطبيق متابعة زيارات عملاء Pest.Co",
+  "main": "electron.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "android:add": "cap add android",
+    "android:sync": "npm run build && (test -d android || npx cap add android) && npm run android:patch && npx cap sync android",
+    "android:open": "cap open android",
+    "electron:start": "electron .",
+    "electron:build": "npm run build && electron-builder --win",
+    "electron:release": "npm run build && electron-builder --win --publish always",
+    "android:patch": "node scripts/patch-android-storage.cjs",
+    "android:setup": "npm run build && (test -d android || npx cap add android) && npm run android:patch && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/filesystem": "^6.0.1",
+    "@capacitor/local-notifications": "^6.1.0",
+    "@capacitor/share": "^6.0.2",
+    "electron-updater": "^6.3.0",
+    "firebase": "^10.12.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.2",
+    "lucide-react": "^0.383.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5",
+    "recharts": "^2.15.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.pestco.app",
+    "productName": "Pest.Co",
+    "files": [
+      "dist/**/*",
+      "electron.js",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github"
+    }
+  }
+}
