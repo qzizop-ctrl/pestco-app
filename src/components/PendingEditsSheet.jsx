@@ -56,6 +56,7 @@ export default function PendingEditsSheet({ t, open, onClose, pendingEdits, open
             {pendingEdits.map((v) => {
               const who = v.last_change?.updatedBy || v.last_change?.changed_by || "";
               const when = v.last_change?.updatedAt || v.last_change?.updated_at || "";
+              const isDelete = v.last_change?.type === "delete";
               return (
                 <button
                   key={v.id}
@@ -67,7 +68,17 @@ export default function PendingEditsSheet({ t, open, onClose, pendingEdits, open
                   style={{ padding: "12px 4px", borderBottom: `1px solid ${LINE}` }}
                 >
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold" style={{ color: TEXT }}>{v.companyName}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold" style={{ color: TEXT }}>{v.companyName}</span>
+                      {isDelete && (
+                        <span
+                          className="text-xs font-extrabold"
+                          style={{ background: "#FEE2E2", color: "#B91C1C", borderRadius: 999, padding: "1px 7px" }}
+                        >
+                          {t.pendingDeleteLabel}
+                        </span>
+                      )}
+                    </div>
                     {who && (
                       <span className="text-xs" style={{ color: MUTED }}>
                         {t.pendingEditsBy(who, when ? fmtActivityDate(when, t.locale) : "")}

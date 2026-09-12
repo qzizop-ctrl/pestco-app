@@ -13,7 +13,7 @@ import {
 } from "../constants";
 import { mapsUrl } from "../geo";
 import { db } from "../firebase";
-import { doc, updateDoc, deleteField } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 
 export default function CustomerDetailScreen({
   t,
@@ -46,10 +46,13 @@ export default function CustomerDetailScreen({
   deleteActivity,
   openEdit,
   deleteVisit,
+  setScreen,
 }) {
   const [loadingAction, setLoadingAction] = useState(false);
 
   if (!active) return null;
+
+  const isPendingDelete = active.last_change?.type === "delete";
 
   // مرجع مستند العميل الصحيح في Firestore — نفس المسار المستخدم في باقي
   // التطبيق (App.jsx وuseLiveData.js): users/{ownerUid}/visits/{id}.
@@ -119,12 +122,103 @@ export default function CustomerDetailScreen({
     }
   };
 
+  // 3. اعتماد الحذف نهائيًا — بيمسح المستند فعليًا من Firestore (بديل
+  // handleApprove العادي، اللي بيكتفي بمسح last_change فقط).
+  const handleConfirmDelete = async () => {
+    if (!isOwnerAccount || !active?.id) return;
+    const docRef = getDocRef();
+    if (!docRef) {
+      alert("تعذّر تحديد مساحة العمل الحالية.");
+      return;
+    }
+    setLoadingAction(true);
+    try {
+      await deleteDoc(docRef);
+      alert("تم حذف العميل نهائيًا.");
+      setScreen && setScreen("list");
+    } catch (err) {
+      console.error("خطأ أثناء اعتماد الحذف:", err);
+      alert("حدث خطأ أثناء اعتماد الحذف: " + err.message);
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  // 4. استرجاع العميل — بيلغي علامة الحذف وينظّف last_change، فيرجع العميل
+  // يظهر تاني في القايمة العادية كأن حد ماحذفوش.
+  const handleRestoreDeleted = async () => {
+    if (!isOwnerAccount || !active?.id) return;
+    const docRef = getDocRef();
+    if (!docRef) {
+      alert("تعذّر تحديد مساحة العمل الحالية.");
+      return;
+    }
+    setLoadingAction(true);
+    try {
+      await updateDoc(docRef, { deleted: deleteField(), last_change: deleteField() });
+      alert("تم استرجاع العميل بنجاح.");
+    } catch (err) {
+      console.error("خطأ أثناء استرجاع العميل:", err);
+      alert("حدث خطأ أثناء استرجاع العميل: " + err.message);
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
   return (
     <div className="px-4 pt-4 pb-10">
 
+      {/* ----------------- صندوق تنبيه طلب حذف ----------------- */}
+      {/* يظهر لصاحب الـworkspace فقط عشان يعتمد الحذف نهائيًا أو يسترجع العميل */}
+      {isOwnerAccount && isPendingDelete && (
+        <div
+          className="mb-4 shadow-sm"
+          style={{
+            background: "#FEF2F2",
+            border: "1px solid #FCA5A5",
+            borderRadius: 16,
+            padding: 14,
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-bold text-xs flex items-center gap-1" style={{ color: "#991B1B" }}>
+              <Trash2 size={15} color={DANGER} /> {t.deletePendingTitle}
+            </span>
+            <span className="text-xs" style={{ color: MUTED }}>
+              {active.last_change.updatedAt
+                ? new Date(active.last_change.updatedAt).toLocaleString("ar-EG")
+                : ""}
+            </span>
+          </div>
+
+          <div className="text-xs mb-3" style={{ color: TEXT }}>
+            {t.deletePendingBy(active.last_change.updatedBy || "غير معروف")}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirmDelete}
+              disabled={loadingAction}
+              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
+              style={{ background: DANGER, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
+            >
+              <Trash2 size={14} /> {t.confirmDeleteFinalBtn}
+            </button>
+            <button
+              onClick={handleRestoreDeleted}
+              disabled={loadingAction}
+              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
+              style={{ background: "#059669", color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
+            >
+              <RotateCcw size={14} /> {t.restoreCustomerBtn}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ----------------- صندوق تنبيه تعديل البيانات ----------------- */}
       {/* يظهر لصاحب الـworkspace (المالك) فقط — مش لأي editor عنده صلاحية تعديل عادية */}
-      {isOwnerAccount && active.last_change && (
+      {isOwnerAccount && active.last_change && !isPendingDelete && (
         <div 
           className="mb-4 shadow-sm"
           style={{ 
