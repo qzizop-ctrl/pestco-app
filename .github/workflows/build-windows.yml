@@ -50,7 +50,7 @@ jobs:
       # Package Windows App
       # =========================
       - name: Package Windows App (Electron Builder)
-        run: npx electron-builder --win
+        run: npx electron-builder --win --publish never
 
       # =========================
       # GitHub Release for Windows
@@ -60,6 +60,9 @@ jobs:
         with:
           tag_name: "win-v1.0.${{ github.run_number }}"
           name: "Windows Release v1.0.${{ github.run_number }}"
-          files: dist_electron/*.exe
+          files: |
+            dist/*.exe
+            dist_electron/*.exe
+            build/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
