@@ -78,7 +78,7 @@ export default function CustomerDetailScreen({
 
       if (typeof rawChanges === "object") {
         Object.entries(rawChanges).forEach(([field, val]) => {
-          if (!["changed_by", "updatedBy", "updated_at", "updatedAt", "changes", "details"].includes(field)) {
+          if (!["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details"].includes(field)) {
             if (val && typeof val === "object" && "old_value" in val) {
               rollbackPayload[field] = val.old_value;
             }
@@ -138,27 +138,46 @@ export default function CustomerDetailScreen({
             style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: 10 }}
           >
             {(() => {
+              // قاموس تحويل مسميات الحقول للعربية
+              const fieldLabels = {
+                companyName: "اسم الشركة",
+                contactName: "الشخص المسؤول",
+                phone: "رقم الهاتف",
+                email: "البريد الإلكتروني",
+                notes: "الملاحظات",
+                sector: "القطاع",
+                stage: "مرحلة المشروع",
+                visitDate: "تاريخ الزيارة",
+                callDateTime: "موعد التذكير",
+              };
+
+              // الكلمات المراد استبعادها لأنها حقول نظام وليست بيانات عميل
+              const ignoreKeys = [
+                "changed_by", "updatedBy", "updatedById", "updated_at", 
+                "updatedAt", "changes", "details", "last_change"
+              ];
+
               const rawChanges = active.last_change.changes || active.last_change.details || active.last_change;
               
               if (!rawChanges || typeof rawChanges !== "object") {
-                return <div style={{ color: MUTED }}>لا توجد تفاصيل تفصيلية للتغيير</div>;
+                return <div style={{ color: MUTED }}>تعديلات عامة على السجل</div>;
               }
 
-              const entries = Object.entries(rawChanges).filter(
-                ([k]) => !["changed_by", "updatedBy", "updated_at", "updatedAt", "changes", "details"].includes(k)
-              );
+              // تصفية المفاتيح واستبعاد حقول النظام
+              const entries = Object.entries(rawChanges).filter(([k]) => !ignoreKeys.includes(k));
 
               if (entries.length === 0) {
-                return <div style={{ color: MUTED }}>تم إجراء تعديلات عامة على بيانات العميل</div>;
+                return <div style={{ color: MUTED }}>تم إجراء تعديل على بيانات السجل (بدون تفاصيل قيم قديمة)</div>;
               }
 
               return entries.map(([field, val]) => {
+                const arabicLabel = fieldLabels[field] || field;
                 const oldValue = typeof val === "object" && val !== null ? val.old_value : undefined;
                 const newValue = typeof val === "object" && val !== null ? val.new_value : val;
 
                 return (
                   <div key={field} className="flex items-center gap-2 border-b border-gray-100 last:border-0 pb-1">
-                    <span className="font-semibold min-w-[90px]" style={{ color: MUTED }}>{field}:</span>
+                    <span className="font-semibold min-w-[90px]" style={{ color: MUTED }}>{arabicLabel}:</span>
                     {oldValue !== undefined && (
                       <>
                         <span className="line-through font-bold px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: DANGER }}>
@@ -197,7 +216,7 @@ export default function CustomerDetailScreen({
         </div>
       )}
 
-      {/* ----------------- باقي الكود الأصلي بالكامل دون أي تعديل ----------------- */}
+      {/* ----------------- باقي الكود الأصلي بالكامل ----------------- */}
       <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
