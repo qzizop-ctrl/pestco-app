@@ -233,7 +233,6 @@ export default function App() {
     );
   };
 
-
   // Appends one entry to a visit's activity timeline without overwriting the rest of the log.
   const appendActivity = async (visitId, activity) => {
     if (!ownerUid) return;
@@ -494,15 +493,26 @@ export default function App() {
     if (!validate() || !user || !ownerUid) return;
 
     const proceedSave = async () => {
-      const { id, tagsInput, activityLog, offers, visitHistory, ...rest } = form;
+      const { id, tagsInput, activityLog, offers, visitHistory, last_change, ...rest } = form;
       const data = { ...rest, tags: parseTagsCell(tagsInput) };
       const original = id ? visits.find((v) => v.id === id) : null;
+
+      // تجهيز كائن التتبع (Audit Log)
+      const lastChangeData = {
+        updatedBy: user?.displayName || user?.email || "موظف غير معروف",
+        updatedById: user?.uid || null,
+        updatedAt: new Date().toISOString(),
+      };
 
       setIsSaving(true);
       try {
         let savedId = id;
         if (id) {
-          const updatePayload = { ...data };
+          const updatePayload = {
+            ...data,
+            last_change: lastChangeData,
+            updatedAt: new Date().toISOString()
+          };
           if (original && original.visitDate !== data.visitDate && data.visitDate) {
             updatePayload.visitHistory = arrayUnion(buildVisitEntry(data.visitDate));
           }
@@ -510,10 +520,12 @@ export default function App() {
         } else {
           const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
             ...data,
+            last_change: lastChangeData,
             activityLog: [],
             offers: [],
             visitHistory: data.visitDate ? [buildVisitEntry(data.visitDate)] : [],
             createdAt: serverTimestamp(),
+            updatedAt: new Date().toISOString()
           });
           savedId = ref.id;
         }
