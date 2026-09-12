@@ -70,6 +70,7 @@ export default function CustomerFormScreen({
   errors,
   removeTagFromForm,
   saveForm,
+  saving,
 }) {
   return (
     <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
@@ -214,10 +215,11 @@ export default function CustomerFormScreen({
 
       <button
         onClick={saveForm}
+        disabled={saving}
         className="btn-press font-bold"
-        style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0" }}
+        style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", opacity: saving ? 0.7 : 1 }}
       >
-        {t.save}
+        {saving ? t.saving : t.save}
       </button>
     </div>
   );
