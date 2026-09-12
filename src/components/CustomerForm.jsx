@@ -4,12 +4,30 @@
 // ============================================================================
 
 import React, { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import {
+  ChevronDown, Building2, User, Briefcase, Phone, Mail,
+  LayoutGrid, Flag, Tag, CalendarDays, PhoneCall, StickyNote,
+} from "lucide-react";
 import { TagChip } from "./Shared";
 import {
   PRIMARY, PRIMARY_MID, DANGER, MUTED, LINE, SURFACE,
   STAGE_IDS, SECTOR_IDS, ROLE_IDS, parseTagsCell,
 } from "../constants";
+
+// Bordered, rounded wrapper that puts a small leading icon in front of a
+// field so a form with many inputs is easier to scan at a glance. The
+// child input/select/textarea should carry className="field-bare" so its
+// own border/background gets stripped and only the wrapper's border shows.
+// `top` aligns the icon to the top instead of centering it, for the
+// multi-line notes textarea.
+function IconField({ icon: Icon, top, children }) {
+  return (
+    <div className={`icon-field${top ? " icon-field-top" : ""}`}>
+      <Icon size={17} color={MUTED} style={{ flexShrink: 0, marginTop: top ? 2 : 0 }} />
+      {children}
+    </div>
+  );
+}
 
 // Small uppercase-ish section header used to group related fields (basic
 // info / classification / contact / scheduling / notes) so the form reads
@@ -81,54 +99,68 @@ export default function CustomerFormScreen({
       <FormSection title={t.formSectionBasic} first>
         <div>
           <label>{t.companyLabel}</label>
-          <input
-            value={form.companyName}
-            onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-            placeholder={t.companyPlaceholder}
-          />
+          <IconField icon={Building2}>
+            <input
+              className="field-bare"
+              value={form.companyName}
+              onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+              placeholder={t.companyPlaceholder}
+            />
+          </IconField>
           {errors.companyName && <p className="text-xs mt-1" style={{ color: DANGER }}>{errors.companyName}</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label>{t.contactLabel}</label>
-            <input
-              value={form.contactName}
-              onChange={(e) => setForm({ ...form, contactName: e.target.value })}
-              placeholder={t.contactPlaceholder}
-            />
+            <IconField icon={User}>
+              <input
+                className="field-bare"
+                value={form.contactName}
+                onChange={(e) => setForm({ ...form, contactName: e.target.value })}
+                placeholder={t.contactPlaceholder}
+              />
+            </IconField>
             {errors.contactName && <p className="text-xs mt-1" style={{ color: DANGER }}>{errors.contactName}</p>}
           </div>
 
           <div>
             <label>{t.roleLabel}</label>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              {ROLE_IDS.map((id) => (
-                <option key={id} value={id}>{t.roles[id]}</option>
-              ))}
-            </select>
+            <IconField icon={Briefcase}>
+              <select className="field-bare" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                {ROLE_IDS.map((id) => (
+                  <option key={id} value={id}>{t.roles[id]}</option>
+                ))}
+              </select>
+            </IconField>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label>{t.phoneLabel}</label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              placeholder={t.phonePlaceholder}
-            />
+            <IconField icon={Phone}>
+              <input
+                className="field-bare"
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder={t.phonePlaceholder}
+              />
+            </IconField>
           </div>
 
           <div>
             <label>{t.emailLabel}</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder={t.emailPlaceholder}
-            />
+            <IconField icon={Mail}>
+              <input
+                className="field-bare"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder={t.emailPlaceholder}
+              />
+            </IconField>
           </div>
         </div>
       </FormSection>
@@ -137,31 +169,38 @@ export default function CustomerFormScreen({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label>{t.sectorLabel}</label>
-            <select value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
-              {SECTOR_IDS.map((id) => (
-                <option key={id} value={id}>{t.sectors[id]}</option>
-              ))}
-            </select>
+            <IconField icon={LayoutGrid}>
+              <select className="field-bare" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
+                {SECTOR_IDS.map((id) => (
+                  <option key={id} value={id}>{t.sectors[id]}</option>
+                ))}
+              </select>
+            </IconField>
           </div>
 
           <div>
             <label>{t.pipelineLabel}</label>
-            <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
-              <option value="">{t.stageNone}</option>
-              {STAGE_IDS.map((id) => (
-                <option key={id} value={id}>{t.stages[id]}</option>
-              ))}
-            </select>
+            <IconField icon={Flag}>
+              <select className="field-bare" value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
+                <option value="">{t.stageNone}</option>
+                {STAGE_IDS.map((id) => (
+                  <option key={id} value={id}>{t.stages[id]}</option>
+                ))}
+              </select>
+            </IconField>
           </div>
         </div>
 
         <div>
           <label>{t.tagsLabel}</label>
-          <input
-            value={form.tagsInput}
-            onChange={(e) => setForm({ ...form, tagsInput: e.target.value })}
-            placeholder={t.tagsPlaceholder}
-          />
+          <IconField icon={Tag}>
+            <input
+              className="field-bare"
+              value={form.tagsInput}
+              onChange={(e) => setForm({ ...form, tagsInput: e.target.value })}
+              placeholder={t.tagsPlaceholder}
+            />
+          </IconField>
           {parseTagsCell(form.tagsInput).length > 0 && (
             <div className="flex items-center flex-wrap gap-1 mt-2">
               {parseTagsCell(form.tagsInput).map((tag) => (
@@ -176,11 +215,14 @@ export default function CustomerFormScreen({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label>{t.visitDateLabel}</label>
-            <input
-              type="date"
-              value={form.visitDate}
-              onChange={(e) => setForm({ ...form, visitDate: e.target.value })}
-            />
+            <IconField icon={CalendarDays}>
+              <input
+                className="field-bare"
+                type="date"
+                value={form.visitDate}
+                onChange={(e) => setForm({ ...form, visitDate: e.target.value })}
+              />
+            </IconField>
             <p className="text-xs mt-1" style={{ color: MUTED }}>
               {t.visitDateHint}
             </p>
@@ -188,11 +230,14 @@ export default function CustomerFormScreen({
 
           <div>
             <label>{t.callDateLabel}</label>
-            <input
-              type="datetime-local"
-              value={form.callDateTime}
-              onChange={(e) => setForm({ ...form, callDateTime: e.target.value, notified: false })}
-            />
+            <IconField icon={PhoneCall}>
+              <input
+                className="field-bare"
+                type="datetime-local"
+                value={form.callDateTime}
+                onChange={(e) => setForm({ ...form, callDateTime: e.target.value, notified: false })}
+              />
+            </IconField>
             <p className="text-xs mt-1" style={{ color: MUTED }}>
               {t.callDateHint}
             </p>
@@ -203,12 +248,15 @@ export default function CustomerFormScreen({
       <CollapsibleSection title={t.formSectionNotes}>
         <div>
           <label>{t.notesLabel}</label>
-          <textarea
-            rows={5}
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            placeholder={t.notesPlaceholder}
-          />
+          <IconField icon={StickyNote} top>
+            <textarea
+              className="field-bare"
+              rows={5}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder={t.notesPlaceholder}
+            />
+          </IconField>
         </div>
       </CollapsibleSection>
      </div>
