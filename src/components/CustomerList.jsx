@@ -6,11 +6,12 @@
 import React, { useState } from "react";
 import {
   Search,
-  SlidersHorizontal, Building2, Plus,
+  SlidersHorizontal, Building2, Plus, Bell,
 } from "lucide-react";
 import { VisitCard, SkeletonList } from "./Shared";
 import AlertsCenter from "./AlertsCenter";
 import FilterSheet from "./FilterSheet";
+import PendingEditsSheet from "./PendingEditsSheet";
 import {
   PRIMARY, TEXT, MUTED, GOLD, LINE, SURFACE,
   SECTOR_IDS,
@@ -50,8 +51,11 @@ export default function CustomerListScreen({
   togglePin,
   canEdit,
   openNew,
+  isOwnerAccount,
+  pendingEdits = [],
 }) {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [pendingEditsOpen, setPendingEditsOpen] = useState(false);
   const activeFilterCount =
     (sectorFilter !== "all" ? 1 : 0) +
     (stageFilter !== "all" ? 1 : 0) +
@@ -112,7 +116,45 @@ export default function CustomerListScreen({
             </span>
           )}
         </button>
+
+        {isOwnerAccount && (
+          <button
+            onClick={() => setPendingEditsOpen(true)}
+            className="btn-press flex items-center justify-center gap-1 font-bold text-xs flex-shrink-0"
+            style={{
+              position: "relative",
+              border: `1.4px solid ${pendingEdits.length > 0 ? GOLD : LINE}`,
+              background: pendingEdits.length > 0 ? GOLD : SURFACE,
+              color: pendingEdits.length > 0 ? "#fff" : MUTED,
+              borderRadius: 14,
+              padding: "0 14px",
+              height: 44,
+            }}
+          >
+            <Bell size={15} />
+            {t.pendingEditsBtn}
+            {pendingEdits.length > 0 && (
+              <span
+                className="text-xs font-extrabold flex items-center justify-center"
+                style={{
+                  background: "#fff", color: GOLD, borderRadius: 999,
+                  minWidth: 16, height: 16, padding: "0 4px",
+                }}
+              >
+                {pendingEdits.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
+
+      <PendingEditsSheet
+        t={t}
+        open={pendingEditsOpen}
+        onClose={() => setPendingEditsOpen(false)}
+        pendingEdits={pendingEdits}
+        openDetail={openDetail}
+      />
 
       <FilterSheet
         t={t}
