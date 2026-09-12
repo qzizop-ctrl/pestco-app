@@ -366,6 +366,15 @@ export const STRINGS = {
     pendingEditsTitle: "تعديلات بانتظار المراجعة",
     pendingEditsEmpty: "لا توجد تعديلات بانتظار المراجعة",
     pendingEditsBy: (name, date) => `بواسطة ${name} • ${date}`,
+    pendingDeleteLabel: "حذف",
+
+    // Delete-approval banner in CustomerDetail (owner-only)
+    deletePendingTitle: "طلب حذف عميل (خاص بك)",
+    deletePendingBy: (name) => `قام المستخدم ${name} بحذف هذا العميل. هل تريد اعتماد الحذف نهائيًا أم استرجاع العميل؟`,
+    confirmDeleteFinalBtn: "اعتماد الحذف نهائيًا",
+    restoreCustomerBtn: "استرجاع العميل",
+    deleteApprovedMsg: "تم حذف العميل نهائيًا.",
+    deleteRestoredMsg: "تم استرجاع العميل بنجاح.",
 
     // PDF report export
     dashExportPdfBtn: "تصدير تقرير PDF",
@@ -716,6 +725,15 @@ export const STRINGS = {
     pendingEditsTitle: "Edits awaiting review",
     pendingEditsEmpty: "No edits awaiting review",
     pendingEditsBy: (name, date) => `by ${name} • ${date}`,
+    pendingDeleteLabel: "Delete",
+
+    // Delete-approval banner in CustomerDetail (owner-only)
+    deletePendingTitle: "Customer deletion request (yours to review)",
+    deletePendingBy: (name) => `${name} deleted this customer. Approve the deletion permanently, or restore the customer?`,
+    confirmDeleteFinalBtn: "Confirm deletion",
+    restoreCustomerBtn: "Restore customer",
+    deleteApprovedMsg: "Customer permanently deleted.",
+    deleteRestoredMsg: "Customer restored successfully.",
 
     // PDF report export
     dashExportPdfBtn: "Export PDF Report",

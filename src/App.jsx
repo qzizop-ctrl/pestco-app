@@ -649,11 +649,25 @@ export default function App() {
     const visit = visits.find((v) => v.id === id);
     setScreen("list");
 
-    // Soft delete: hide immediately from the UI, but only actually delete
-    // from Firestore after a few seconds, giving the user a chance to undo.
+    // Soft delete: hide immediately from the UI (self-undo window for the
+    // person deleting), then — after a few seconds — flag the document as
+    // deleted instead of actually removing it from Firestore. Flagging it
+    // (rather than deleteDoc) sets last_change just like a normal edit does,
+    // so it shows up in the owner's pending-edits bell/sheet and can be
+    // approved (final delete) or rolled back (restored) from CustomerDetail,
+    // the same review flow edits already get. Only the owner's approval
+    // actually calls deleteDoc.
     const timeoutId = setTimeout(async () => {
       try {
-        await deleteDoc(doc(db, "users", ownerUid, "visits", id));
+        await updateDoc(doc(db, "users", ownerUid, "visits", id), {
+          deleted: true,
+          last_change: {
+            type: "delete",
+            updatedBy: user?.displayName || user?.email || "موظف غير معروف",
+            updatedById: user?.uid || null,
+            updatedAt: new Date().toISOString(),
+          },
+        });
         await cancelCallReminder(id);
       } catch (e) {
         reportSaveError(e);
@@ -908,7 +922,10 @@ export default function App() {
   const nowBucket = Math.floor(Date.now() / 60000);
   const now = nowBucket * 60000;
   const visibleVisits = useMemo(
-    () => (pendingDelete ? visits.filter((v) => v.id !== pendingDelete.id) : visits),
+    () =>
+      visits.filter(
+        (v) => v.id !== pendingDelete?.id && !v.deleted
+      ),
     [visits, pendingDelete]
   );
 
@@ -947,13 +964,16 @@ export default function App() {
     [visibleVisits, nowBucket]
   );
 
-  // Customers with a pending edit awaiting the owner's اعتماد/تراجع decision
-  // (last_change set but not yet cleared). Feeds the bell icon next to the
-  // filters button on the customer list — owner-only, mirroring the
-  // approve/rollback controls in CustomerDetail.jsx.
+  // Customers with a pending edit OR a pending deletion awaiting the owner's
+  // اعتماد/تراجع decision (last_change set but not yet cleared). Feeds the
+  // bell icon next to the filters button on the customer list — owner-only,
+  // mirroring the approve/rollback controls in CustomerDetail.jsx. Deliberately
+  // derived from the raw `visits` list rather than `visibleVisits`: a pending
+  // deletion is flagged with `deleted: true` and hidden from the normal list,
+  // but it still needs to reach the owner here, or it would never be reviewable.
   const pendingEdits = useMemo(
-    () => visibleVisits.filter((v) => v.last_change),
-    [visibleVisits]
+    () => visits.filter((v) => v.last_change && v.id !== pendingDelete?.id),
+    [visits, pendingDelete]
   );
 
   // Possible duplicate customers (same phone or a near-identical company
@@ -1328,6 +1348,7 @@ export default function App() {
           deleteActivity={deleteActivity}
           openEdit={openEdit}
           deleteVisit={deleteVisit}
+          setScreen={setScreen}
         />
       )}
 
