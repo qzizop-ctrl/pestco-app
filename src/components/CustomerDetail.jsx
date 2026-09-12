@@ -20,6 +20,7 @@ export default function CustomerDetailScreen({
   active,
   ownerUid,
   canEdit,
+  isOwnerAccount,
   togglePin,
   activeStageIdx,
   changeStage,
@@ -61,7 +62,7 @@ export default function CustomerDetailScreen({
 
   // 1. دالة الاعتماد (حذف تنبيه التعديل وتنظيف المساحة)
   const handleApprove = async () => {
-    if (!active?.id) return;
+    if (!isOwnerAccount || !active?.id) return;
     const docRef = getDocRef();
     if (!docRef) {
       alert("تعذّر تحديد مساحة العمل الحالية.");
@@ -81,7 +82,7 @@ export default function CustomerDetailScreen({
 
   // 2. دالة التراجع عن التعديل (إعادة القيم القديمة وحذف التنبيه)
   const handleRollback = async () => {
-    if (!active?.id || !active.last_change) return;
+    if (!isOwnerAccount || !active?.id || !active.last_change) return;
     const docRef = getDocRef();
     if (!docRef) {
       alert("تعذّر تحديد مساحة العمل الحالية.");
@@ -122,7 +123,8 @@ export default function CustomerDetailScreen({
     <div className="px-4 pt-4 pb-10">
 
       {/* ----------------- صندوق تنبيه تعديل البيانات ----------------- */}
-      {canEdit && active.last_change && (
+      {/* يظهر لصاحب الـworkspace (المالك) فقط — مش لأي editor عنده صلاحية تعديل عادية */}
+      {isOwnerAccount && active.last_change && (
         <div 
           className="mb-4 shadow-sm"
           style={{ 
