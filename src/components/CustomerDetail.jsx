@@ -49,38 +49,53 @@ export default function CustomerDetailScreen({
 
   if (!active) return null;
 
-  // 1. دالة الاعتماد (تنظيف مساحة last_change من Firestore)
+  // دالة ذكية لتحديد مرجع المستند الصحيح في Firestore تلقائياً
+  const getDocRef = () => {
+    if (active.ownerUid) {
+      return doc(db, "users", active.ownerUid, "customers", active.id);
+    }
+    return doc(db, "customers", active.id);
+  };
+
+  // 1. دالة الاعتماد (حذف تنبيه التعديل وتنظيف المساحة)
   const handleApprove = async () => {
     if (!active?.id) return;
     setLoadingAction(true);
     try {
-      const docRef = doc(db, "customers", active.id);
-      await updateDoc(docRef, {
-        last_change: deleteField()
-      });
+      const docRef = getDocRef();
+      await updateDoc(docRef, { last_change: deleteField() });
       alert("تم اعتماد البيانات وتنظيف المساحة بنجاح.");
     } catch (err) {
-      console.error("خطأ أثناء الاعتماد:", err);
-      alert("حدث خطأ أثناء الاعتماد: " + err.message);
+      try {
+        // محاولة جراحية بالمسار البديل في حال عدم مطابقة ownerUid
+        const altRef = doc(db, "customers", active.id);
+        await updateDoc(altRef, { last_change: deleteField() });
+        alert("تم اعتماد البيانات بنجاح.");
+      } catch (retryErr) {
+        console.error("خطأ أثناء الاعتماد:", retryErr);
+        alert("حدث خطأ أثناء الاعتماد: " + retryErr.message);
+      }
     } finally {
       setLoadingAction(false);
     }
   };
 
-  // 2. دالة التراجع عن التعديل (إعادة القيم القديمة وإزالة last_change)
+  // 2. دالة التراجع عن التعديل (إعادة القيم القديمة وحذف التنبيه)
   const handleRollback = async () => {
     if (!active?.id || !active.last_change) return;
     setLoadingAction(true);
     try {
       const rawChanges = active.last_change.changes || active.last_change.details || active.last_change;
-      const docRef = doc(db, "customers", active.id);
       const rollbackPayload = {};
 
-      if (typeof rawChanges === "object") {
+      if (typeof rawChanges === "object" && rawChanges !== null) {
         Object.entries(rawChanges).forEach(([field, val]) => {
-          if (!["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details"].includes(field)) {
+          const ignoreKeys = ["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details"];
+          if (!ignoreKeys.includes(field)) {
             if (val && typeof val === "object" && "old_value" in val) {
               rollbackPayload[field] = val.old_value;
+            } else if (typeof val !== "object") {
+              rollbackPayload[field] = val;
             }
           }
         });
@@ -88,8 +103,16 @@ export default function CustomerDetailScreen({
 
       rollbackPayload.last_change = deleteField();
 
-      await updateDoc(docRef, rollbackPayload);
-      alert("تم التراجع عن التعديلات وإعادة البيانات القديمة بنجاح.");
+      try {
+        const docRef = getDocRef();
+        await updateDoc(docRef, rollbackPayload);
+      } catch (pathErr) {
+        // محاولة بالمسار البديل
+        const altRef = doc(db, "customers", active.id);
+        await updateDoc(altRef, rollbackPayload);
+      }
+
+      alert("تم التراجع عن التعديلات وإعادة البيانات بنجاح.");
     } catch (err) {
       console.error("خطأ أثناء التراجع:", err);
       alert("حدث خطأ أثناء التراجع: " + err.message);
@@ -138,7 +161,6 @@ export default function CustomerDetailScreen({
             style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: 10 }}
           >
             {(() => {
-              // قاموس تحويل مسميات الحقول للعربية
               const fieldLabels = {
                 companyName: "اسم الشركة",
                 contactName: "الشخص المسؤول",
@@ -151,7 +173,6 @@ export default function CustomerDetailScreen({
                 callDateTime: "موعد التذكير",
               };
 
-              // الكلمات المراد استبعادها لأنها حقول نظام وليست بيانات عميل
               const ignoreKeys = [
                 "changed_by", "updatedBy", "updatedById", "updated_at", 
                 "updatedAt", "changes", "details", "last_change"
@@ -163,7 +184,6 @@ export default function CustomerDetailScreen({
                 return <div style={{ color: MUTED }}>تعديلات عامة على السجل</div>;
               }
 
-              // تصفية المفاتيح واستبعاد حقول النظام
               const entries = Object.entries(rawChanges).filter(([k]) => !ignoreKeys.includes(k));
 
               if (entries.length === 0) {
@@ -216,7 +236,7 @@ export default function CustomerDetailScreen({
         </div>
       )}
 
-      {/* ----------------- باقي الكود الأصلي بالكامل ----------------- */}
+      {/* ----------------- باقي الواجهة والبيانات ----------------- */}
       <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
