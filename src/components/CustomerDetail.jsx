@@ -115,12 +115,12 @@ export default function CustomerDetailScreen({
               <AlertTriangle size={15} color="#D97706" /> تنبيه تعديل بيانات (خاص بك)
             </span>
             <span className="text-xs" style={{ color: MUTED }}>
-              {new Date(active.last_change.updated_at).toLocaleString("ar-EG")}
+              {active.last_change.updated_at ? new Date(active.last_change.updated_at).toLocaleString("ar-EG") : ""}
             </span>
           </div>
 
           <div className="text-xs mb-2" style={{ color: TEXT }}>
-            قام المستخدم <span className="font-bold">{active.last_change.changed_by}</span> بتعديل البيانات التالية:
+            قام المستخدم <span className="font-bold">{active.last_change.changed_by || "غير معروف"}</span> بتعديل البيانات التالية:
           </div>
 
           <div 
@@ -131,11 +131,11 @@ export default function CustomerDetailScreen({
               <div key={field} className="flex items-center gap-2 border-b border-gray-100 last:border-0 pb-1">
                 <span className="font-semibold min-w-[80px]" style={{ color: MUTED }}>{field}:</span>
                 <span className="line-through font-bold px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: DANGER }}>
-                  {val.old_value}
+                  {val.old_value !== undefined && val.old_value !== null ? String(val.old_value) : "—"}
                 </span>
                 <span>←</span>
                 <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: "#D1FAE5", color: "#047857" }}>
-                  {val.new_value}
+                  {val.new_value !== undefined && val.new_value !== null ? String(val.new_value) : "—"}
                 </span>
               </div>
             ))}
@@ -335,6 +335,19 @@ export default function CustomerDetailScreen({
               <span className="flex items-center gap-2 text-sm"><MapPin size={15} /> {t.lastVisitLocationLabel}</span>
               <span className="text-sm font-bold">{t.openInMaps}</span>
             </a>
+          )}
+
+          {/* شريط معلومات آخر تعديل للمستخدم العادي */}
+          {!isOwner && active.last_change && (
+            <div
+              className="flex items-center justify-between text-xs pt-2 mt-1"
+              style={{ borderTop: `1px dashed ${LINE}`, color: MUTED }}
+            >
+              <span>آخر تعديل بواسطة: <strong style={{ color: TEXT }}>{active.last_change.changed_by || active.last_change.updatedBy || "غير معروف"}</strong></span>
+              {active.last_change.updated_at && (
+                <span>{new Date(active.last_change.updated_at).toLocaleString("ar-EG")}</span>
+              )}
+            </div>
           )}
         </div>
 
