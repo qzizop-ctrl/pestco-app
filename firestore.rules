@@ -56,14 +56,20 @@ service cloud.firestore {
         || roleOn(ownerUid) == 'editor';
     }
 
+    // True only when this update is removing an existing last_change
+    // (i.e. "اعتماد" / approve, or "تراجع" / rollback). Editors are allowed
+    // to WRITE a fresh last_change as part of a normal edit, but only the
+    // owner (or the reviewer account) may clear/replace it once it exists —
+    // this mirrors the client-side isOwnerAccount check in
+    // CustomerDetail.jsx and stops a non-owner editor from calling
+    // updateDoc() directly to self-approve or self-rollback their own edit.
+    function isClearingLastChange() {
+      return resource.data.keys().hasAny(['last_change'])
+        && !request.resource.data.keys().hasAny(['last_change']);
+    }
 
-    // ============================================================
-    // DIRECT CUSTOMERS COLLECTION (دعم كولكشن العملاء المباشر)
-    // ============================================================
-
-    match /customers/{customerId} {
-      // يسمح بالقراءة والكتابة للمستخدمين المسجلين (ويشمل دعمlast_change والـ deleteField)
-      allow read, write: if isSignedIn();
+    function canClearLastChange(ownerUid) {
+      return isOwner(ownerUid) || isReviewer();
     }
 
 
@@ -75,7 +81,12 @@ service cloud.firestore {
 
       allow read: if canRead(ownerUid);
 
-      allow create, update, delete: if canWrite(ownerUid);
+      allow create: if canWrite(ownerUid);
+
+      allow update: if canWrite(ownerUid)
+        && (!isClearingLastChange() || canClearLastChange(ownerUid));
+
+      allow delete: if canWrite(ownerUid);
     }
 
 
