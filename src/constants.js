@@ -361,6 +361,12 @@ export const STRINGS = {
     applyFiltersBtn: "تطبيق",
     clearFiltersBtn: "مسح الكل",
 
+    // Pending edits notification (owner-only "last_change" review queue)
+    pendingEditsBtn: "تعديلات",
+    pendingEditsTitle: "تعديلات بانتظار المراجعة",
+    pendingEditsEmpty: "لا توجد تعديلات بانتظار المراجعة",
+    pendingEditsBy: (name, date) => `بواسطة ${name} • ${date}`,
+
     // PDF report export
     dashExportPdfBtn: "تصدير تقرير PDF",
     dashPdfGenerating: "جارِ تجهيز التقرير...",
@@ -704,6 +710,12 @@ export const STRINGS = {
     otherFiltersLabel: "Other filters",
     applyFiltersBtn: "Apply",
     clearFiltersBtn: "Clear all",
+
+    // Pending edits notification (owner-only "last_change" review queue)
+    pendingEditsBtn: "Edits",
+    pendingEditsTitle: "Edits awaiting review",
+    pendingEditsEmpty: "No edits awaiting review",
+    pendingEditsBy: (name, date) => `by ${name} • ${date}`,
 
     // PDF report export
     dashExportPdfBtn: "Export PDF Report",

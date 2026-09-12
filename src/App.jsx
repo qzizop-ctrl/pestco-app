@@ -916,6 +916,15 @@ export default function App() {
     [visibleVisits, nowBucket]
   );
 
+  // Customers with a pending edit awaiting the owner's اعتماد/تراجع decision
+  // (last_change set but not yet cleared). Feeds the bell icon next to the
+  // filters button on the customer list — owner-only, mirroring the
+  // approve/rollback controls in CustomerDetail.jsx.
+  const pendingEdits = useMemo(
+    () => visibleVisits.filter((v) => v.last_change),
+    [visibleVisits]
+  );
+
   // Possible duplicate customers (same phone or a near-identical company
   // name), reviewed from the Settings screen.
   const duplicateGroups = useMemo(() => findDuplicateGroups(visibleVisits), [visibleVisits]);
@@ -1239,6 +1248,8 @@ export default function App() {
           togglePin={togglePin}
           canEdit={canEdit}
           openNew={openNew}
+          isOwnerAccount={isOwnerAccount}
+          pendingEdits={pendingEdits}
         />
       )}
 
