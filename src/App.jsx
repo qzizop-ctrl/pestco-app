@@ -493,15 +493,33 @@ export default function App() {
     if (!validate() || !user || !ownerUid) return;
 
     const proceedSave = async () => {
-      const { id, tagsInput, activityLog, offers, visitHistory, last_change, ...rest } = form;
+      const { id, tagsInput, activityLog, offers, visitHistory, last_change, originalCustomer, ...rest } = form;
       const data = { ...rest, tags: parseTagsCell(tagsInput) };
       const original = id ? visits.find((v) => v.id === id) : null;
 
-      // تجهيز كائن التتبع (Audit Log)
+      // تجهيز كائن التتبع (Audit Log) — بيقارن كل حقل في البيانات الجديدة
+      // بالسجل الأصلي الموجود فعليًا في Firestore (visits state)، عشان
+      // القيم القديمة في last_change.changes تبقى حقيقية، مش "فارغ" لكل حقل.
+      const auditIgnoreKeys = ["tags", "createdAt", "updatedAt"];
+      const changes = {};
+      if (original) {
+        Object.keys(data).forEach((key) => {
+          if (auditIgnoreKeys.includes(key)) return;
+          const oldVal = original[key];
+          const newVal = data[key];
+          const oldCompare = oldVal ?? "";
+          const newCompare = newVal ?? "";
+          if (oldCompare !== newCompare) {
+            changes[key] = { old_value: oldVal ?? "فارغ", new_value: newVal ?? "فارغ" };
+          }
+        });
+      }
+
       const lastChangeData = {
         updatedBy: user?.displayName || user?.email || "موظف غير معروف",
         updatedById: user?.uid || null,
         updatedAt: new Date().toISOString(),
+        ...(Object.keys(changes).length > 0 ? { changes } : {}),
       };
 
       setIsSaving(true);
@@ -1240,6 +1258,7 @@ export default function App() {
         <CustomerDetailScreen
           t={t}
           active={active}
+          ownerUid={ownerUid}
           canEdit={canEdit}
           togglePin={togglePin}
           activeStageIdx={activeStageIdx}
