@@ -33,6 +33,41 @@ label {
   display: block;
   margin-bottom: 4px;
 }
+
+/* Icon-prefixed field wrapper (used on the customer form): a bordered,
+   rounded box holding a leading icon plus a "bare" input/select/textarea
+   that has its own border/background stripped so only the wrapper shows
+   one border. Focus ring moves to the wrapper via :focus-within so it
+   still lights up when the inner control is focused. */
+.icon-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  border: 0.5px solid var(--line);
+  background: var(--surface-subtle);
+  padding: 0 12px;
+  min-height: 46px;
+  transition: border-color 150ms ease;
+}
+.icon-field.icon-field-top {
+  align-items: flex-start;
+  padding: 10px 12px;
+}
+.icon-field:focus-within {
+  border-color: #2A5FA8;
+}
+.icon-field .field-bare {
+  flex: 1;
+  min-width: 0;
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+.icon-field .field-bare:focus {
+  outline: none !important;
+}
 button:focus-visible {
   outline: 2px solid #2A5FA8;
   outline-offset: 2px;
