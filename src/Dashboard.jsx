@@ -584,6 +584,68 @@ function SummaryCard({ icon: Icon, label, value, delta, subValue, extra, t }) {
   );
 }
 
+// Wraps a set of charts (visits performance, offers value trend in EGP,
+// offers value trend in USD — whichever apply) in a single card the person
+// swipes between horizontally, instead of stacking every chart vertically.
+// Only the active chart's title shows up top; dots below mark which page
+// you're on. `pages` is an array of { title, node }, already filtered down
+// to the charts that actually have data (see hasEGPOffers/hasUSDOffers
+// below) so a 1-page case just renders without any swipe chrome.
+function SwipeableChartCard({ pages }) {
+  const [active, setActive] = useState(0);
+  const trackRef = React.useRef(null);
+
+  if (pages.length === 0) return null;
+
+  // scrollLeft's sign flips between browsers under `direction: rtl`
+  // (0 → -max in spec-compliant browsers, 0 → +max in older ones), so we
+  // only ever look at its magnitude relative to the track's own width —
+  // that ratio is direction-agnostic and lands on the right page either way.
+  const handleScroll = () => {
+    const el = trackRef.current;
+    if (!el || el.clientWidth === 0) return;
+    const i = Math.round(Math.abs(el.scrollLeft) / el.clientWidth);
+    setActive(Math.max(0, Math.min(pages.length - 1, i)));
+  };
+
+  return (
+    <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
+      <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{pages[active].title}</p>
+      <div
+        ref={trackRef}
+        onScroll={pages.length > 1 ? handleScroll : undefined}
+        style={{
+          display: "flex",
+          overflowX: pages.length > 1 ? "auto" : "hidden",
+          scrollSnapType: pages.length > 1 ? "x mandatory" : "none",
+          scrollbarWidth: "none",
+        }}
+      >
+        {pages.map((page, i) => (
+          <div key={i} style={{ flex: "0 0 100%", scrollSnapAlign: "start", minWidth: 0 }}>
+            {page.node}
+          </div>
+        ))}
+      </div>
+      {pages.length > 1 && (
+        <div className="flex items-center justify-center gap-1" style={{ marginTop: 6 }}>
+          {pages.map((_, i) => (
+            <span
+              key={i}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 999,
+                background: i === active ? PRIMARY : LINE,
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   const t = STRINGS[lang];
   const now = new Date();
@@ -922,67 +984,76 @@ subValue={
         />
       </div>
 
-      {/* Visits performance chart */}
-      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
-        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashVisitsPerformance}</p>
-        <div style={{ width: "100%", height: 180 }}>
-          <ResponsiveContainer>
-            <BarChart data={chartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxChartCount]} />
-              <Tooltip
-                formatter={(v) => [v, t.dashCardVisits]}
-                contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-              />
-              <Bar dataKey="count" fill={GOLD} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Offers value trend (EGP) — hidden entirely when there are no EGP
-          offers in the selected period, same as the USD chart below,
-          instead of rendering an empty/flat chart with nothing to show. */}
-      {hasEGPOffers && (
-        <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
-          <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashOffersValueTrend}</p>
-          <div style={{ width: "100%", height: 180 }}>
-            <ResponsiveContainer>
-              <BarChart data={offersChartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValue]} />
-                <Tooltip
-                  formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.dashCurrency}`, t.dashCardOffersValue]}
-                  contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-                />
-                <Bar dataKey="value" fill={PRIMARY_MID} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {hasUSDOffers && (
-        <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
-          <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{t.dashOffersValueTrendUSD}</p>
-          <div style={{ width: "100%", height: 180 }}>
-            <ResponsiveContainer>
-              <BarChart data={offersChartDataUSD} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValueUSD]} />
-                <Tooltip
-                  formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.currencies.USD}`, t.dashCardOffersValue]}
-                  contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-                />
-                <Bar dataKey="value" fill={GOLD} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+      {/* Visits performance + offers value trend(s), swiped between in one
+          card instead of stacked as separate cards — see
+          SwipeableChartCard above. Only pages with actual data are
+          included, so this still collapses to a single non-swipeable
+          chart when there are no offers in the selected period. */}
+      <SwipeableChartCard
+        pages={[
+          {
+            title: t.dashVisitsPerformance,
+            node: (
+              <div style={{ width: "100%", height: 180 }}>
+                <ResponsiveContainer>
+                  <BarChart data={chartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxChartCount]} />
+                    <Tooltip
+                      formatter={(v) => [v, t.dashCardVisits]}
+                      contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
+                    />
+                    <Bar dataKey="count" fill={GOLD} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ),
+          },
+          ...(hasEGPOffers
+            ? [{
+                title: t.dashOffersValueTrend,
+                node: (
+                  <div style={{ width: "100%", height: 180 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={offersChartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValue]} />
+                        <Tooltip
+                          formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.dashCurrency}`, t.dashCardOffersValue]}
+                          contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
+                        />
+                        <Bar dataKey="value" fill={PRIMARY_MID} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ),
+              }]
+            : []),
+          ...(hasUSDOffers
+            ? [{
+                title: t.dashOffersValueTrendUSD,
+                node: (
+                  <div style={{ width: "100%", height: 180 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={offersChartDataUSD} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
+                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValueUSD]} />
+                        <Tooltip
+                          formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.currencies.USD}`, t.dashCardOffersValue]}
+                          contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
+                        />
+                        <Bar dataKey="value" fill={GOLD} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ),
+              }]
+            : []),
+        ]}
+      />
 
       {/* Sales pipeline */}
       <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
