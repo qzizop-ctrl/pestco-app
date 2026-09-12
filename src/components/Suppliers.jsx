@@ -305,48 +305,50 @@ export function SupplierFormScreen({
           {supplierErrors.name && <p className="text-xs mt-1" style={{ color: DANGER }}>{supplierErrors.name}</p>}
         </div>
 
-        <div>
-          <label>{t.supplierContactLabel}</label>
-          <input
-            value={supplierForm.contactName}
-            onChange={(e) => setSupplierForm({ ...supplierForm, contactName: e.target.value })}
-            placeholder={t.supplierContactPlaceholder}
-          />
-        </div>
-      </FormSection>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label>{t.supplierContactLabel}</label>
+            <input
+              value={supplierForm.contactName}
+              onChange={(e) => setSupplierForm({ ...supplierForm, contactName: e.target.value })}
+              placeholder={t.supplierContactPlaceholder}
+            />
+          </div>
 
-      <FormSection title={t.formSectionContact}>
-        <div>
-          <label>{t.phoneLabel}</label>
-          <input
-            type="tel"
-            value={supplierForm.phone}
-            onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
-            placeholder={t.phonePlaceholder}
-          />
+          <div>
+            <label>{t.phoneLabel}</label>
+            <input
+              type="tel"
+              value={supplierForm.phone}
+              onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
+              placeholder={t.phonePlaceholder}
+            />
+          </div>
         </div>
 
-        <div>
-          <label>{t.emailLabel}</label>
-          <input
-            type="email"
-            value={supplierForm.email}
-            onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })}
-            placeholder={t.emailPlaceholder}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label>{t.emailLabel}</label>
+            <input
+              type="email"
+              value={supplierForm.email}
+              onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })}
+              placeholder={t.emailPlaceholder}
+            />
+          </div>
+
+          <div>
+            <label>{t.supplierCategoryLabel}</label>
+            <input
+              value={supplierForm.category}
+              onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
+              placeholder={t.supplierCategoryPlaceholder}
+            />
+          </div>
         </div>
       </FormSection>
 
       <FormSection title={t.formSectionClassification}>
-        <div>
-          <label>{t.supplierCategoryLabel}</label>
-          <input
-            value={supplierForm.category}
-            onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
-            placeholder={t.supplierCategoryPlaceholder}
-          />
-        </div>
-
         <div>
           <label>{t.supplierTagsLabel}</label>
           <input
