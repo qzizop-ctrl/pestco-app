@@ -10,7 +10,7 @@
 import React from "react";
 import {
   Star, User, Phone, MessageCircle, Mail, Calendar, Clock, History, Bell,
-  FileText, Wallet, Trash2, Pencil, MapPin, Truck,
+  FileText, Wallet, Trash2, Pencil, MapPin, Truck, AlertTriangle, Check, RotateCcw
 } from "lucide-react";
 import { TagChip } from "./Shared";
 import SupplierPickerSheet from "./SupplierPickerSheet";
@@ -18,9 +18,12 @@ import {
   PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
   STATUS_COLORS, STAGE_IDS, CURRENCY_IDS, OFFER_STATUS_IDS, ACTIVITY_COLORS,
   stageColor, offerStatusColor, visitStatus, getVisitEvents,
-  fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney,
+  fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney, OWNER_EMAIL,
 } from "../constants";
 import { mapsUrl } from "../geo";
+import { doc, updateDoc, deleteField } from "firebase/firestore";
+import { db } from "../firebase";
+import { getAuth } from "firebase/auth";
 
 export default function CustomerDetailScreen({
   t,
@@ -54,8 +57,109 @@ export default function CustomerDetailScreen({
 }) {
   if (!active) return null;
 
+  // فحص هل المستخدم الحالي هو مالك التطبيق (qzizop@gmail.com)
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
+  const isOwner = currentUser && currentUser.email === OWNER_EMAIL;
+
+  // زر اعتماد التعديل (يمسح سجل التعديل المؤقت لتوفير المساحة)
+  const handleApprove = async () => {
+    try {
+      const customerRef = doc(db, "customers", active.id);
+      await updateDoc(customerRef, {
+        last_change: deleteField()
+      });
+      alert("تم اعتماد التعديل وتنظيف السجل بنجاح!");
+    } catch (error) {
+      console.error("خطأ أثناء الاعتماد:", error);
+    }
+  };
+
+  // زر التراجع عن التعديل (إعادة البيانات القديمة كما كانت)
+  const handleRollback = async () => {
+    try {
+      const customerRef = doc(db, "customers", active.id);
+      const revertedData = {};
+
+      if (active.last_change && active.last_change.changes) {
+        Object.keys(active.last_change.changes).forEach((key) => {
+          revertedData[key] = active.last_change.changes[key].old_value;
+        });
+      }
+
+      await updateDoc(customerRef, {
+        ...revertedData,
+        last_change: deleteField()
+      });
+      alert("تم التراجع عن التعديلات وإعادة البيانات القديمة!");
+    } catch (error) {
+      console.error("خطأ أثناء التراجع:", error);
+    }
+  };
+
   return (
     <div className="px-4 pt-4 pb-10">
+      {/* ----------------- صندوق الاعتماد والتراجع (يظهر لمالك التطبيق فقط) ----------------- */}
+      {isOwner && active.last_change && (
+        <div 
+          className="mb-4 text-right shadow-sm"
+          style={{ 
+            background: "#FFFBEB", 
+            border: "1px solid #FCD34D", 
+            borderRadius: 16, 
+            padding: 14 
+          }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-bold text-xs flex items-center gap-1" style={{ color: "#92400E" }}>
+              <AlertTriangle size={15} color="#D97706" /> تنبيه تعديل بيانات (خاص بك)
+            </span>
+            <span className="text-xs" style={{ color: MUTED }}>
+              {new Date(active.last_change.updated_at).toLocaleString("ar-EG")}
+            </span>
+          </div>
+
+          <div className="text-xs mb-2" style={{ color: TEXT }}>
+            قام المستخدم <span className="font-bold">{active.last_change.changed_by}</span> بتعديل البيانات التالية:
+          </div>
+
+          <div 
+            className="flex flex-col gap-1 text-xs mb-3" 
+            style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: 8 }}
+          >
+            {Object.entries(active.last_change.changes || {}).map(([field, val]) => (
+              <div key={field} className="flex items-center gap-2 border-b border-gray-100 last:border-0 pb-1">
+                <span className="font-semibold min-w-[80px]" style={{ color: MUTED }}>{field}:</span>
+                <span className="line-through font-bold px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: DANGER }}>
+                  {val.old_value}
+                </span>
+                <span>←</span>
+                <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: "#D1FAE5", color: "#047857" }}>
+                  {val.new_value}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleApprove}
+              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
+              style={{ background: "#059669", color: "#fff", borderRadius: 10, padding: "8px 0" }}
+            >
+              <Check size={14} /> اعتماد (تنظيف المساحة)
+            </button>
+            <button
+              onClick={handleRollback}
+              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
+              style={{ background: DANGER, color: "#fff", borderRadius: 10, padding: "8px 0" }}
+            >
+              <RotateCcw size={14} /> تراجع عن التعديل
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}>
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
@@ -318,10 +422,6 @@ export default function CustomerDetailScreen({
                           {t.rejectionReasonRow} {offer.rejectionReason}
                         </p>
                       )}
-                      {/* Compact one-line summary — the chip list itself only
-                          appears once the card is expanded, below, so a
-                          collapsed offer never grows taller just because it
-                          has suppliers attached. */}
                       {offer.supplierNames && offer.supplierNames.length > 0 && (
                         <div className="flex items-center gap-1 text-xs mt-1" style={{ color: PRIMARY_MID }}>
                           <Truck size={13} />
@@ -421,9 +521,6 @@ export default function CustomerDetailScreen({
                 </select>
               </div>
 
-              {/* Single button instead of an inline picker — keeps the form
-                  the same height whether or not suppliers get linked. The
-                  actual picking happens in the sheet, see bottom of file. */}
               <button
                 onClick={() => setSupplierPickerOpen(true)}
                 className="btn-press flex items-center justify-center gap-1 text-xs font-bold"
