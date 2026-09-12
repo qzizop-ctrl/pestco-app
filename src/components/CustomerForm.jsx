@@ -3,9 +3,9 @@
 // only — form state and saveForm() still live in App.jsx.
 // ============================================================================
 
-import React, { useState } from "react";
+import React from "react";
 import {
-  ChevronDown, Building2, User, Briefcase, Phone, Mail,
+  Building2, User, Briefcase, Phone, Mail,
   LayoutGrid, Flag, Tag, CalendarDays, PhoneCall, StickyNote,
 } from "lucide-react";
 import { TagChip } from "./Shared";
@@ -51,32 +51,18 @@ export function FormSection({ title, first, children }) {
   );
 }
 
-// Same grouping idea as FormSection, but the group starts collapsed and
-// only renders its fields once the person taps the header — used for the
-// less-frequently-touched sections (classification / scheduling / notes)
-// so the form isn't one long scroll of every field at once. The "basic
-// info" section stays as a plain always-open FormSection since it's what
-// almost everyone fills in first.
-function CollapsibleSection({ title, defaultOpen = false, children }) {
-  const [open, setOpen] = useState(defaultOpen);
+// Same grouping idea as FormSection, but with the header rendered as a
+// plain non-interactive label (no toggle) — used for classification /
+// scheduling / notes. All fields are always visible; nothing collapses.
+function CollapsibleSection({ title, children }) {
   return (
     <div style={{ borderTop: `0.5px solid ${LINE}`, marginTop: 4 }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="btn-press w-full flex items-center justify-between"
-        style={{ padding: "14px 0" }}
-      >
+      <div style={{ padding: "14px 0 8px" }}>
         <span className="text-xs font-bold" style={{ color: PRIMARY_MID, letterSpacing: 0.3 }}>
           {title}
         </span>
-        <ChevronDown
-          size={16}
-          color={MUTED}
-          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 150ms ease" }}
-        />
-      </button>
-      {open && <div className="flex flex-col gap-3" style={{ paddingBottom: 16 }}>{children}</div>}
+      </div>
+      <div className="flex flex-col gap-3" style={{ paddingBottom: 16 }}>{children}</div>
     </div>
   );
 }
@@ -171,11 +157,13 @@ export default function CustomerFormScreen({
             <label>{t.sectorLabel}</label>
             <IconField icon={LayoutGrid}>
               <select className="field-bare" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
+                <option value="" disabled>{t.sectorPlaceholder}</option>
                 {SECTOR_IDS.map((id) => (
                   <option key={id} value={id}>{t.sectors[id]}</option>
                 ))}
               </select>
             </IconField>
+            {errors.sector && <p className="text-xs mt-1" style={{ color: DANGER }}>{errors.sector}</p>}
           </div>
 
           <div>
@@ -212,36 +200,34 @@ export default function CustomerFormScreen({
       </CollapsibleSection>
 
       <CollapsibleSection title={t.formSectionSchedule}>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label>{t.visitDateLabel}</label>
-            <IconField icon={CalendarDays}>
-              <input
-                className="field-bare"
-                type="date"
-                value={form.visitDate}
-                onChange={(e) => setForm({ ...form, visitDate: e.target.value })}
-              />
-            </IconField>
-            <p className="text-xs mt-1" style={{ color: MUTED }}>
-              {t.visitDateHint}
-            </p>
-          </div>
+        <div>
+          <label>{t.visitDateLabel}</label>
+          <IconField icon={CalendarDays}>
+            <input
+              className="field-bare"
+              type="date"
+              value={form.visitDate}
+              onChange={(e) => setForm({ ...form, visitDate: e.target.value })}
+            />
+          </IconField>
+          <p className="text-xs mt-1" style={{ color: MUTED }}>
+            {t.visitDateHint}
+          </p>
+        </div>
 
-          <div>
-            <label>{t.callDateLabel}</label>
-            <IconField icon={PhoneCall}>
-              <input
-                className="field-bare"
-                type="datetime-local"
-                value={form.callDateTime}
-                onChange={(e) => setForm({ ...form, callDateTime: e.target.value, notified: false })}
-              />
-            </IconField>
-            <p className="text-xs mt-1" style={{ color: MUTED }}>
-              {t.callDateHint}
-            </p>
-          </div>
+        <div>
+          <label>{t.callDateLabel}</label>
+          <IconField icon={PhoneCall}>
+            <input
+              className="field-bare"
+              type="datetime-local"
+              value={form.callDateTime}
+              onChange={(e) => setForm({ ...form, callDateTime: e.target.value, notified: false })}
+            />
+          </IconField>
+          <p className="text-xs mt-1" style={{ color: MUTED }}>
+            {t.callDateHint}
+          </p>
         </div>
       </CollapsibleSection>
 
