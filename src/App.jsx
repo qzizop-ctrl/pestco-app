@@ -31,6 +31,7 @@ import { useWorkspace } from "./hooks/useWorkspace";
 import { useLiveData } from "./hooks/useLiveData";
 import { useReminders } from "./hooks/useReminders";
 import { useAndroidBackButton } from "./hooks/useAndroidBackButton";
+import { useResetViewOnOpen } from "./hooks/useResetViewOnOpen";
 import { getCurrentLocation } from "./geo";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD,
@@ -197,6 +198,36 @@ export default function App() {
       setConfirmDialog(null);
     },
   });
+
+  // Always reopen the app on the customer list with no filters active,
+  // regardless of whatever screen/filters were left on before it went to
+  // the background — see useResetViewOnOpen for why this is needed.
+  const resetToDefaultView = () => {
+    setScreen("list");
+    setQuery("");
+    setSectorFilter("all");
+    setStageFilter("all");
+    setTagFilter("all");
+    setMissingDataOnly(false);
+    setNoVisitsOnly(false);
+    setDateAddedFilter("all");
+  };
+  useResetViewOnOpen(resetToDefaultView);
+
+  // Signing out only swaps AuthScreen back in — it doesn't touch screen/
+  // filter state, since those live in this same component and nothing
+  // else was clearing them. Without this, whoever logs in next (the same
+  // person again, or a different account on a shared device) landed
+  // straight back on whatever screen/filters were active when the
+  // previous session logged out, instead of a clean customer list.
+  const wasSignedIn = useRef(false);
+  useEffect(() => {
+    if (!user && wasSignedIn.current) {
+      resetToDefaultView();
+    }
+    wasSignedIn.current = !!user;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Surfaces a *read* failure on the customer list itself — previously this
   // was swallowed entirely by useLiveData, so an account without real
