@@ -10,9 +10,10 @@
 import React from "react";
 import {
   Star, User, Phone, MessageCircle, Mail, Calendar, Clock, History, Bell,
-  FileText, Wallet, Trash2, Pencil, MapPin,
+  FileText, Wallet, Trash2, Pencil, MapPin, Truck,
 } from "lucide-react";
 import { TagChip } from "./Shared";
+import SupplierPickerSheet from "./SupplierPickerSheet";
 import {
   PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
   STATUS_COLORS, STAGE_IDS, CURRENCY_IDS, OFFER_STATUS_IDS, ACTIVITY_COLORS,
@@ -39,6 +40,10 @@ export default function CustomerDetailScreen({
   newOffer,
   setNewOffer,
   addOffer,
+  suppliers,
+  supplierPickerOpen,
+  setSupplierPickerOpen,
+  toggleOfferSupplier,
   activityLog,
   newActivityText,
   setNewActivityText,
@@ -313,7 +318,25 @@ export default function CustomerDetailScreen({
                           {t.rejectionReasonRow} {offer.rejectionReason}
                         </p>
                       )}
+                      {/* Compact one-line summary — the chip list itself only
+                          appears once the card is expanded, below, so a
+                          collapsed offer never grows taller just because it
+                          has suppliers attached. */}
+                      {offer.supplierNames && offer.supplierNames.length > 0 && (
+                        <div className="flex items-center gap-1 text-xs mt-1" style={{ color: PRIMARY_MID }}>
+                          <Truck size={13} />
+                          {t.offerSuppliersCount(offer.supplierNames.length)}
+                        </div>
+                      )}
                     </button>
+
+                    {isExpanded && offer.supplierNames && offer.supplierNames.length > 0 && (
+                      <div className="flex items-center flex-wrap gap-1" style={{ marginTop: 8 }}>
+                        {offer.supplierNames.map((name) => (
+                          <TagChip key={name} label={name} />
+                        ))}
+                      </div>
+                    )}
 
                     {isExpanded && canEdit && (
                       <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}>
@@ -397,6 +420,27 @@ export default function CustomerDetailScreen({
                   ))}
                 </select>
               </div>
+
+              {/* Single button instead of an inline picker — keeps the form
+                  the same height whether or not suppliers get linked. The
+                  actual picking happens in the sheet, see bottom of file. */}
+              <button
+                onClick={() => setSupplierPickerOpen(true)}
+                className="btn-press flex items-center justify-center gap-1 text-xs font-bold"
+                style={{
+                  border: `1px dashed ${GOLD}`,
+                  color: "#7A5420",
+                  background: SURFACE_SUBTLE,
+                  borderRadius: 8,
+                  padding: "8px 0",
+                }}
+              >
+                <Truck size={14} />
+                {newOffer.supplierNames.length > 0
+                  ? t.offerSuppliersCount(newOffer.supplierNames.length)
+                  : t.offerSuppliersBtn}
+              </button>
+
               <button
                 onClick={() => addOffer(active)}
                 className="btn-press font-bold text-sm"
@@ -492,6 +536,15 @@ export default function CustomerDetailScreen({
           </button>
         </div>
       )}
+
+      <SupplierPickerSheet
+        t={t}
+        open={supplierPickerOpen}
+        onClose={() => setSupplierPickerOpen(false)}
+        suppliers={suppliers}
+        selectedIds={newOffer.supplierIds}
+        onToggle={toggleOfferSupplier}
+      />
     </div>
   );
 }
