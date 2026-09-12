@@ -94,15 +94,17 @@ export default function App() {
   const [supplierPickerOpen, setSupplierPickerOpen] = useState(false);
   const toggleOfferSupplier = (supplier) => {
     setNewOffer((prev) => {
-      const isSelected = prev.supplierIds.includes(supplier.id);
+      const supplierIds = prev.supplierIds || [];
+      const supplierNames = prev.supplierNames || [];
+      const isSelected = supplierIds.includes(supplier.id);
       return {
         ...prev,
         supplierIds: isSelected
-          ? prev.supplierIds.filter((id) => id !== supplier.id)
-          : [...prev.supplierIds, supplier.id],
+          ? supplierIds.filter((id) => id !== supplier.id)
+          : [...supplierIds, supplier.id],
         supplierNames: isSelected
-          ? prev.supplierNames.filter((n) => n !== supplier.name)
-          : [...prev.supplierNames, supplier.name],
+          ? supplierNames.filter((n) => n !== supplier.name)
+          : [...supplierNames, supplier.name],
       };
     });
   };
