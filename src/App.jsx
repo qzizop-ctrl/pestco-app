@@ -78,6 +78,10 @@ export default function App() {
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("viewer");
   const [importing, setImporting] = useState(false);
+  // True only while an actual Firestore write from the customer/supplier
+  // save button is in flight — lets the save button show a "saving..."
+  // state instead of looking unresponsive on a slow connection.
+  const [isSaving, setIsSaving] = useState(false);
   const [newActivityText, setNewActivityText] = useState("");
   const [newOffer, setNewOffer] = useState({
     name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
@@ -388,6 +392,7 @@ export default function App() {
 
     const { id, tagsInput, ...rest } = supplierForm;
     const data = { ...rest, tags: parseTagsCell(tagsInput) };
+    setIsSaving(true);
     try {
       if (activeSupplierId) {
         await updateDoc(doc(db, "users", ownerUid, "suppliers", activeSupplierId), data);
@@ -400,6 +405,8 @@ export default function App() {
       setScreen("suppliers");
     } catch (e) {
       reportSaveError(e);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -465,6 +472,7 @@ export default function App() {
       const data = { ...rest, tags: parseTagsCell(tagsInput) };
       const original = id ? visits.find((v) => v.id === id) : null;
 
+      setIsSaving(true);
       try {
         let savedId = id;
         if (id) {
@@ -514,6 +522,8 @@ export default function App() {
         setScreen("list");
       } catch (e) {
         reportSaveError(e);
+      } finally {
+        setIsSaving(false);
       }
     };
 
@@ -1184,6 +1194,7 @@ export default function App() {
           errors={errors}
           removeTagFromForm={removeTagFromForm}
           saveForm={saveForm}
+          saving={isSaving}
         />
       )}
 
@@ -1246,6 +1257,7 @@ export default function App() {
           saveSupplierForm={saveSupplierForm}
           activeSupplierId={activeSupplierId}
           deleteSupplier={deleteSupplier}
+          saving={isSaving}
         />
       )}
 
