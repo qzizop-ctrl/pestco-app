@@ -438,6 +438,7 @@ export default function App() {
     const e = {};
     if (!form.companyName.trim()) e.companyName = t.companyError;
     if (!form.contactName.trim()) e.contactName = t.contactError;
+    if (!form.sector) e.sector = t.sectorError;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
