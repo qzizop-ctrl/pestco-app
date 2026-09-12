@@ -436,7 +436,7 @@ export default function CustomerDetailScreen({
                 }}
               >
                 <Truck size={14} />
-                {newOffer.supplierNames.length > 0
+                {(newOffer.supplierNames || []).length > 0
                   ? t.offerSuppliersCount(newOffer.supplierNames.length)
                   : t.offerSuppliersBtn}
               </button>
@@ -541,8 +541,8 @@ export default function CustomerDetailScreen({
         t={t}
         open={supplierPickerOpen}
         onClose={() => setSupplierPickerOpen(false)}
-        suppliers={suppliers}
-        selectedIds={newOffer.supplierIds}
+        suppliers={suppliers || []}
+        selectedIds={newOffer.supplierIds || []}
         onToggle={toggleOfferSupplier}
       />
     </div>
