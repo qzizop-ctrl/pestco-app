@@ -61,8 +61,6 @@ jobs:
           tag_name: "win-v1.0.${{ github.run_number }}"
           name: "Windows Release v1.0.${{ github.run_number }}"
           files: |
-            dist/*.exe
-            dist_electron/*.exe
-            build/*.exe
+            release/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
