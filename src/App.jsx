@@ -85,7 +85,27 @@ export default function App() {
   const [newActivityText, setNewActivityText] = useState("");
   const [newOffer, setNewOffer] = useState({
     name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
+    supplierIds: [], supplierNames: [],
   });
+  // Drives the "select suppliers" bottom sheet on the new-offer form — kept
+  // here (not local state in CustomerDetail) only because every other piece
+  // of `newOffer` editing state already lives in App.jsx; the sheet itself
+  // is presentational.
+  const [supplierPickerOpen, setSupplierPickerOpen] = useState(false);
+  const toggleOfferSupplier = (supplier) => {
+    setNewOffer((prev) => {
+      const isSelected = prev.supplierIds.includes(supplier.id);
+      return {
+        ...prev,
+        supplierIds: isSelected
+          ? prev.supplierIds.filter((id) => id !== supplier.id)
+          : [...prev.supplierIds, supplier.id],
+        supplierNames: isSelected
+          ? prev.supplierNames.filter((n) => n !== supplier.name)
+          : [...prev.supplierNames, supplier.name],
+      };
+    });
+  };
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
   // Drives the in-app rejection-reason modal (replaces window.prompt).
   // { initialReason, onConfirm(reason) } while the modal is open, else null.
@@ -255,7 +275,10 @@ export default function App() {
           offers: arrayUnion(offer),
         });
         await appendActivity(visit.id, buildActivity("offer", t.activityOfferAdded(offer.name)));
-        setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
+        setNewOffer({
+          name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
+          supplierIds: [], supplierNames: [],
+        });
       } catch (e) {
         reportSaveError(e);
       }
@@ -1218,6 +1241,10 @@ export default function App() {
           newOffer={newOffer}
           setNewOffer={setNewOffer}
           addOffer={addOffer}
+          suppliers={suppliers}
+          supplierPickerOpen={supplierPickerOpen}
+          setSupplierPickerOpen={setSupplierPickerOpen}
+          toggleOfferSupplier={toggleOfferSupplier}
           activityLog={activityLog}
           newActivityText={newActivityText}
           setNewActivityText={setNewActivityText}

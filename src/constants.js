@@ -285,6 +285,17 @@ export const STRINGS = {
       rejected: "مرفوض",
       installed: "تم التركيب",
     },
+
+    // Offer suppliers (many-to-many link between an offer and suppliers)
+    offerSuppliersBtn: "اختيار الموردين",
+    offerSuppliersSheetTitle: "اختيار الموردين",
+    offerSuppliersDone: "تم",
+    offerSuppliersNone: "بدون مورد محدد",
+    offerSuppliersLabel: "الموردين",
+    offerSuppliersCount: (n) => (n === 1 ? "مورد واحد" : `موردين (${n})`),
+    noSuppliersToPick: "لسه معندكش موردين مسجلين",
+    pickSupplierSearchPlaceholder: "ابحث عن مورد بالاسم",
+    noSupplierSearchResults: "مفيش مورد بالاسم ده",
     activityOfferAdded: (name) => `تم إضافة أوفر جديد: ${name}`,
     activityOfferStatus: (name, status) => `تم تغيير حالة الأوفر "${name}" إلى: ${status}`,
 
@@ -618,6 +629,17 @@ export const STRINGS = {
       rejected: "Rejected",
       installed: "Installed",
     },
+
+    // Offer suppliers (many-to-many link between an offer and suppliers)
+    offerSuppliersBtn: "Select suppliers",
+    offerSuppliersSheetTitle: "Select suppliers",
+    offerSuppliersDone: "Done",
+    offerSuppliersNone: "No supplier selected",
+    offerSuppliersLabel: "Suppliers",
+    offerSuppliersCount: (n) => (n === 1 ? "1 supplier" : `${n} suppliers`),
+    noSuppliersToPick: "No suppliers added yet",
+    pickSupplierSearchPlaceholder: "Search suppliers by name",
+    noSupplierSearchResults: "No supplier matches that name",
     activityOfferAdded: (name) => `New offer added: ${name}`,
     activityOfferStatus: (name, status) => `Offer "${name}" status changed to: ${status}`,
 
@@ -897,7 +919,7 @@ export function getVisitEvents(visit) {
 }
 
 // Builds a unique offer entry for a customer's offers list
-export function buildOffer({ name, offerNumber, amount, offerDate, status, currency }) {
+export function buildOffer({ name, offerNumber, amount, offerDate, status, currency, supplierIds, supplierNames }) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: name || "",
@@ -907,6 +929,12 @@ export function buildOffer({ name, offerNumber, amount, offerDate, status, curre
     offerDate: offerDate || "",
     status: status || "pending",
     rejectionReason: "",
+    // Many-to-many link to suppliers. supplierNames is a snapshot taken at
+    // save time (same pattern as everywhere else names get denormalized in
+    // this app) so a later rename/delete of a supplier doesn't change what
+    // an already-saved offer displays.
+    supplierIds: Array.isArray(supplierIds) ? supplierIds : [],
+    supplierNames: Array.isArray(supplierNames) ? supplierNames : [],
     createdAt: new Date().toISOString(),
   };
 }
