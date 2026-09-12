@@ -18,6 +18,7 @@ import { doc, updateDoc, deleteField } from "firebase/firestore";
 export default function CustomerDetailScreen({
   t,
   active,
+  ownerUid,
   canEdit,
   togglePin,
   activeStageIdx,
@@ -49,32 +50,30 @@ export default function CustomerDetailScreen({
 
   if (!active) return null;
 
-  // دالة ذكية لتحديد مرجع المستند الصحيح في Firestore تلقائياً
+  // مرجع مستند العميل الصحيح في Firestore — نفس المسار المستخدم في باقي
+  // التطبيق (App.jsx وuseLiveData.js): users/{ownerUid}/visits/{id}.
+  // العميل مخزّن في كولكشن اسمه "visits" مش "customers"، وownerUid بييجي
+  // من الـ workspace الحالي مش من بيانات العميل نفسه.
   const getDocRef = () => {
-    if (active.ownerUid) {
-      return doc(db, "users", active.ownerUid, "customers", active.id);
-    }
-    return doc(db, "customers", active.id);
+    if (!ownerUid) return null;
+    return doc(db, "users", ownerUid, "visits", active.id);
   };
 
   // 1. دالة الاعتماد (حذف تنبيه التعديل وتنظيف المساحة)
   const handleApprove = async () => {
     if (!active?.id) return;
+    const docRef = getDocRef();
+    if (!docRef) {
+      alert("تعذّر تحديد مساحة العمل الحالية.");
+      return;
+    }
     setLoadingAction(true);
     try {
-      const docRef = getDocRef();
       await updateDoc(docRef, { last_change: deleteField() });
       alert("تم اعتماد البيانات وتنظيف المساحة بنجاح.");
     } catch (err) {
-      try {
-        // محاولة جراحية بالمسار البديل في حال عدم مطابقة ownerUid
-        const altRef = doc(db, "customers", active.id);
-        await updateDoc(altRef, { last_change: deleteField() });
-        alert("تم اعتماد البيانات بنجاح.");
-      } catch (retryErr) {
-        console.error("خطأ أثناء الاعتماد:", retryErr);
-        alert("حدث خطأ أثناء الاعتماد: " + retryErr.message);
-      }
+      console.error("خطأ أثناء الاعتماد:", err);
+      alert("حدث خطأ أثناء الاعتماد: " + err.message);
     } finally {
       setLoadingAction(false);
     }
@@ -83,6 +82,11 @@ export default function CustomerDetailScreen({
   // 2. دالة التراجع عن التعديل (إعادة القيم القديمة وحذف التنبيه)
   const handleRollback = async () => {
     if (!active?.id || !active.last_change) return;
+    const docRef = getDocRef();
+    if (!docRef) {
+      alert("تعذّر تحديد مساحة العمل الحالية.");
+      return;
+    }
     setLoadingAction(true);
     try {
       const rawChanges = active.last_change.changes || active.last_change.details || active.last_change;
@@ -103,14 +107,7 @@ export default function CustomerDetailScreen({
 
       rollbackPayload.last_change = deleteField();
 
-      try {
-        const docRef = getDocRef();
-        await updateDoc(docRef, rollbackPayload);
-      } catch (pathErr) {
-        // محاولة بالمسار البديل
-        const altRef = doc(db, "customers", active.id);
-        await updateDoc(altRef, rollbackPayload);
-      }
+      await updateDoc(docRef, rollbackPayload);
 
       alert("تم التراجع عن التعديلات وإعادة البيانات بنجاح.");
     } catch (err) {

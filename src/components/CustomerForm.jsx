@@ -13,7 +13,6 @@ import {
   PRIMARY, PRIMARY_MID, DANGER, MUTED, LINE, SURFACE,
   STAGE_IDS, SECTOR_IDS, ROLE_IDS, parseTagsCell,
 } from "../constants";
-import { getAuth } from "firebase/auth";
 
 // Bordered, rounded wrapper that puts a small leading icon in front of a
 // field so a form with many inputs is easier to scan at a glance. The
@@ -77,52 +76,12 @@ export default function CustomerFormScreen({
   saveForm,
   saving,
 }) {
-  // دالة الحفظ المعدلة مع تسجيل الفروقات في حقل last_change
-  const handleSaveWithAudit = () => {
-    // إذا كان تعديل لعميل موجود وليس إضافة عميل جديد
-    if (form.id) {
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      const userEmail = currentUser ? currentUser.email : "غير معروف";
-
-      const original = form.originalCustomer || {};
-      const changes = {};
-
-      // تجميع الحقول المعدلة فقط ومقارنتها بالبيانات الأصلية
-      Object.keys(form).forEach((key) => {
-        if (
-          key !== "last_change" &&
-          key !== "originalCustomer" &&
-          key !== "id" &&
-          original[key] !== form[key]
-        ) {
-          changes[key] = {
-            old_value: original[key] || "فارغ",
-            new_value: form[key] || "فارغ",
-          };
-        }
-      });
-
-      // إذا وُجدت تغييرات فعليّة يتم إضافتها لحالة النموذج قبل الحفظ
-      if (Object.keys(changes).length > 0) {
-        const updatedFormWithAudit = {
-          ...form,
-          last_change: {
-            changed_by: userEmail,
-            updated_at: new Date().toISOString(),
-            changes: changes,
-          },
-        };
-
-        setForm(updatedFormWithAudit);
-        saveForm(updatedFormWithAudit);
-        return;
-      }
-    }
-
-    // للحالات العادية أو إضافة عميل جديد
-    saveForm();
-  };
+  // ملحوظة: تسجيل التغييرات (last_change.changes) بقى بيتحسب جوه saveForm
+  // نفسها في App.jsx، لأنها هي اللي عندها السجل الأصلي الموثوق من
+  // Firestore (visits state) وهي اللي بتكتب فعليًا على قاعدة البيانات.
+  // الاعتماد على نسخة محلية هنا كان بيدّي نتائج غلط دايمًا لأن الحفظ
+  // الفعلي (saveForm) كان بيتجاهل أي بيانات ممرّرة له ويبني last_change
+  // من جديد بدون تفاصيل.
 
   return (
     <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
@@ -296,7 +255,7 @@ export default function CustomerFormScreen({
      </div>
 
       <button
-        onClick={handleSaveWithAudit}
+        onClick={saveForm}
         disabled={saving}
         className="btn-press font-bold"
         style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", opacity: saving ? 0.7 : 1 }}
