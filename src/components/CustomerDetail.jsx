@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { db } from './firebase'; // تأكد من مسار firebase الصحيح في مشروعك
+import { db } from '../firebase'; // تصحيح المسار للخروج من مجلد components
 import { doc, updateDoc, deleteField } from 'firebase/firestore';
 import { AlertTriangle, Check, RotateCcw } from 'lucide-react';
 
@@ -9,7 +9,7 @@ const SURFACE = "#FFFFFF";
 const LINE = "#E5E7EB";
 const DANGER = "#DC2626";
 
-export default function CustomerDetailScreen({ active, isOwner, onClose }) {
+export default function CustomerDetail({ active, isOwner, onClose }) {
   const [loading, setLoading] = useState(false);
 
   // 1. دالة الاعتماد (تنظيف مساحة last_change من المستند)
@@ -162,7 +162,7 @@ export default function CustomerDetailScreen({ active, isOwner, onClose }) {
         </div>
       )}
 
-      {/* باقي تفاصيل العميل تعود هنا كالمعتاد */}
+      {/* هنا باقي واجهة تفاصيل العميل الخاصة بك */}
     </div>
   );
 }
