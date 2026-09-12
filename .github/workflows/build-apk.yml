@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    tags: ["v*"]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -67,29 +69,12 @@ jobs:
         run: |
           mkdir -p android/app/src/main/java/com/pestco/app
 
-          # -----------------------------------------
-          # Add MANAGE_EXTERNAL_STORAGE permission
-          # (kept as a fallback path; not required by
-          # saveToDownloads on Android 10+ via MediaStore)
-          # -----------------------------------------
-
           sed -i '/<application/i\
               <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />' \
             android/app/src/main/AndroidManifest.xml
 
-          # -----------------------------------------
-          # Raise the Dalvik/ART heap ceiling — this app renders
-          # PDF report pages via off-screen html2canvas + jsPDF,
-          # which needs more headroom than the WebView's default
-          # heap allows for large multi-month reports.
-          # -----------------------------------------
-
           sed -i 's/<application/<application\n        android:largeHeap="true"/' \
             android/app/src/main/AndroidManifest.xml
-
-          # -----------------------------------------
-          # Create StorageAccessPlugin.java
-          # -----------------------------------------
 
           cat > android/app/src/main/java/com/pestco/app/StorageAccessPlugin.java <<-'EOF'
           	package com.pestco.app;
@@ -116,18 +101,6 @@ jobs:
           	@CapacitorPlugin(name = "StorageAccess")
           	public class StorageAccessPlugin extends Plugin {
 
-          	    // ------------------------------------------------------------------
-          	    // Writes a base64 file straight into the public Downloads folder.
-          	    //
-          	    // On Android 10+ (API 29+) this uses MediaStore, which lets an app
-          	    // create new files in Downloads WITHOUT any storage permission at
-          	    // all. No settings redirect, no permission dialog, fully silent.
-          	    //
-          	    // On Android 9 and older MediaStore.Downloads doesn't exist, so this
-          	    // falls back to writing the file directly, which requires the legacy
-          	    // WRITE_EXTERNAL_STORAGE runtime permission (requested from the JS
-          	    // side before calling this).
-          	    // ------------------------------------------------------------------
           	    @com.getcapacitor.PluginMethod
           	    public void saveToDownloads(PluginCall call) {
           	        String fileName = call.getString("fileName");
@@ -201,10 +174,6 @@ jobs:
           	        }
           	    }
 
-          	    // ------------------------------------------------------------------
-          	    // Kept in case other parts of the app still check/request "All
-          	    // files access" for other features. Not needed for saveToDownloads.
-          	    // ------------------------------------------------------------------
           	    @com.getcapacitor.PluginMethod
           	    public void checkAllFilesAccess(PluginCall call) {
           	        boolean granted;
@@ -244,10 +213,6 @@ jobs:
           	}
           	EOF
 
-          # -----------------------------------------
-          # Register plugin in MainActivity
-          # -----------------------------------------
-
           cat > android/app/src/main/java/com/pestco/app/MainActivity.java <<-'EOF'
           	package com.pestco.app;
 
@@ -265,10 +230,6 @@ jobs:
           	}
           	EOF
 
-          echo "======================================"
-          echo "Android storage access setup complete"
-          echo "======================================"
-
       # =========================
       # Generate Icons
       # =========================
@@ -280,26 +241,6 @@ jobs:
       # =========================
       - name: Sync Capacitor
         run: npx cap sync android
-
-      # =========================
-      # Verify Storage Permission
-      # =========================
-      - name: Verify Android storage setup
-        run: |
-          echo "===== MANIFEST ====="
-          grep -n "MANAGE_EXTERNAL_STORAGE" \
-            android/app/src/main/AndroidManifest.xml || true
-
-          echo ""
-          echo "===== STORAGE PLUGIN ====="
-          test -f \
-            android/app/src/main/java/com/pestco/app/StorageAccessPlugin.java \
-            && echo "StorageAccessPlugin.java OK" \
-            || echo "StorageAccessPlugin.java MISSING"
-
-          echo ""
-          echo "===== MAIN ACTIVITY ====="
-          cat android/app/src/main/java/com/pestco/app/MainActivity.java
 
       # =========================
       # Gradle permission
@@ -315,22 +256,13 @@ jobs:
         run: ./gradlew assembleDebug
 
       # =========================
-      # Upload APK (Disabled to bypass Storage Quota issue)
-      # =========================
-      # - name: Upload APK as build artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: pestco-app-debug-apk
-      #     path: android/app/build/outputs/apk/debug/app-debug.apk
-      #     retention-days: 3
-
-      # =========================
       # GitHub Release
       # =========================
       - name: Create GitHub Release with APK
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Release v1.0.${{ github.run_number }}"
           files: android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
