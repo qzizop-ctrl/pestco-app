@@ -5,10 +5,9 @@ import {
   sendPasswordResetEmail,
 } from "firebase/auth";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { Languages } from "lucide-react";
+import { Shield, Languages } from "lucide-react";
 import { auth, db } from "./firebase";
 import { PRIMARY } from "./constants";
-import { BrandMark, BADGE_WATERMARK } from "./components/Shared";
 
 const BG = "#F7F6F2";
 const TEXT = "#22282B";
@@ -184,16 +183,14 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
               width: 56,
               height: 56,
               background: PRIMARY,
-              backgroundImage: BADGE_WATERMARK,
               borderRadius: 14,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              overflow: "hidden",
               margin: "0 auto 12px",
             }}
           >
-            <BrandMark size={22} color="#fff" showUnderline />
+            <Shield size={32} color="#fff" />
           </div>
           <div style={{ fontWeight: 900, fontSize: 22, color: TEXT }}>{t.appTitle}</div>
           <div style={{ color: MUTED, fontSize: 13 }}>{t.subtitle}</div>
