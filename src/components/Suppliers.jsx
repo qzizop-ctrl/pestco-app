@@ -21,6 +21,7 @@ import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, SUCCESS, GOLD, GOLD_SOFT, LINE, SURFACE,
   parseTagsCell, buildWhatsAppLink,
 } from "../constants";
+import { openWhatsApp } from "../nativeWhatsApp";
 import { db } from "../firebase";
 import { doc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 
@@ -273,7 +274,7 @@ export function SuppliersListScreen({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      window.location.href = buildWhatsAppLink(s.phone);
+                      openWhatsApp(s.phone);
                     }}
                     className="btn-press flex items-center justify-center"
                     style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}

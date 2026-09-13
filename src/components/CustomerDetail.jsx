@@ -11,6 +11,7 @@ import {
   stageColor, offerStatusColor, visitStatus, getVisitEvents,
   fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney, buildWhatsAppLink,
 } from "../constants";
+import { openWhatsApp } from "../nativeWhatsApp";
 import { mapsUrl } from "../geo";
 import { db } from "../firebase";
 import { doc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
@@ -421,7 +422,7 @@ export default function CustomerDetailScreen({
               href={buildWhatsAppLink(active.phone)}
               onClick={(e) => {
                 e.preventDefault();
-                window.location.href = buildWhatsAppLink(active.phone);
+                openWhatsApp(active.phone);
               }}
               className="flex items-center justify-between"
               style={{ color: "#25A245", textDecoration: "none" }}

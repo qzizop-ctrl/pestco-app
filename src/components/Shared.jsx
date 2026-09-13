@@ -15,6 +15,7 @@ import {
   STATUS_COLORS, STALE_ACTIVITY_DAYS,
   stageColor, visitStatus, fmtReminder, isStaleCustomer, buildWhatsAppLink,
 } from "../constants";
+import { openWhatsApp } from "../nativeWhatsApp";
 
 // Loading placeholder shown instead of a plain "loading..." line while
 // Firestore's initial snapshot is still arriving. `count` controls how many
@@ -292,7 +293,7 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  window.location.href = buildWhatsAppLink(visit.phone);
+                  openWhatsApp(visit.phone);
                 }}
                 className="btn-press flex items-center justify-center"
                 style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
