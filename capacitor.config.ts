@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.pestco.app",
-  appName: "Pest.Co",
+  appName: "PEST",
   webDir: "dist",
   server: {
     androidScheme: "https",

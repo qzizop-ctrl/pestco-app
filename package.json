@@ -2,7 +2,7 @@
   "name": "pestco-app",
   "version": "1.0.0",
   "private": true,
-  "description": "تطبيق متابعة زيارات عملاء Pest.Co",
+  "description": "تطبيق متابعة زيارات عملاء PEST",
   "main": "electron.js",
   "scripts": {
     "dev": "vite",
@@ -47,7 +47,7 @@
   },
   "build": {
     "appId": "com.pestco.app",
-    "productName": "Pest.Co",
+    "productName": "PEST",
     "files": [
       "dist/**/*",
       "electron.js",
