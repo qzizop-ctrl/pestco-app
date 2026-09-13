@@ -18,7 +18,7 @@ const DANGER = "#B3401F";
 const STRINGS = {
   ar: {
     dir: "rtl",
-    appTitle: "Pest.Co",
+    appTitle: "PEST",
     subtitle: "CRM",
     langToggle: "English",
     loginTab: "تسجيل الدخول",
@@ -47,7 +47,7 @@ const STRINGS = {
   },
   en: {
     dir: "ltr",
-    appTitle: "Pest.Co",
+    appTitle: "PEST",
     subtitle: "CRM",
     langToggle: "عربي",
     loginTab: "Sign In",

@@ -4,7 +4,7 @@ import {
   ChevronRight, Languages, LogOut, Settings,
   Wifi, WifiOff, Moon, Sun,
 } from "lucide-react";
-import { Logo, TagChip, VisitCard, BottomNav, beep, SkeletonList } from "./components/Shared";
+import { Logo, BrandMark, TagChip, VisitCard, BottomNav, beep, SkeletonList } from "./components/Shared";
 import { SuppliersListScreen, SupplierFormScreen } from "./components/Suppliers";
 import SettingsScreen from "./components/Settings";
 import CustomerListScreen from "./components/CustomerList";
@@ -1420,51 +1420,74 @@ export default function App() {
             <ChevronRight size={22} style={{ transform: t.dir === "rtl" ? "none" : "rotate(180deg)" }} />
           </button>
         ) : (
-          <Logo size={30} />
-        )}
-        <span className="font-bold text-lg flex-1" style={{ color: "#fff" }}>
-          {screen === "dashboard" && t.titleDashboard}
-          {screen === "list" && t.appTitle}
-          {screen === "form" && (form.id ? t.titleEdit : t.titleNew)}
-          {screen === "detail" && t.titleDetail}
-          {screen === "suppliers" && t.suppliersTitle}
-          {screen === "supplier-form" && (activeSupplierId ? t.titleEditSupplier : t.titleNewSupplier)}
-          {screen === "settings" && t.settingsTitle}
-        </span>
-        {isRootScreen && (
-          <span
-            className="flex items-center"
-            style={{ color: "#fff", opacity: 0.9 }}
-            aria-label={isOnline ? "online" : "offline"}
-            title={isOnline ? "" : t.offlineBanner}
+          <div
+            className="flex items-center justify-center"
+            style={{ width: 34, height: 34, minWidth: 34, background: "rgba(255,255,255,0.14)", borderRadius: 10 }}
           >
-            {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
-          </span>
+            <BrandMark size={15} color="#fff" />
+          </div>
         )}
-        <button
-          onClick={() => setDarkMode((d) => !d)}
-          className="btn-press flex items-center"
-          style={{ color: "#fff", background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "6px 8px" }}
-          aria-label={darkMode ? t.lightModeToggle : t.darkModeToggle}
-          title={darkMode ? t.lightModeToggle : t.darkModeToggle}
+        <span className="flex-1" style={{ color: "#fff" }}>
+          {screen === "list" ? (
+            <span className="flex items-baseline" style={{ gap: 6 }}>
+              <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: 0.5 }}>PEST</span>
+              <span style={{ fontWeight: 500, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>CRM</span>
+            </span>
+          ) : (
+            <span className="font-bold text-lg">
+              {screen === "dashboard" && t.titleDashboard}
+              {screen === "form" && (form.id ? t.titleEdit : t.titleNew)}
+              {screen === "detail" && t.titleDetail}
+              {screen === "suppliers" && t.suppliersTitle}
+              {screen === "supplier-form" && (activeSupplierId ? t.titleEditSupplier : t.titleNewSupplier)}
+              {screen === "settings" && t.settingsTitle}
+            </span>
+          )}
+        </span>
+        <div
+          className="flex items-center gap-2"
+          style={{ background: "rgba(255,255,255,0.14)", borderRadius: 10, padding: "6px 10px" }}
         >
-          {darkMode ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
-        <button
-          onClick={() => setLang(lang === "ar" ? "en" : "ar")}
-          className="btn-press flex items-center gap-1 font-bold text-xs"
-          style={{ color: "#fff", background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "6px 10px" }}
-          aria-label={t.langToggle}
-        >
-          <Languages size={14} /> {t.langToggle}
-        </button>
+          {isRootScreen && (
+            <>
+              <span
+                className="flex items-center"
+                style={{ color: isOnline ? "#6FCF97" : "#fff", opacity: isOnline ? 1 : 0.7 }}
+                aria-label={isOnline ? "online" : "offline"}
+                title={isOnline ? "" : t.offlineBanner}
+              >
+                {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
+              </span>
+              <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
+            </>
+          )}
+          <button
+            onClick={() => setDarkMode((d) => !d)}
+            className="btn-press flex items-center"
+            style={{ color: "#fff" }}
+            aria-label={darkMode ? t.lightModeToggle : t.darkModeToggle}
+            title={darkMode ? t.lightModeToggle : t.darkModeToggle}
+          >
+            {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+          <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
+          <button
+            onClick={() => setLang(lang === "ar" ? "en" : "ar")}
+            className="btn-press flex items-center gap-1 font-bold text-xs"
+            style={{ color: "#fff" }}
+            aria-label={t.langToggle}
+          >
+            <Languages size={14} /> {t.langToggle}
+          </button>
+        </div>
+        <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.22)" }} />
         <button
           onClick={() => signOut(auth).catch(() => {})}
           className="btn-press flex items-center"
-          style={{ color: "#fff", background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "6px 8px" }}
+          style={{ color: "#fff" }}
           aria-label={t.signOut}
         >
-          <LogOut size={14} />
+          <LogOut size={16} />
         </button>
       </div>
 
