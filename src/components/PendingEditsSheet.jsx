@@ -9,7 +9,7 @@ import React from "react";
 import { Bell, ChevronRight } from "lucide-react";
 import { TEXT, MUTED, LINE, SURFACE, GOLD, fmtActivityDate } from "../constants";
 
-export default function PendingEditsSheet({ t, open, onClose, pendingEdits, openDetail }) {
+export default function PendingEditsSheet({ t, open, onClose, pendingEdits, onOpenItem }) {
   if (!open) return null;
 
   return (
@@ -61,7 +61,7 @@ export default function PendingEditsSheet({ t, open, onClose, pendingEdits, open
                 <button
                   key={v.id}
                   onClick={() => {
-                    openDetail(v);
+                    onOpenItem(v);
                     onClose();
                   }}
                   className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}

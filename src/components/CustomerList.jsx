@@ -53,6 +53,7 @@ export default function CustomerListScreen({
   openNew,
   isOwnerAccount,
   pendingEdits = [],
+  openPendingEditItem,
 }) {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -167,7 +168,7 @@ export default function CustomerListScreen({
         open={pendingEditsOpen}
         onClose={() => setPendingEditsOpen(false)}
         pendingEdits={pendingEdits}
-        openDetail={openDetail}
+        onOpenItem={openPendingEditItem}
       />
 
       <FilterSheet

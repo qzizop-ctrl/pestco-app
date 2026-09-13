@@ -11,15 +11,18 @@
 import React, { useState } from "react";
 import {
   Search, SlidersHorizontal, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2,
-  Building2, User, Package, Tag, StickyNote,
+  Building2, User, Package, Tag, StickyNote, Bell, AlertTriangle, Check, RotateCcw,
 } from "lucide-react";
 import { TagChip, SkeletonList } from "./Shared";
 import { FormSection, IconField } from "./CustomerForm";
 import SupplierFilterSheet from "./SupplierFilterSheet";
+import PendingEditsSheet from "./PendingEditsSheet";
 import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
+  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, SUCCESS, GOLD, GOLD_SOFT, LINE, SURFACE,
   parseTagsCell,
 } from "../constants";
+import { db } from "../firebase";
+import { doc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 
 export function SuppliersListScreen({
   t,
@@ -38,9 +41,13 @@ export function SuppliersListScreen({
   togglePinSupplier,
   openEditSupplier,
   openNewSupplier,
+  isOwnerAccount,
+  pendingEdits = [],
+  openPendingEditItem,
 }) {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [pendingEditsOpen, setPendingEditsOpen] = useState(false);
   const searchActive = searchFocused || supplierQuery.length > 0;
 
   const activeFilterCount =
@@ -97,7 +104,50 @@ export function SuppliersListScreen({
             </span>
           )}
         </button>
+
+        {isOwnerAccount && (
+          <button
+            onClick={() => setPendingEditsOpen(true)}
+            className="btn-press flex items-center justify-center gap-1 font-bold text-xs flex-shrink-0"
+            style={{
+              position: "relative",
+              border: `1.4px solid ${pendingEdits.length > 0 ? GOLD : LINE}`,
+              background: pendingEdits.length > 0 ? GOLD : SURFACE,
+              color: pendingEdits.length > 0 ? "#fff" : MUTED,
+              borderRadius: 14,
+              height: 44,
+              overflow: "hidden",
+              transition: "max-width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease",
+              maxWidth: searchActive ? 0 : 120,
+              padding: searchActive ? "0" : "0 14px",
+              opacity: searchActive ? 0 : 1,
+              pointerEvents: searchActive ? "none" : "auto",
+            }}
+          >
+            <Bell size={15} />
+            {t.pendingEditsBtn}
+            {pendingEdits.length > 0 && (
+              <span
+                className="text-xs font-extrabold flex items-center justify-center"
+                style={{
+                  background: "#fff", color: GOLD, borderRadius: 999,
+                  minWidth: 16, height: 16, padding: "0 4px",
+                }}
+              >
+                {pendingEdits.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
+
+      <PendingEditsSheet
+        t={t}
+        open={pendingEditsOpen}
+        onClose={() => setPendingEditsOpen(false)}
+        pendingEdits={pendingEdits}
+        onOpenItem={openPendingEditItem}
+      />
 
       <SupplierFilterSheet
         t={t}
@@ -272,9 +322,263 @@ export function SupplierFormScreen({
   activeSupplierId,
   deleteSupplier,
   saving,
+  ownerUid,
+  isOwnerAccount,
+  setScreen,
 }) {
+  const [loadingAction, setLoadingAction] = useState(false);
+
+  const isPendingDelete = supplierForm.last_change?.type === "delete";
+
+  // نفس مسار مستند المورد المستخدم في باقي التطبيق: users/{ownerUid}/suppliers/{id}.
+  const getDocRef = () => {
+    if (!ownerUid || !activeSupplierId) return null;
+    return doc(db, "users", ownerUid, "suppliers", activeSupplierId);
+  };
+
+  // 1. اعتماد التعديل (حذف تنبيه التعديل وتنظيف المساحة)
+  const handleApprove = async () => {
+    if (!isOwnerAccount || !activeSupplierId) return;
+    const docRef = getDocRef();
+    if (!docRef) {
+      alert("تعذّر تحديد مساحة العمل الحالية.");
+      return;
+    }
+    setLoadingAction(true);
+    try {
+      await updateDoc(docRef, { last_change: deleteField() });
+      alert("تم اعتماد البيانات وتنظيف المساحة بنجاح.");
+    } catch (err) {
+      console.error("خطأ أثناء الاعتماد:", err);
+      alert("حدث خطأ أثناء الاعتماد: " + err.message);
+    } finally {
+      setLoadingAction(false);
+      setScreen && setScreen("suppliers");
+    }
+  };
+
+  // 2. التراجع عن التعديل (إعادة القيم القديمة وحذف التنبيه)
+  const handleRollback = async () => {
+    if (!isOwnerAccount || !activeSupplierId || !supplierForm.last_change) return;
+    const docRef = getDocRef();
+    if (!docRef) {
+      alert("تعذّر تحديد مساحة العمل الحالية.");
+      return;
+    }
+    setLoadingAction(true);
+    try {
+      const rawChanges = supplierForm.last_change.changes || supplierForm.last_change.details || supplierForm.last_change;
+      const rollbackPayload = {};
+
+      if (typeof rawChanges === "object" && rawChanges !== null) {
+        Object.entries(rawChanges).forEach(([field, val]) => {
+          const ignoreKeys = ["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details"];
+          if (!ignoreKeys.includes(field)) {
+            if (val && typeof val === "object" && "old_value" in val) {
+              rollbackPayload[field] = val.old_value;
+            } else if (typeof val !== "object") {
+              rollbackPayload[field] = val;
+            }
+          }
+        });
+      }
+
+      rollbackPayload.last_change = deleteField();
+
+      await updateDoc(docRef, rollbackPayload);
+      alert("تم التراجع عن التعديلات وإعادة البيانات بنجاح.");
+    } catch (err) {
+      console.error("خطأ أثناء التراجع:", err);
+      alert("حدث خطأ أثناء التراجع: " + err.message);
+    } finally {
+      setLoadingAction(false);
+      setScreen && setScreen("suppliers");
+    }
+  };
+
+  // 3. اعتماد الحذف نهائيًا — بيمسح المستند فعليًا من Firestore
+  const handleConfirmDelete = async () => {
+    if (!isOwnerAccount || !activeSupplierId) return;
+    const docRef = getDocRef();
+    if (!docRef) {
+      alert("تعذّر تحديد مساحة العمل الحالية.");
+      return;
+    }
+    setLoadingAction(true);
+    try {
+      await deleteDoc(docRef);
+      alert(t.deleteApprovedMsgSupplier);
+    } catch (err) {
+      console.error("خطأ أثناء اعتماد الحذف:", err);
+      alert("حدث خطأ أثناء اعتماد الحذف: " + err.message);
+    } finally {
+      setLoadingAction(false);
+      setScreen && setScreen("suppliers");
+    }
+  };
+
+  // 4. استرجاع المورد — بيلغي علامة الحذف وينظّف last_change
+  const handleRestoreDeleted = async () => {
+    if (!isOwnerAccount || !activeSupplierId) return;
+    const docRef = getDocRef();
+    if (!docRef) {
+      alert("تعذّر تحديد مساحة العمل الحالية.");
+      return;
+    }
+    setLoadingAction(true);
+    try {
+      await updateDoc(docRef, { deleted: deleteField(), last_change: deleteField() });
+      alert(t.deleteRestoredMsgSupplier);
+    } catch (err) {
+      console.error("خطأ أثناء استرجاع المورد:", err);
+      alert("حدث خطأ أثناء استرجاع المورد: " + err.message);
+    } finally {
+      setLoadingAction(false);
+      setScreen && setScreen("suppliers");
+    }
+  };
+
+  const fieldLabels = {
+    name: "اسم المورد",
+    contactName: "الشخص المسؤول",
+    phone: "رقم الهاتف",
+    email: "البريد الإلكتروني",
+    category: "نوع الخدمة/المنتج",
+    notes: "الملاحظات",
+  };
+
   return (
     <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
+
+      {/* ----------------- صندوق تنبيه طلب حذف مورد ----------------- */}
+      {isOwnerAccount && activeSupplierId && isPendingDelete && (
+        <div
+          className="shadow-sm"
+          style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 16, padding: 14 }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-bold text-xs flex items-center gap-1" style={{ color: "#991B1B" }}>
+              <Trash2 size={15} color={DANGER} /> {t.deletePendingTitleSupplier}
+            </span>
+            <span className="text-xs" style={{ color: MUTED }}>
+              {supplierForm.last_change.updatedAt
+                ? new Date(supplierForm.last_change.updatedAt).toLocaleString("ar-EG")
+                : ""}
+            </span>
+          </div>
+
+          <div className="text-xs mb-3" style={{ color: TEXT }}>
+            {t.deletePendingBySupplier(supplierForm.last_change.updatedBy || "غير معروف")}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirmDelete}
+              disabled={loadingAction}
+              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
+              style={{ background: DANGER, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
+            >
+              <Trash2 size={14} /> {t.confirmDeleteFinalBtn}
+            </button>
+            <button
+              onClick={handleRestoreDeleted}
+              disabled={loadingAction}
+              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
+              style={{ background: SUCCESS, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
+            >
+              <RotateCcw size={14} /> {t.restoreSupplierBtn}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- صندوق تنبيه تعديل بيانات مورد ----------------- */}
+      {isOwnerAccount && activeSupplierId && supplierForm.last_change && !isPendingDelete && (
+        <div
+          className="shadow-sm"
+          style={{ background: "#FFFBEB", border: "1px solid #FCD34D", borderRadius: 16, padding: 14 }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-bold text-xs flex items-center gap-1" style={{ color: "#92400E" }}>
+              <AlertTriangle size={15} color="#D97706" /> تنبيه تعديل بيانات مورد (خاص بك)
+            </span>
+            <span className="text-xs" style={{ color: MUTED }}>
+              {supplierForm.last_change.updatedAt
+                ? new Date(supplierForm.last_change.updatedAt).toLocaleString("ar-EG")
+                : ""}
+            </span>
+          </div>
+
+          <div className="text-xs mb-2" style={{ color: TEXT }}>
+            قام المستخدم{" "}
+            <span className="font-bold">{supplierForm.last_change.updatedBy || "غير معروف"}</span>{" "}
+            بتعديل البيانات التالية:
+          </div>
+
+          <div
+            className="flex flex-col gap-1.5 text-xs mb-3"
+            style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: 10 }}
+          >
+            {(() => {
+              const ignoreKeys = ["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details", "last_change"];
+              const rawChanges = supplierForm.last_change.changes || supplierForm.last_change.details || supplierForm.last_change;
+
+              if (!rawChanges || typeof rawChanges !== "object") {
+                return <div style={{ color: MUTED }}>تعديلات عامة على السجل</div>;
+              }
+
+              const entries = Object.entries(rawChanges).filter(([k]) => !ignoreKeys.includes(k));
+
+              if (entries.length === 0) {
+                return <div style={{ color: MUTED }}>تم إجراء تعديل على بيانات السجل (بدون تفاصيل قيم قديمة)</div>;
+              }
+
+              return entries.map(([field, val]) => {
+                const arabicLabel = fieldLabels[field] || field;
+                const oldValue = typeof val === "object" && val !== null ? val.old_value : undefined;
+                const newValue = typeof val === "object" && val !== null ? val.new_value : val;
+
+                return (
+                  <div key={field} className="flex items-center gap-2 border-b border-gray-100 last:border-0 pb-1">
+                    <span className="font-semibold min-w-[90px]" style={{ color: MUTED }}>{arabicLabel}:</span>
+                    {oldValue !== undefined && (
+                      <>
+                        <span className="line-through font-bold px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: DANGER }}>
+                          {String(oldValue || "—")}
+                        </span>
+                        <span>←</span>
+                      </>
+                    )}
+                    <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: "#D1FAE5", color: "#047857" }}>
+                      {String(newValue !== undefined && newValue !== null ? newValue : "—")}
+                    </span>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleApprove}
+              disabled={loadingAction}
+              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
+              style={{ background: SUCCESS, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
+            >
+              <Check size={14} /> اعتماد (تنظيف المساحة)
+            </button>
+            <button
+              onClick={handleRollback}
+              disabled={loadingAction}
+              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
+              style={{ background: DANGER, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
+            >
+              <RotateCcw size={14} /> تراجع عن التعديل
+            </button>
+          </div>
+        </div>
+      )}
+
      <div
       className="flex flex-col gap-4"
       style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16 }}
