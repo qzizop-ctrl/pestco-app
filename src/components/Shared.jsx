@@ -8,7 +8,7 @@
 import React from "react";
 import {
   X, Phone, Calendar, User, Star, MessageCircle,
-  Settings, LayoutDashboard, Users as UsersIcon, Truck, Shield,
+  Settings, LayoutDashboard, Users as UsersIcon, Truck, Speaker, Monitor,
 } from "lucide-react";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
@@ -60,13 +60,44 @@ export function beep() {
   }
 }
 
+// شعار التطبيق — سماعة + شاشة، بنفس تركيبة أيقونة التطبيق الفعلية
+// (resources/icon.png)، عشان الهوية تبقى واحدة جوه وبرّه التطبيق.
+// شعار التطبيق — سماعة + شاشة، بنفس تركيبة أيقونة التطبيق الفعلية
+// (resources/icon.png)، عشان الهوية تبقى واحدة جوه وبرّه التطبيق.
+// showUnderline بيضيف نفس الخط الذهبي الصغير اللي تحت "PEST" في الأيقونة،
+// لما يكون فيه مساحة كفاية (شارة تسجيل الدخول الكبيرة مثلًا).
+export function BrandMark({ size = 22, color = "#F6F3EC", showUnderline = false }) {
+  return (
+    <div className="flex flex-col items-center" style={{ gap: size * 0.22 }}>
+      <div className="flex items-center" style={{ gap: size * 0.16 }}>
+        <Speaker size={size} color={color} strokeWidth={2.3} />
+        <Monitor size={size} color={color} strokeWidth={2.3} />
+      </div>
+      {showUnderline && (
+        <div style={{ width: size * 0.85, height: Math.max(2, size * 0.09), borderRadius: 999, background: GOLD }} />
+      )}
+    </div>
+  );
+}
+
+// نفس العلامة المائية المايلة (من الزاوية العلوية اليمين للسفلية الشمال)
+// الموجودة في أيقونة التطبيق الخارجية — واحدة بس، بتغطي المنتصف بشكل مايل.
+export const BADGE_WATERMARK = "linear-gradient(-45deg, transparent 42%, rgba(255,255,255,0.22) 50%, transparent 58%)";
+
 export function Logo({ size = 36 }) {
   return (
     <div
       className="flex items-center justify-center"
-      style={{ width: size, height: size, background: "rgba(255,255,255,0.12)", borderRadius: 12 }}
+      style={{
+        width: size,
+        height: size,
+        background: "rgba(255,255,255,0.12)",
+        backgroundImage: BADGE_WATERMARK,
+        borderRadius: 12,
+        overflow: "hidden",
+      }}
     >
-      <Shield size={size * 0.6} color="#F6F3EC" />
+      <BrandMark size={size * 0.4} color="#F6F3EC" />
     </div>
   );
 }
