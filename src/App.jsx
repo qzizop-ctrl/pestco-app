@@ -111,7 +111,6 @@ export default function App() {
     });
   };
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
-  const [pendingSupplierDelete, setPendingSupplierDelete] = useState(null); // { id, companyName, timeoutId }
   // Drives the in-app rejection-reason modal (replaces window.prompt).
   // { initialReason, onConfirm(reason) } while the modal is open, else null.
   const [rejectionPrompt, setRejectionPrompt] = useState(null);
@@ -448,48 +447,15 @@ export default function App() {
     if (!requireOnline()) return;
     if (!validateSupplier() || !user || !ownerUid) return;
 
-    const { id, tagsInput, last_change, ...rest } = supplierForm;
+    const { id, tagsInput, ...rest } = supplierForm;
     const data = { ...rest, tags: parseTagsCell(tagsInput) };
-    const original = activeSupplierId ? suppliers.find((s) => s.id === activeSupplierId) : null;
-
-    // Same audit-trail approach as saveForm for customers: diff the new data
-    // against the record actually in Firestore (suppliers state) so
-    // last_change.changes carries real old/new values, and flag the record
-    // with last_change so it surfaces in the owner's pending-edits bell
-    // (shared with customer edits) for review.
-    const auditIgnoreKeys = ["tags", "createdAt", "updatedAt", "isPinned", "deleted"];
-    const changes = {};
-    if (original) {
-      Object.keys(data).forEach((key) => {
-        if (auditIgnoreKeys.includes(key)) return;
-        const oldVal = original[key];
-        const newVal = data[key];
-        const oldCompare = oldVal ?? "";
-        const newCompare = newVal ?? "";
-        if (oldCompare !== newCompare) {
-          changes[key] = { old_value: oldVal ?? "فارغ", new_value: newVal ?? "فارغ" };
-        }
-      });
-    }
-
-    const lastChangeData = {
-      updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-      updatedById: user?.uid || null,
-      updatedAt: new Date().toISOString(),
-      ...(Object.keys(changes).length > 0 ? { changes } : {}),
-    };
-
     setIsSaving(true);
     try {
       if (activeSupplierId) {
-        await updateDoc(doc(db, "users", ownerUid, "suppliers", activeSupplierId), {
-          ...data,
-          last_change: lastChangeData,
-        });
+        await updateDoc(doc(db, "users", ownerUid, "suppliers", activeSupplierId), data);
       } else {
         await addDoc(collection(db, "users", ownerUid, "suppliers"), {
           ...data,
-          last_change: lastChangeData,
           createdAt: serverTimestamp(),
         });
       }
@@ -505,45 +471,14 @@ export default function App() {
     if (!canEdit) return;
     if (!requireOnline()) return;
     if (!user || !ownerUid) return;
-    confirmAction(t.deleteSupplierConfirm, () => {
-      proceedDeleteSupplier(id);
-    }, { danger: true });
-  };
-
-  // Soft delete: same pattern as proceedDeleteVisit for customers — hide it
-  // immediately (self-undo window), then flag it with deleted + a
-  // last_change of type "delete" instead of actually removing the document.
-  // That's what lets it show up in the owner's pending-edits bell/sheet and
-  // be approved (final delete) or rolled back (restored) from
-  // SupplierFormScreen, mirroring the customer review flow.
-  const proceedDeleteSupplier = async (id) => {
-    const supplier = suppliers.find((s) => s.id === id);
-    setScreen("suppliers");
-
-    const timeoutId = setTimeout(async () => {
+    confirmAction(t.deleteSupplierConfirm, async () => {
       try {
-        await updateDoc(doc(db, "users", ownerUid, "suppliers", id), {
-          deleted: true,
-          last_change: {
-            type: "delete",
-            updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-            updatedById: user?.uid || null,
-            updatedAt: new Date().toISOString(),
-          },
-        });
+        await deleteDoc(doc(db, "users", ownerUid, "suppliers", id));
+        setScreen("suppliers");
       } catch (e) {
         reportSaveError(e);
       }
-      setPendingSupplierDelete((cur) => (cur && cur.id === id ? null : cur));
-    }, 5000);
-
-    setPendingSupplierDelete({ id, companyName: supplier ? supplier.name : "", timeoutId });
-  };
-
-  const undoSupplierDelete = () => {
-    if (!pendingSupplierDelete) return;
-    clearTimeout(pendingSupplierDelete.timeoutId);
-    setPendingSupplierDelete(null);
+    }, { danger: true });
   };
 
   const togglePinSupplier = async (supplier) => {
@@ -922,7 +857,7 @@ export default function App() {
 
   const exportSuppliersAllToExcel = async () => {
     if (!canEdit) return;
-    await writeSuppliersExcel(visibleSuppliers, "all");
+    await writeSuppliersExcel(suppliers, "all");
   };
 
   const exportSuppliersFilteredToExcel = async () => {
@@ -1144,38 +1079,15 @@ export default function App() {
 
   // Customers with a pending edit OR a pending deletion awaiting the owner's
   // اعتماد/تراجع decision (last_change set but not yet cleared). Feeds the
-  // bell icon on the customer list ONLY — kept independent from the
-  // suppliers bell below, each section shows its own review queue rather
-  // than a merged one, so tapping a section's bell always stays in that
-  // section.
+  // bell icon next to the filters button on the customer list — owner-only,
+  // mirroring the approve/rollback controls in CustomerDetail.jsx. Deliberately
+  // derived from the raw `visits` list rather than `visibleVisits`: a pending
+  // deletion is flagged with `deleted: true` and hidden from the normal list,
+  // but it still needs to reach the owner here, or it would never be reviewable.
   const pendingEdits = useMemo(
     () => visits.filter((v) => v.last_change && v.id !== pendingDelete?.id),
     [visits, pendingDelete]
   );
-
-  // Same idea, mirrored for suppliers (last_change set by saveSupplierForm /
-  // proceedDeleteSupplier) but feeding a separate bell on the suppliers
-  // list, independent of the customer one above.
-  const pendingSupplierEdits = useMemo(
-    () =>
-      suppliers
-        .filter((s) => s.last_change && s.id !== pendingSupplierDelete?.id)
-        .map((s) => ({ ...s, companyName: s.name })),
-    [suppliers, pendingSupplierDelete]
-  );
-
-  // Opens a tapped row from the customer pending-edits sheet, looking the
-  // record up fresh from `visits` (rather than trusting the passed-in copy).
-  const openPendingEditItem = (item) => {
-    const original = visits.find((v) => v.id === item.id);
-    if (original) openDetail(original);
-  };
-
-  // Same, for the suppliers pending-edits sheet.
-  const openPendingSupplierEditItem = (item) => {
-    const original = suppliers.find((s) => s.id === item.id);
-    if (original) openEditSupplier(original);
-  };
 
   // Possible duplicate customers (same phone or a near-identical company
   // name), reviewed from the Settings screen.
@@ -1301,28 +1213,19 @@ export default function App() {
     [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly, dateAddedFilter, debouncedQuery, t.locale]
   );
 
-  // Suppliers with a pending deletion hidden, same as visibleVisits does for
-  // customers: a pending deletion is flagged with `deleted: true` (and kept
-  // out of the self-undo window via pendingSupplierDelete) rather than
-  // actually removed, so it still needs to stay out of the normal list.
-  const visibleSuppliers = useMemo(
-    () => suppliers.filter((s) => s.id !== pendingSupplierDelete?.id && !s.deleted),
-    [suppliers, pendingSupplierDelete]
-  );
-
   // All unique product tags across every supplier, used to populate the
   // "filter by product" chip row on the Suppliers list.
-  const allSupplierTags = useMemo(() => collectSupplierTags(visibleSuppliers), [visibleSuppliers]);
+  const allSupplierTags = useMemo(() => collectSupplierTags(suppliers), [suppliers]);
 
   // All unique "goods/service type" values across every supplier, used to
   // populate a separate "filter by category" chip row — distinct from the
   // product tags above, since a supplier's category (e.g. "كاميرات مراقبة")
   // and its individual product tags aren't the same field.
-  const allSupplierCategories = useMemo(() => collectSupplierCategories(visibleSuppliers), [visibleSuppliers]);
+  const allSupplierCategories = useMemo(() => collectSupplierCategories(suppliers), [suppliers]);
 
   const filteredSuppliers = useMemo(
     () =>
-      visibleSuppliers
+      suppliers
         .filter((s) => supplierTagFilter === "all" || (s.tags || []).includes(supplierTagFilter))
         .filter((s) => supplierCategoryFilter === "all" || (s.category || "").trim() === supplierCategoryFilter)
         .filter((s) => {
@@ -1342,7 +1245,7 @@ export default function App() {
           if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
           return (a.name || "").localeCompare(b.name || "", "ar");
         }),
-    [visibleSuppliers, supplierTagFilter, supplierCategoryFilter, debouncedSupplierQuery]
+    [suppliers, supplierTagFilter, supplierCategoryFilter, debouncedSupplierQuery]
   );
 
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
@@ -1511,7 +1414,6 @@ export default function App() {
           openNew={openNew}
           isOwnerAccount={isOwnerAccount}
           pendingEdits={pendingEdits}
-          openPendingEditItem={openPendingEditItem}
         />
       )}
 
@@ -1569,7 +1471,7 @@ export default function App() {
           canEdit={canEdit}
           supplierQuery={supplierQuery}
           setSupplierQuery={setSupplierQuery}
-          totalSuppliers={visibleSuppliers.length}
+          totalSuppliers={suppliers.length}
           allSupplierTags={allSupplierTags}
           supplierTagFilter={supplierTagFilter}
           setSupplierTagFilter={setSupplierTagFilter}
@@ -1581,9 +1483,6 @@ export default function App() {
           togglePinSupplier={togglePinSupplier}
           openEditSupplier={openEditSupplier}
           openNewSupplier={openNewSupplier}
-          isOwnerAccount={isOwnerAccount}
-          pendingEdits={pendingSupplierEdits}
-          openPendingEditItem={openPendingSupplierEditItem}
         />
       )}
 
@@ -1598,9 +1497,6 @@ export default function App() {
           activeSupplierId={activeSupplierId}
           deleteSupplier={deleteSupplier}
           saving={isSaving}
-          ownerUid={ownerUid}
-          isOwnerAccount={isOwnerAccount}
-          setScreen={setScreen}
         />
       )}
 
@@ -1666,33 +1562,6 @@ export default function App() {
           <span className="text-sm font-bold">{t.deletedUndoMsg(pendingDelete.companyName || "")}</span>
           <button
             onClick={undoDelete}
-            className="btn-press font-extrabold text-sm flex-shrink-0"
-            style={{ color: GOLD }}
-          >
-            {t.undoBtn}
-          </button>
-        </div>
-      )}
-
-      {pendingSupplierDelete && (
-        <div
-          className="flex items-center justify-between gap-3"
-          style={{
-            position: "fixed",
-            left: 16,
-            right: 16,
-            bottom: isRootScreen ? 78 : 16,
-            background: PRIMARY,
-            color: "#fff",
-            borderRadius: 14,
-            padding: "12px 16px",
-            boxShadow: "0 8px 20px rgba(0,0,0,.25)",
-            zIndex: 30,
-          }}
-        >
-          <span className="text-sm font-bold">{t.deletedUndoMsg(pendingSupplierDelete.companyName || "")}</span>
-          <button
-            onClick={undoSupplierDelete}
             className="btn-press font-extrabold text-sm flex-shrink-0"
             style={{ color: GOLD }}
           >
