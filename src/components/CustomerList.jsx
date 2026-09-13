@@ -55,6 +55,8 @@ export default function CustomerListScreen({
   pendingEdits = [],
 }) {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchActive = searchFocused || query.length > 0;
   const [pendingEditsOpen, setPendingEditsOpen] = useState(false);
   const activeFilterCount =
     (sectorFilter !== "all" ? 1 : 0) +
@@ -85,6 +87,8 @@ export default function CustomerListScreen({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
             placeholder={t.searchPlaceholder}
             style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
           />
@@ -98,8 +102,13 @@ export default function CustomerListScreen({
             background: activeFilterCount > 0 ? PRIMARY : SURFACE,
             color: activeFilterCount > 0 ? "#fff" : MUTED,
             borderRadius: 14,
-            padding: "0 14px",
             height: 44,
+            overflow: "hidden",
+            transition: "max-width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease",
+            maxWidth: searchActive ? 0 : 120,
+            padding: searchActive ? "0" : "0 14px",
+            opacity: searchActive ? 0 : 1,
+            pointerEvents: searchActive ? "none" : "auto",
           }}
         >
           <SlidersHorizontal size={15} />
@@ -127,8 +136,13 @@ export default function CustomerListScreen({
               background: pendingEdits.length > 0 ? GOLD : SURFACE,
               color: pendingEdits.length > 0 ? "#fff" : MUTED,
               borderRadius: 14,
-              padding: "0 14px",
               height: 44,
+              overflow: "hidden",
+              transition: "max-width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease",
+              maxWidth: searchActive ? 0 : 120,
+              padding: searchActive ? "0" : "0 14px",
+              opacity: searchActive ? 0 : 1,
+              pointerEvents: searchActive ? "none" : "auto",
             }}
           >
             <Bell size={15} />
