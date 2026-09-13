@@ -379,6 +379,7 @@ export const STRINGS = {
     pendingEditsEmpty: "لا توجد تعديلات بانتظار المراجعة",
     pendingEditsBy: (name, date) => `بواسطة ${name} • ${date}`,
     pendingDeleteLabel: "حذف",
+    pendingEditsKindSupplier: "مورد",
 
     // Delete-approval banner in CustomerDetail (owner-only)
     deletePendingTitle: "طلب حذف عميل (خاص بك)",
@@ -387,6 +388,13 @@ export const STRINGS = {
     restoreCustomerBtn: "استرجاع العميل",
     deleteApprovedMsg: "تم حذف العميل نهائيًا.",
     deleteRestoredMsg: "تم استرجاع العميل بنجاح.",
+
+    // Delete-approval banner in SupplierFormScreen (owner-only)
+    deletePendingTitleSupplier: "طلب حذف مورد (خاص بك)",
+    deletePendingBySupplier: (name) => `قام المستخدم ${name} بحذف هذا المورد. هل تريد اعتماد الحذف نهائيًا أم استرجاع المورد؟`,
+    restoreSupplierBtn: "استرجاع المورد",
+    deleteApprovedMsgSupplier: "تم حذف المورد نهائيًا.",
+    deleteRestoredMsgSupplier: "تم استرجاع المورد بنجاح.",
 
     // PDF report export
     dashExportPdfBtn: "تصدير تقرير PDF",
@@ -749,6 +757,7 @@ export const STRINGS = {
     pendingEditsEmpty: "No edits awaiting review",
     pendingEditsBy: (name, date) => `by ${name} • ${date}`,
     pendingDeleteLabel: "Delete",
+    pendingEditsKindSupplier: "Supplier",
 
     // Delete-approval banner in CustomerDetail (owner-only)
     deletePendingTitle: "Customer deletion request (yours to review)",
@@ -757,6 +766,13 @@ export const STRINGS = {
     restoreCustomerBtn: "Restore customer",
     deleteApprovedMsg: "Customer permanently deleted.",
     deleteRestoredMsg: "Customer restored successfully.",
+
+    // Delete-approval banner in SupplierFormScreen (owner-only)
+    deletePendingTitleSupplier: "Supplier deletion request (yours to review)",
+    deletePendingBySupplier: (name) => `${name} deleted this supplier. Approve the deletion permanently, or restore the supplier?`,
+    restoreSupplierBtn: "Restore supplier",
+    deleteApprovedMsgSupplier: "Supplier permanently deleted.",
+    deleteRestoredMsgSupplier: "Supplier restored successfully.",
 
     // PDF report export
     dashExportPdfBtn: "Export PDF Report",
