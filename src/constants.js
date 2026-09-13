@@ -37,7 +37,6 @@ export const STRINGS = {
   ar: {
     dir: "rtl",
     locale: "ar-EG",
-    appTitle: "Pest.Co — CRM",
     titleEdit: "تعديل العميل",
     titleNew: "عميل جديد",
     titleDetail: "تفاصيل العميل",
@@ -409,7 +408,7 @@ export const STRINGS = {
     dashPdfCustomersSection: "العملاء المُضافون خلال الفترة",
     dashPdfNoOffers: "لا توجد أوفرات في هذه الفترة",
     dashPdfNoCustomers: "لا يوجد عملاء جدد في هذه الفترة",
-    dashPdfFooterNote: "تم إصدار هذا التقرير تلقائيًا من تطبيق Pest.Co",
+    dashPdfFooterNote: "تم إصدار هذا التقرير تلقائيًا من تطبيق PEST",
     dashPdfError: "حصل خطأ أثناء إنشاء ملف PDF",
     dashPdfShareTitle: "حفظ أو مشاركة التقرير",
     dashPdfColCompany: "الشركة",
@@ -423,7 +422,6 @@ export const STRINGS = {
   en: {
     dir: "ltr",
     locale: "en-US",
-    appTitle: "Pest.Co — CRM",
     titleEdit: "Edit Customer",
     titleNew: "New Customer",
     titleDetail: "Customer Details",
@@ -787,7 +785,7 @@ export const STRINGS = {
     dashPdfCustomersSection: "Customers Added in Period",
     dashPdfNoOffers: "No offers in this period",
     dashPdfNoCustomers: "No new customers in this period",
-    dashPdfFooterNote: "This report was generated automatically by the Pest.Co app",
+    dashPdfFooterNote: "This report was generated automatically by the PEST app",
     dashPdfError: "An error occurred while generating the PDF",
     dashPdfShareTitle: "Save or share report",
     dashPdfColCompany: "Company",

@@ -150,7 +150,7 @@ function buildFrontMatterHtml({
     <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;color:${TEXT_HEX};">
       <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid ${PRIMARY};padding-bottom:14px;margin-bottom:14px;">
         <div>
-          <div style="font-size:20px;font-weight:800;color:${PRIMARY};">Pest.Co</div>
+          <div style="font-size:20px;font-weight:800;color:${PRIMARY};">PEST</div>
           <div style="font-size:13px;font-weight:700;color:${MUTED_HEX};margin-top:2px;">${esc(t.dashPdfReportTitle)}</div>
         </div>
         <div style="text-align:${align === "right" ? "left" : "right"};font-size:11px;color:${MUTED_HEX};">
