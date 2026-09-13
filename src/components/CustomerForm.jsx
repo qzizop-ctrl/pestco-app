@@ -207,34 +207,36 @@ export default function CustomerFormScreen({
       </CollapsibleSection>
 
       <CollapsibleSection title={t.formSectionSchedule}>
-        <div>
-          <label>{t.visitDateLabel}</label>
-          <IconField icon={CalendarDays}>
-            <input
-              className="field-bare"
-              type="date"
-              value={form.visitDate}
-              onChange={(e) => setForm({ ...form, visitDate: e.target.value })}
-            />
-          </IconField>
-          <p className="text-xs mt-1" style={{ color: MUTED }}>
-            {t.visitDateHint}
-          </p>
-        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label>{t.visitDateLabel}</label>
+            <IconField icon={CalendarDays}>
+              <input
+                className="field-bare"
+                type="date"
+                value={form.visitDate}
+                onChange={(e) => setForm({ ...form, visitDate: e.target.value })}
+              />
+            </IconField>
+            <p className="text-xs mt-1" style={{ color: MUTED }}>
+              {t.visitDateHint}
+            </p>
+          </div>
 
-        <div>
-          <label>{t.callDateLabel}</label>
-          <IconField icon={PhoneCall}>
-            <input
-              className="field-bare"
-              type="datetime-local"
-              value={form.callDateTime}
-              onChange={(e) => setForm({ ...form, callDateTime: e.target.value, notified: false })}
-            />
-          </IconField>
-          <p className="text-xs mt-1" style={{ color: MUTED }}>
-            {t.callDateHint}
-          </p>
+          <div>
+            <label>{t.callDateLabel}</label>
+            <IconField icon={PhoneCall}>
+              <input
+                className="field-bare"
+                type="datetime-local"
+                value={form.callDateTime}
+                onChange={(e) => setForm({ ...form, callDateTime: e.target.value, notified: false })}
+              />
+            </IconField>
+            <p className="text-xs mt-1" style={{ color: MUTED }}>
+              {t.callDateHint}
+            </p>
+          </div>
         </div>
       </CollapsibleSection>
 
