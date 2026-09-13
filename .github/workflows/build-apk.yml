@@ -73,6 +73,13 @@ jobs:
               <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />' \
             android/app/src/main/AndroidManifest.xml
 
+          sed -i '/<application/i\
+              <queries>\
+                  <package android:name="com.whatsapp.w4b" />\
+                  <package android:name="com.whatsapp" />\
+              </queries>' \
+            android/app/src/main/AndroidManifest.xml
+
           sed -i 's/<application/<application\n        android:largeHeap="true"/' \
             android/app/src/main/AndroidManifest.xml
 
