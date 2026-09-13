@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, setPersistence, inMemoryPersistence } from "firebase/auth";
+import { getAuth, initializeAuth, inMemoryPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 /* ---------------------------------------------------------------
@@ -27,21 +27,30 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
 
 // نسخة الويندوز (Electron) بتستخدم نفس البروفايل/التخزين بين كل تشغيلة
 // وبعدها، فتسجيل الدخول كان بيفضل محفوظ ويدخل على طول من غير ما يطلب
-// إيميل وباسورد تاني. هنا بنجبر التطبيق إنه ميتفكرش تسجيل الدخول خالص
-// لما يشتغل جوه Electron، فكل مرة تتفتح بتطلب تسجيل دخول من جديد.
+// إيميل وباسورد تاني. الحل القديم كان بيستخدم getAuth() ثم setPersistence()
+// بعده — بس getAuth() بيبدأ فورًا يدور على جلسة محفوظة قبل ما سطر
+// setPersistence يتنفذ (لأنه Async)، فكان أحيانًا يلحق يرجّع الجلسة القديمة
+// ويفتح على البيانات قبل ما الإصلاح يمنعه. هنا بنستخدم initializeAuth() من
+// الأول ونحدد نوع التخزين وهو بيتبني، عشان Electron ميدورش على أي جلسة
+// محفوظة خالص من البداية، وكل مرة تتفتح بتطلب تسجيل دخول من جديد فعليًا.
 // نسخة المتصفح والموبايل مبتتأثرش وفاضلة تفتكر تسجيل الدخول زي العادة.
 //
 // The Windows (Electron) build reuses the same on-disk profile between
 // launches, so a previous login was staying remembered and skipping the
-// email/password screen entirely. Force no persistence at all when running
-// inside Electron so it always asks to sign in again. The browser and
-// mobile builds are untouched and keep remembering the session as before.
+// email/password screen entirely. The old fix called getAuth() then
+// setPersistence() afterward — but getAuth() immediately starts restoring
+// any persisted session, and since setPersistence() is async, that restore
+// could finish first and let the old session through before the fix took
+// effect. Using initializeAuth() with the persistence set up front means
+// Electron never reads a stored session in the first place, so it reliably
+// asks to sign in again on every launch. The browser and mobile builds are
+// untouched and keep remembering the session as before.
 const isElectron = typeof navigator !== "undefined" && /electron/i.test(navigator.userAgent || "");
-if (isElectron) {
-  setPersistence(auth, inMemoryPersistence).catch(() => {});
-}
+export const auth = isElectron
+  ? initializeAuth(app, { persistence: inMemoryPersistence })
+  : getAuth(app);
+
+export const db = getFirestore(app);
