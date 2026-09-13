@@ -19,7 +19,7 @@ import SupplierFilterSheet from "./SupplierFilterSheet";
 import PendingEditsSheet from "./PendingEditsSheet";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, SUCCESS, GOLD, GOLD_SOFT, LINE, SURFACE,
-  parseTagsCell,
+  parseTagsCell, buildWhatsAppLink,
 } from "../constants";
 import { db } from "../firebase";
 import { doc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
@@ -269,7 +269,7 @@ export function SuppliersListScreen({
                 )}
                 {s.phone && (
                   <a
-                    href={`https://wa.me/${s.phone.replace(/[^0-9]/g, "")}`}
+                    href={buildWhatsAppLink(s.phone)}
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}

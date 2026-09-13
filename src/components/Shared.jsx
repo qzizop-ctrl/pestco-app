@@ -13,7 +13,7 @@ import {
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
   STATUS_COLORS, STALE_ACTIVITY_DAYS,
-  stageColor, visitStatus, fmtReminder, isStaleCustomer,
+  stageColor, visitStatus, fmtReminder, isStaleCustomer, buildWhatsAppLink,
 } from "../constants";
 
 // Loading placeholder shown instead of a plain "loading..." line while
@@ -288,7 +288,7 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
             )}
             {visit.phone && (
               <a
-                href={`https://wa.me/${visit.phone.replace(/[^0-9]/g, "")}`}
+                href={buildWhatsAppLink(visit.phone)}
                 target="_blank"
                 rel="noreferrer"
                 onClick={stop(() => {})}

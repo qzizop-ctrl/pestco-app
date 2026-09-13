@@ -9,7 +9,7 @@ import {
   PRIMARY_MID, TEXT, MUTED, DANGER, SUCCESS, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
   STATUS_COLORS, STAGE_IDS, CURRENCY_IDS, OFFER_STATUS_IDS, ACTIVITY_COLORS,
   stageColor, offerStatusColor, visitStatus, getVisitEvents,
-  fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney,
+  fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney, buildWhatsAppLink,
 } from "../constants";
 import { mapsUrl } from "../geo";
 import { db } from "../firebase";
@@ -418,7 +418,7 @@ export default function CustomerDetailScreen({
           </a>
           {active.phone && (
             <a
-              href={`https://wa.me/${active.phone.replace(/[^0-9]/g, "")}`}
+              href={buildWhatsAppLink(active.phone)}
               target="_blank"
               rel="noreferrer"
               className="flex items-center justify-between"
