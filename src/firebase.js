@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, setPersistence, inMemoryPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 /* ---------------------------------------------------------------
@@ -29,3 +29,19 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// نسخة الويندوز (Electron) بتستخدم نفس البروفايل/التخزين بين كل تشغيلة
+// وبعدها، فتسجيل الدخول كان بيفضل محفوظ ويدخل على طول من غير ما يطلب
+// إيميل وباسورد تاني. هنا بنجبر التطبيق إنه ميتفكرش تسجيل الدخول خالص
+// لما يشتغل جوه Electron، فكل مرة تتفتح بتطلب تسجيل دخول من جديد.
+// نسخة المتصفح والموبايل مبتتأثرش وفاضلة تفتكر تسجيل الدخول زي العادة.
+//
+// The Windows (Electron) build reuses the same on-disk profile between
+// launches, so a previous login was staying remembered and skipping the
+// email/password screen entirely. Force no persistence at all when running
+// inside Electron so it always asks to sign in again. The browser and
+// mobile builds are untouched and keep remembering the session as before.
+const isElectron = typeof navigator !== "undefined" && /electron/i.test(navigator.userAgent || "");
+if (isElectron) {
+  setPersistence(auth, inMemoryPersistence).catch(() => {});
+}
