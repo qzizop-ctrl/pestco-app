@@ -4,6 +4,8 @@
 // truth for colors, labels, and data-shape helpers without duplicating them.
 // ============================================================================
 
+import { Capacitor } from "@capacitor/core";
+
 export const PRIMARY = "#0F2E5E";
 export const PRIMARY_MID = "#2A5FA8";
 export const BG = "var(--bg)";
@@ -46,6 +48,9 @@ export const STRINGS = {
     dueCalls: (n) => `عندك ${n} متابعة مستحقة`,
     searchPlaceholder: "ابحث بالشركة أو المسؤول أو الرقم أو الملاحظات أو التاريخ",
     loading: "جارِ التحميل...",
+    updateRequiredTitle: "في نسخة أحدث من التطبيق",
+    updateRequiredMessage: "النسخة اللي عندك قديمة ومحتاج تحدّثها عشان تقدر تكمل استخدام التطبيق.",
+    updateRequiredButton: "تحميل النسخة الجديدة",
     noVisits: "لا توجد زيارات بعد",
     noVisitsHint: 'اضغط على "عميل جديد" لإضافة أول عميل',
     newVisit: "عميل جديد",
@@ -431,6 +436,9 @@ export const STRINGS = {
     dueCalls: (n) => `You have ${n} follow-up${n === 1 ? "" : "s"} due`,
     searchPlaceholder: "Search by company, contact, phone, notes or date",
     loading: "Loading...",
+    updateRequiredTitle: "A newer version is available",
+    updateRequiredMessage: "The version you're using is out of date. Please update to keep using the app.",
+    updateRequiredButton: "Download the new version",
     noVisits: "No visits yet",
     noVisitsHint: 'Tap "New Customer" to add your first client',
     newVisit: "New Customer",
@@ -1143,6 +1151,24 @@ export function corePhoneDigits(phone) {
   if (d.startsWith("20") && d.length > 10) d = d.slice(2);
   if (d.startsWith("0")) d = d.slice(1);
   return d;
+}
+
+// Builds the href for a customer/supplier's WhatsApp button. A plain
+// wa.me/whatsapp:// link can't specify which WhatsApp app should handle it —
+// when both WhatsApp and WhatsApp Business are installed, Android just shows
+// its normal app-picker (or falls back to whichever is set as default).
+// On the native Android build only, we instead use an explicit Android
+// intent:// URI naming WhatsApp Business's package (com.whatsapp.w4b), which
+// opens it directly with no picker — this only works because intent URIs
+// support targeting a package by name; wa.me links don't. Web, iOS, and the
+// Windows/Electron build have no equivalent way to target a specific app, so
+// they keep using the regular wa.me link and let the OS decide.
+export function buildWhatsAppLink(phone) {
+  const digits = (phone || "").replace(/[^0-9]/g, "");
+  if (Capacitor.getPlatform() === "android") {
+    return `intent://send?phone=${digits}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;end`;
+  }
+  return `https://wa.me/${digits}`;
 }
 
 // Normalizes a company name for duplicate-matching (trim, lowercase, collapse spaces)
