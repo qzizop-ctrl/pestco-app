@@ -8,10 +8,11 @@
 // self-contained chunk out of the single giant App.jsx file.
 // ============================================================================
 
-import React from "react";
-import { Search, Tag, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2, Package } from "lucide-react";
+import React, { useState } from "react";
+import { Search, SlidersHorizontal, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2 } from "lucide-react";
 import { TagChip, SkeletonList } from "./Shared";
 import { FormSection } from "./CustomerForm";
+import SupplierFilterSheet from "./SupplierFilterSheet";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
   parseTagsCell,
@@ -22,6 +23,7 @@ export function SuppliersListScreen({
   canEdit,
   supplierQuery,
   setSupplierQuery,
+  totalSuppliers,
   allSupplierTags,
   supplierTagFilter,
   setSupplierTagFilter,
@@ -34,99 +36,78 @@ export function SuppliersListScreen({
   openEditSupplier,
   openNewSupplier,
 }) {
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchActive = searchFocused || supplierQuery.length > 0;
+
+  const activeFilterCount =
+    (supplierCategoryFilter !== "all" ? 1 : 0) +
+    (supplierTagFilter !== "all" ? 1 : 0);
+
   return (
     <div className="px-4 pt-4 pb-24">
-      <div className="relative mb-4">
-        <Search
-          size={16}
-          color={MUTED}
-          style={{ position: "absolute", [t.dir === "rtl" ? "right" : "left"]: 12, top: "50%", transform: "translateY(-50%)" }}
-        />
-        <input
-          value={supplierQuery}
-          onChange={(e) => setSupplierQuery(e.target.value)}
-          placeholder={t.searchSuppliersPlaceholder}
-          style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
-        />
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            color={MUTED}
+            style={{ position: "absolute", [t.dir === "rtl" ? "right" : "left"]: 12, top: "50%", transform: "translateY(-50%)" }}
+          />
+          <input
+            value={supplierQuery}
+            onChange={(e) => setSupplierQuery(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder={t.searchSuppliersPlaceholder}
+            style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
+          />
+        </div>
+        <button
+          onClick={() => setFilterSheetOpen(true)}
+          className="btn-press flex items-center justify-center gap-1 font-bold text-xs flex-shrink-0"
+          style={{
+            position: "relative",
+            border: `1.4px solid ${activeFilterCount > 0 ? PRIMARY : LINE}`,
+            background: activeFilterCount > 0 ? PRIMARY : SURFACE,
+            color: activeFilterCount > 0 ? "#fff" : MUTED,
+            borderRadius: 14,
+            height: 44,
+            overflow: "hidden",
+            transition: "max-width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease",
+            maxWidth: searchActive ? 0 : 120,
+            padding: searchActive ? "0" : "0 14px",
+            opacity: searchActive ? 0 : 1,
+            pointerEvents: searchActive ? "none" : "auto",
+          }}
+        >
+          <SlidersHorizontal size={15} />
+          {t.filtersBtn}
+          {activeFilterCount > 0 && (
+            <span
+              className="text-xs font-extrabold flex items-center justify-center"
+              style={{
+                background: GOLD, color: "#fff", borderRadius: 999,
+                minWidth: 16, height: 16, padding: "0 4px",
+              }}
+            >
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
       </div>
 
-      {allSupplierTags.length > 0 && (
-        <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
-          <button
-            onClick={() => setSupplierTagFilter("all")}
-            className="btn-press font-bold text-xs flex items-center gap-1"
-            style={{
-              flexShrink: 0,
-              padding: "8px 16px",
-              borderRadius: 999,
-              border: `1.4px solid ${supplierTagFilter === "all" ? PRIMARY : LINE}`,
-              background: supplierTagFilter === "all" ? PRIMARY : SURFACE,
-              color: supplierTagFilter === "all" ? "#fff" : MUTED,
-            }}
-          >
-            <Tag size={12} /> {t.supplierTagsAll}
-          </button>
-          {allSupplierTags.map((tag) => {
-            const isActive = supplierTagFilter === tag;
-            return (
-              <button
-                key={tag}
-                onClick={() => setSupplierTagFilter(tag)}
-                className="btn-press font-bold text-xs"
-                style={{
-                  flexShrink: 0,
-                  padding: "8px 16px",
-                  borderRadius: 999,
-                  border: `1.4px solid ${isActive ? GOLD : LINE}`,
-                  background: isActive ? GOLD : SURFACE,
-                  color: isActive ? "#fff" : MUTED,
-                }}
-              >
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {allSupplierCategories.length > 0 && (
-        <div className="flex items-center gap-2 mb-4" style={{ overflowX: "auto" }}>
-          <button
-            onClick={() => setSupplierCategoryFilter("all")}
-            className="btn-press font-bold text-xs flex items-center gap-1"
-            style={{
-              flexShrink: 0,
-              padding: "8px 16px",
-              borderRadius: 999,
-              border: `1.4px solid ${supplierCategoryFilter === "all" ? PRIMARY_MID : LINE}`,
-              background: supplierCategoryFilter === "all" ? PRIMARY_MID : SURFACE,
-              color: supplierCategoryFilter === "all" ? "#fff" : MUTED,
-            }}
-          >
-            <Package size={12} /> {t.supplierCategoryAll}
-          </button>
-          {allSupplierCategories.map((category) => {
-            const isActive = supplierCategoryFilter === category;
-            return (
-              <button
-                key={category}
-                onClick={() => setSupplierCategoryFilter(category)}
-                className="btn-press font-bold text-xs"
-                style={{
-                  flexShrink: 0,
-                  padding: "8px 16px",
-                  borderRadius: 999,
-                  border: `1.4px solid ${isActive ? PRIMARY_MID : LINE}`,
-                  background: isActive ? PRIMARY_MID : SURFACE,
-                  color: isActive ? "#fff" : MUTED,
-                }}
-              >
-                {category}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <SupplierFilterSheet
+        t={t}
+        open={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        totalSuppliers={totalSuppliers}
+        allSupplierCategories={allSupplierCategories}
+        supplierCategoryFilter={supplierCategoryFilter}
+        setSupplierCategoryFilter={setSupplierCategoryFilter}
+        allSupplierTags={allSupplierTags}
+        supplierTagFilter={supplierTagFilter}
+        setSupplierTagFilter={setSupplierTagFilter}
+      />
 
       {!suppliersLoaded && <SkeletonList count={4} />}
 

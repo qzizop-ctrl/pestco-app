@@ -7,7 +7,7 @@
 // or Excel changed; only the JSX moved.
 // ============================================================================
 
-import React from "react";
+import React, { useState } from "react";
 import { Copy, Trash2, Download, Upload, UserCheck, Eye, X } from "lucide-react";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
@@ -39,12 +39,20 @@ export default function SettingsScreen({
   importing,
   fileInputRef,
   handleImportFile,
+  exportSuppliersAllToExcel,
+  exportSuppliersFilteredToExcel,
+  filteredSuppliersCount,
+  triggerSupplierImportPicker,
+  importingSuppliers,
+  supplierFileInputRef,
+  handleImportSupplierFile,
   newMemberEmail,
   setNewMemberEmail,
   newMemberRole,
   setNewMemberRole,
   grantAccess,
 }) {
+  const [exportTab, setExportTab] = useState("customers");
   return (
     <div className="px-4 pt-4 pb-24">
       {availableOwners.length > 1 && (
@@ -199,61 +207,156 @@ export default function SettingsScreen({
         <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
           <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
 
-          <button
-            onClick={exportAllToExcel}
-            className="btn-press flex items-center justify-center gap-2 font-bold"
-            style={{
-              background: PRIMARY_MID,
-              color: "#fff",
-              borderRadius: 14,
-              padding: "12px 0",
-              width: "100%",
-              marginBottom: 10,
-            }}
-          >
-            <Download size={16} /> {t.exportAllBtn}
-          </button>
+          {/* مفتاح تبديل بدل ما نضيف صف أزرار تاني ثابت — بيبان بس أزرار
+              التبويب المختار، فمساحة الكارت بتفضل زي ما هي. */}
+          <div className="flex items-center" style={{ background: SURFACE_SUBTLE, borderRadius: 999, padding: 3, marginBottom: 14 }}>
+            <button
+              onClick={() => setExportTab("customers")}
+              className="btn-press font-bold"
+              style={{
+                flex: 1,
+                fontSize: 12,
+                padding: "7px 0",
+                borderRadius: 999,
+                background: exportTab === "customers" ? PRIMARY_MID : "transparent",
+                color: exportTab === "customers" ? "#fff" : MUTED,
+              }}
+            >
+              {t.exportTabCustomers}
+            </button>
+            <button
+              onClick={() => setExportTab("suppliers")}
+              className="btn-press font-bold"
+              style={{
+                flex: 1,
+                fontSize: 12,
+                padding: "7px 0",
+                borderRadius: 999,
+                background: exportTab === "suppliers" ? PRIMARY_MID : "transparent",
+                color: exportTab === "suppliers" ? "#fff" : MUTED,
+              }}
+            >
+              {t.exportTabSuppliers}
+            </button>
+          </div>
 
-          <button
-            onClick={exportFilteredToExcel}
-            className="btn-press flex items-center justify-center gap-2 font-bold"
-            style={{
-              background: SURFACE,
-              border: `1px solid ${PRIMARY_MID}`,
-              color: PRIMARY_MID,
-              borderRadius: 14,
-              padding: "12px 0",
-              width: "100%",
-              marginBottom: 10,
-            }}
-          >
-            <Download size={16} /> {t.exportFilteredBtn(filteredCount)}
-          </button>
+          {exportTab === "customers" ? (
+            <>
+              <button
+                onClick={exportAllToExcel}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: PRIMARY_MID,
+                  color: "#fff",
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  marginBottom: 10,
+                }}
+              >
+                <Download size={16} /> {t.exportAllBtn}
+              </button>
 
-          <button
-            onClick={triggerImportPicker}
-            disabled={importing}
-            className="btn-press flex items-center justify-center gap-2 font-bold"
-            style={{
-              background: SURFACE,
-              border: `1px solid ${PRIMARY_MID}`,
-              color: PRIMARY_MID,
-              borderRadius: 14,
-              padding: "12px 0",
-              width: "100%",
-              opacity: importing ? 0.6 : 1,
-            }}
-          >
-            <Upload size={16} /> {importing ? t.importing : t.importBtn}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleImportFile}
-            style={{ display: "none" }}
-          />
-          <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importHint}</p>
+              <button
+                onClick={exportFilteredToExcel}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: SURFACE,
+                  border: `1px solid ${PRIMARY_MID}`,
+                  color: PRIMARY_MID,
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  marginBottom: 10,
+                }}
+              >
+                <Download size={16} /> {t.exportFilteredBtn(filteredCount)}
+              </button>
+
+              <button
+                onClick={triggerImportPicker}
+                disabled={importing}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: SURFACE,
+                  border: `1px solid ${PRIMARY_MID}`,
+                  color: PRIMARY_MID,
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  opacity: importing ? 0.6 : 1,
+                }}
+              >
+                <Upload size={16} /> {importing ? t.importing : t.importBtn}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleImportFile}
+                style={{ display: "none" }}
+              />
+              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importHint}</p>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={exportSuppliersAllToExcel}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: PRIMARY_MID,
+                  color: "#fff",
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  marginBottom: 10,
+                }}
+              >
+                <Download size={16} /> {t.exportSuppliersAllBtn}
+              </button>
+
+              <button
+                onClick={exportSuppliersFilteredToExcel}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: SURFACE,
+                  border: `1px solid ${PRIMARY_MID}`,
+                  color: PRIMARY_MID,
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  marginBottom: 10,
+                }}
+              >
+                <Download size={16} /> {t.exportSuppliersFilteredBtn(filteredSuppliersCount)}
+              </button>
+
+              <button
+                onClick={triggerSupplierImportPicker}
+                disabled={importingSuppliers}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: SURFACE,
+                  border: `1px solid ${PRIMARY_MID}`,
+                  color: PRIMARY_MID,
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  opacity: importingSuppliers ? 0.6 : 1,
+                }}
+              >
+                <Upload size={16} /> {importingSuppliers ? t.importingSuppliers : t.importSuppliersBtn}
+              </button>
+              <input
+                ref={supplierFileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleImportSupplierFile}
+                style={{ display: "none" }}
+              />
+              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.importSuppliersHint}</p>
+            </>
+          )}
         </div>
       )}
 
