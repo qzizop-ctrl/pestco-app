@@ -270,9 +270,11 @@ export function SuppliersListScreen({
                 {s.phone && (
                   <a
                     href={buildWhatsAppLink(s.phone)}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      window.location.href = buildWhatsAppLink(s.phone);
+                    }}
                     className="btn-press flex items-center justify-center"
                     style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
                     aria-label={t.whatsapp}

@@ -289,9 +289,11 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
             {visit.phone && (
               <a
                 href={buildWhatsAppLink(visit.phone)}
-                target="_blank"
-                rel="noreferrer"
-                onClick={stop(() => {})}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  window.location.href = buildWhatsAppLink(visit.phone);
+                }}
                 className="btn-press flex items-center justify-center"
                 style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
                 aria-label={t.whatsapp}

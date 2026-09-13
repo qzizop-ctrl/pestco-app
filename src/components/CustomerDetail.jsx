@@ -419,8 +419,10 @@ export default function CustomerDetailScreen({
           {active.phone && (
             <a
               href={buildWhatsAppLink(active.phone)}
-              target="_blank"
-              rel="noreferrer"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.href = buildWhatsAppLink(active.phone);
+              }}
               className="flex items-center justify-between"
               style={{ color: "#25A245", textDecoration: "none" }}
             >
