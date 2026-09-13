@@ -11,7 +11,7 @@ import {
   Settings, LayoutDashboard, Users as UsersIcon, Truck, Shield,
 } from "lucide-react";
 import {
-  PRIMARY, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
+  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
   STATUS_COLORS, STALE_ACTIVITY_DAYS,
   stageColor, visitStatus, fmtReminder, isStaleCustomer,
 } from "../constants";
@@ -276,11 +276,15 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
 });
 
 export function BottomNav({ screen, setScreen, t, isOwnerAccount }) {
+  // كل قسم رئيسي له لون تمييز خاص بيه بدل ما الكل يستخدم نفس الكحلي —
+  // بيسهّل على المستخدم يميّز القسم اللي هو فيه بنظرة واحدة على الشريط
+  // السفلي، ونفس الألوان دي بتتكرر في هوية كل قسم (الذهبي مربوط أصلاً
+  // بالموردين/التثبيت، والأزرق المتوسط مربوط بالعملاء).
   const items = [
-    { id: "dashboard", label: t.navDashboard, icon: LayoutDashboard },
-    { id: "list", label: t.navCustomers, icon: UsersIcon },
-    { id: "suppliers", label: t.navSuppliers, icon: Truck },
-    ...(isOwnerAccount ? [{ id: "settings", label: t.navSettings, icon: Settings }] : []),
+    { id: "dashboard", label: t.navDashboard, icon: LayoutDashboard, activeColor: PRIMARY },
+    { id: "list", label: t.navCustomers, icon: UsersIcon, activeColor: PRIMARY_MID },
+    { id: "suppliers", label: t.navSuppliers, icon: Truck, activeColor: GOLD },
+    ...(isOwnerAccount ? [{ id: "settings", label: t.navSettings, icon: Settings, activeColor: PRIMARY }] : []),
   ];
   return (
     <div
@@ -296,14 +300,14 @@ export function BottomNav({ screen, setScreen, t, isOwnerAccount }) {
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      {items.map(({ id, label, icon: Icon }) => {
+      {items.map(({ id, label, icon: Icon, activeColor }) => {
         const isActive = screen === id;
         return (
           <button
             key={id}
             onClick={() => setScreen(id)}
             className="btn-press flex-1 flex flex-col items-center gap-1"
-            style={{ padding: "10px 0 8px", color: isActive ? PRIMARY : MUTED }}
+            style={{ padding: "10px 0 8px", color: isActive ? activeColor : MUTED }}
           >
             <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
             <span className="text-xs font-bold">{label}</span>

@@ -6,7 +6,7 @@ import {
 import { TagChip } from "./Shared";
 import SupplierPickerSheet from "./SupplierPickerSheet";
 import {
-  PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
+  PRIMARY_MID, TEXT, MUTED, DANGER, SUCCESS, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
   STATUS_COLORS, STAGE_IDS, CURRENCY_IDS, OFFER_STATUS_IDS, ACTIVITY_COLORS,
   stageColor, offerStatusColor, visitStatus, getVisitEvents,
   fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney,
@@ -208,7 +208,7 @@ export default function CustomerDetailScreen({
               onClick={handleRestoreDeleted}
               disabled={loadingAction}
               className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
-              style={{ background: "#059669", color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
+              style={{ background: SUCCESS, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
             >
               <RotateCcw size={14} /> {t.restoreCustomerBtn}
             </button>
@@ -313,7 +313,7 @@ export default function CustomerDetailScreen({
               onClick={handleApprove}
               disabled={loadingAction}
               className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
-              style={{ background: "#059669", color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
+              style={{ background: SUCCESS, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
             >
               <Check size={14} /> اعتماد (تنظيف المساحة)
             </button>

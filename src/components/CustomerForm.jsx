@@ -20,7 +20,7 @@ import {
 // own border/background gets stripped and only the wrapper's border shows.
 // `top` aligns the icon to the top instead of centering it, for the
 // multi-line notes textarea.
-function IconField({ icon: Icon, top, children }) {
+export function IconField({ icon: Icon, top, children }) {
   return (
     <div className={`icon-field${top ? " icon-field-top" : ""}`}>
       <Icon size={17} color={MUTED} style={{ flexShrink: 0, marginTop: top ? 2 : 0 }} />

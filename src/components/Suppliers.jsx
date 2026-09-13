@@ -9,9 +9,12 @@
 // ============================================================================
 
 import React, { useState } from "react";
-import { Search, SlidersHorizontal, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2 } from "lucide-react";
+import {
+  Search, SlidersHorizontal, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2,
+  Building2, User, Package, Tag, StickyNote,
+} from "lucide-react";
 import { TagChip, SkeletonList } from "./Shared";
-import { FormSection } from "./CustomerForm";
+import { FormSection, IconField } from "./CustomerForm";
 import SupplierFilterSheet from "./SupplierFilterSheet";
 import {
   PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
@@ -279,53 +282,68 @@ export function SupplierFormScreen({
       <FormSection title={t.formSectionBasic} first>
         <div>
           <label>{t.supplierNameLabel}</label>
-          <input
-            value={supplierForm.name}
-            onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
-            placeholder={t.supplierNamePlaceholder}
-          />
+          <IconField icon={Building2}>
+            <input
+              className="field-bare"
+              value={supplierForm.name}
+              onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })}
+              placeholder={t.supplierNamePlaceholder}
+            />
+          </IconField>
           {supplierErrors.name && <p className="text-xs mt-1" style={{ color: DANGER }}>{supplierErrors.name}</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label>{t.supplierContactLabel}</label>
-            <input
-              value={supplierForm.contactName}
-              onChange={(e) => setSupplierForm({ ...supplierForm, contactName: e.target.value })}
-              placeholder={t.supplierContactPlaceholder}
-            />
+            <IconField icon={User}>
+              <input
+                className="field-bare"
+                value={supplierForm.contactName}
+                onChange={(e) => setSupplierForm({ ...supplierForm, contactName: e.target.value })}
+                placeholder={t.supplierContactPlaceholder}
+              />
+            </IconField>
           </div>
 
           <div>
             <label>{t.phoneLabel}</label>
-            <input
-              type="tel"
-              value={supplierForm.phone}
-              onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
-              placeholder={t.phonePlaceholder}
-            />
+            <IconField icon={Phone}>
+              <input
+                className="field-bare"
+                type="tel"
+                value={supplierForm.phone}
+                onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })}
+                placeholder={t.phonePlaceholder}
+              />
+            </IconField>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label>{t.emailLabel}</label>
-            <input
-              type="email"
-              value={supplierForm.email}
-              onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })}
-              placeholder={t.emailPlaceholder}
-            />
+            <IconField icon={Mail}>
+              <input
+                className="field-bare"
+                type="email"
+                value={supplierForm.email}
+                onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })}
+                placeholder={t.emailPlaceholder}
+              />
+            </IconField>
           </div>
 
           <div>
             <label>{t.supplierCategoryLabel}</label>
-            <input
-              value={supplierForm.category}
-              onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
-              placeholder={t.supplierCategoryPlaceholder}
-            />
+            <IconField icon={Package}>
+              <input
+                className="field-bare"
+                value={supplierForm.category}
+                onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}
+                placeholder={t.supplierCategoryPlaceholder}
+              />
+            </IconField>
           </div>
         </div>
       </FormSection>
@@ -333,11 +351,14 @@ export function SupplierFormScreen({
       <FormSection title={t.formSectionClassification}>
         <div>
           <label>{t.supplierTagsLabel}</label>
-          <input
-            value={supplierForm.tagsInput}
-            onChange={(e) => setSupplierForm({ ...supplierForm, tagsInput: e.target.value })}
-            placeholder={t.supplierTagsPlaceholder}
-          />
+          <IconField icon={Tag}>
+            <input
+              className="field-bare"
+              value={supplierForm.tagsInput}
+              onChange={(e) => setSupplierForm({ ...supplierForm, tagsInput: e.target.value })}
+              placeholder={t.supplierTagsPlaceholder}
+            />
+          </IconField>
           {parseTagsCell(supplierForm.tagsInput).length > 0 && (
             <div className="flex items-center flex-wrap gap-1 mt-2">
               {parseTagsCell(supplierForm.tagsInput).map((tag) => (
@@ -351,12 +372,15 @@ export function SupplierFormScreen({
       <FormSection title={t.formSectionNotes}>
         <div>
           <label>{t.supplierNotesLabel}</label>
-          <textarea
-            rows={5}
-            value={supplierForm.notes}
-            onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
-            placeholder={t.notesPlaceholder}
-          />
+          <IconField icon={StickyNote} top>
+            <textarea
+              className="field-bare"
+              rows={5}
+              value={supplierForm.notes}
+              onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })}
+              placeholder={t.notesPlaceholder}
+            />
+          </IconField>
         </div>
       </FormSection>
      </div>
