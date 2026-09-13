@@ -13,6 +13,7 @@ export const CARD_BG = "var(--surface)";
 export const TEXT = "var(--text)";
 export const MUTED = "var(--muted)";
 export const DANGER = "#B3401F";
+export const SUCCESS = "#2F9E58";
 export const GOLD = "#C08A3E";
 export const GOLD_SOFT = "#F3E6D0";
 export const LINE = "var(--line)";
