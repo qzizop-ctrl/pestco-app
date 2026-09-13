@@ -211,6 +211,17 @@ export const STRINGS = {
     exportAllBtn: "تصدير كل العملاء (إكسيل)",
     exportFilteredBtn: (n) => `تصدير النتائج المفلترة حاليًا (${n})`,
 
+    // Export/import tabs (customers vs suppliers) in Settings
+    exportTabCustomers: "العملاء",
+    exportTabSuppliers: "الموردين",
+    exportSuppliersAllBtn: "تصدير كل الموردين (إكسيل)",
+    exportSuppliersFilteredBtn: (n) => `تصدير الموردين المفلترين حاليًا (${n})`,
+    importSuppliersBtn: "استيراد موردين من ملف إكسيل",
+    importingSuppliers: "جارِ استيراد الموردين...",
+    importSuppliersHint: "الملف لازم يكون بنفس أعمدة ملف تصدير الموردين (اسم المورد، نوع البضاعة، إلخ). الصفوف هتتضاف كموردين جدد.",
+    importSuppliersSuccess: (n) => `تم استيراد ${n} مورد بنجاح`,
+    importSuppliersError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+
     // Member invite hint
     memberInviteHint: "لو الشخص ده لسه معملش حساب على التطبيق بنفس الإيميل ده، الصلاحية هتتفعل تلقائيًا أول ما يعمل تسجيل.",
 
@@ -569,6 +580,17 @@ export const STRINGS = {
     // Export
     exportAllBtn: "Export all customers (Excel)",
     exportFilteredBtn: (n) => `Export current filtered results (${n})`,
+
+    // Export/import tabs (customers vs suppliers) in Settings
+    exportTabCustomers: "Customers",
+    exportTabSuppliers: "Suppliers",
+    exportSuppliersAllBtn: "Export all suppliers (Excel)",
+    exportSuppliersFilteredBtn: (n) => `Export current filtered suppliers (${n})`,
+    importSuppliersBtn: "Import suppliers from Excel file",
+    importingSuppliers: "Importing suppliers...",
+    importSuppliersHint: "The file must use the same columns as the exported suppliers file (Supplier Name, Goods/Service Type, etc). Rows will be added as new suppliers.",
+    importSuppliersSuccess: (n) => `Successfully imported ${n} supplier${n === 1 ? "" : "s"}`,
+    importSuppliersError: "Something went wrong reading the file, please check the file format",
 
     // Member invite hint
     memberInviteHint: "If this person hasn't signed up with this email yet, their access will activate automatically as soon as they do.",

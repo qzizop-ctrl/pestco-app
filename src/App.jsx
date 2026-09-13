@@ -79,6 +79,7 @@ export default function App() {
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("viewer");
   const [importing, setImporting] = useState(false);
+  const [importingSuppliers, setImportingSuppliers] = useState(false);
   // True only while an actual Firestore write from the customer/supplier
   // save button is in flight — lets the save button show a "saving..."
   // state instead of looking unresponsive on a slow connection.
@@ -145,6 +146,7 @@ export default function App() {
   const [supplierTagFilter, setSupplierTagFilter] = useState("all");
   const [supplierCategoryFilter, setSupplierCategoryFilter] = useState("all");
   const fileInputRef = useRef(null);
+  const supplierFileInputRef = useRef(null);
 
   const t = STRINGS[lang];
   const isRootScreen = ROOT_SCREENS.includes(screen);
@@ -822,6 +824,117 @@ export default function App() {
     await writeExcel(filtered, "filtered");
   };
 
+  const suppliersToRows = (rows) =>
+    rows.map((s) => ({
+      [t.supplierNameLabel.replace(" *", "")]: s.name || "",
+      [t.supplierContactLabel]: s.contactName || "",
+      [t.supplierCategoryLabel]: s.category || "",
+      [t.supplierTagsLabel]: (s.tags || []).join(", "),
+      [t.phoneLabel]: s.phone || "",
+      [t.emailLabel]: s.email || "",
+      [t.supplierNotesLabel]: s.notes || "",
+    }));
+
+  const writeSuppliersExcel = async (rows, filenameSuffix) => {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet(suppliersToRows(rows));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Suppliers");
+    const fileName = `pestco_suppliers_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    if (Capacitor.isNativePlatform()) {
+      const { saveFileNative } = await import("./nativeFileSave");
+      const base64Data = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+      await saveFileNative(
+        fileName,
+        base64Data,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+    } else {
+      XLSX.writeFile(wb, fileName);
+    }
+  };
+
+  const exportSuppliersAllToExcel = async () => {
+    if (!canEdit) return;
+    await writeSuppliersExcel(suppliers, "all");
+  };
+
+  const exportSuppliersFilteredToExcel = async () => {
+    if (!canEdit) return;
+    await writeSuppliersExcel(filteredSuppliers, "filtered");
+  };
+
+  const triggerSupplierImportPicker = () => {
+    if (!canEdit) return;
+    if (!requireOnline()) return;
+    if (supplierFileInputRef.current) supplierFileInputRef.current.click();
+  };
+
+  const handleImportSupplierFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!canEdit) return;
+    if (!requireOnline()) return;
+    if (!file || !user || !ownerUid) return;
+
+    setImportingSuppliers(true);
+    try {
+      const XLSX = await import("xlsx");
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: "array", cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      const headerMap = {
+        name: [
+          STRINGS.ar.supplierNameLabel, STRINGS.en.supplierNameLabel,
+          STRINGS.ar.supplierNameLabel.replace(" *", ""), STRINGS.en.supplierNameLabel.replace(" *", ""),
+        ],
+        contactName: [STRINGS.ar.supplierContactLabel, STRINGS.en.supplierContactLabel],
+        category: [STRINGS.ar.supplierCategoryLabel, STRINGS.en.supplierCategoryLabel],
+        tags: [STRINGS.ar.supplierTagsLabel, STRINGS.en.supplierTagsLabel],
+        phone: [STRINGS.ar.phoneLabel, STRINGS.en.phoneLabel],
+        email: [STRINGS.ar.emailLabel, STRINGS.en.emailLabel],
+        notes: [STRINGS.ar.supplierNotesLabel, STRINGS.en.supplierNotesLabel],
+      };
+
+      const getField = (row, key) => {
+        for (const candidate of headerMap[key]) {
+          if (row[candidate] !== undefined && row[candidate] !== "") return row[candidate];
+        }
+        return "";
+      };
+
+      let count = 0;
+      for (const row of rows) {
+        const name = String(getField(row, "name") || "").trim();
+        const contactName = String(getField(row, "contactName") || "").trim();
+        if (!name && !contactName) continue;
+
+        const supplierData = {
+          name,
+          contactName,
+          category: String(getField(row, "category") || "").trim(),
+          tags: parseTagsCell(getField(row, "tags")),
+          phone: String(getField(row, "phone") || "").trim(),
+          email: String(getField(row, "email") || "").trim(),
+          notes: String(getField(row, "notes") || "").trim(),
+          isPinned: false,
+          createdAt: serverTimestamp(),
+        };
+
+        await addDoc(collection(db, "users", ownerUid, "suppliers"), supplierData);
+        count++;
+      }
+      showAlert(t.importSuppliersSuccess(count));
+    } catch (err) {
+      showAlert(t.importSuppliersError);
+    } finally {
+      setImportingSuppliers(false);
+    }
+  };
+
   const triggerImportPicker = () => {
     if (!canEdit) return;
     if (!requireOnline()) return;
@@ -1358,6 +1471,7 @@ export default function App() {
           canEdit={canEdit}
           supplierQuery={supplierQuery}
           setSupplierQuery={setSupplierQuery}
+          totalSuppliers={suppliers.length}
           allSupplierTags={allSupplierTags}
           supplierTagFilter={supplierTagFilter}
           setSupplierTagFilter={setSupplierTagFilter}
@@ -1413,6 +1527,13 @@ export default function App() {
           importing={importing}
           fileInputRef={fileInputRef}
           handleImportFile={handleImportFile}
+          exportSuppliersAllToExcel={exportSuppliersAllToExcel}
+          exportSuppliersFilteredToExcel={exportSuppliersFilteredToExcel}
+          filteredSuppliersCount={filteredSuppliers.length}
+          triggerSupplierImportPicker={triggerSupplierImportPicker}
+          importingSuppliers={importingSuppliers}
+          supplierFileInputRef={supplierFileInputRef}
+          handleImportSupplierFile={handleImportSupplierFile}
           newMemberEmail={newMemberEmail}
           setNewMemberEmail={setNewMemberEmail}
           newMemberRole={newMemberRole}
