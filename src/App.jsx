@@ -184,7 +184,7 @@ export default function App() {
   const {
     authChecked, user, authError, authErrorDebug, clearAuthError, ownerUid, availableOwners, permissionLoading,
     canEdit, isOwnerAccount, members,
-    pendingSignups, isReviewer, adminEmails, addAdminEmail, removeAdminEmail, reviewSignup, dismissSignup,
+    pendingSignups, isReviewer, isPrimaryAdmin, adminEmails, addAdminEmail, removeAdminEmail, reviewSignup, dismissSignup,
     switchOwnerWorkspace, grantAccess, revokeAccess,
   } = useWorkspace({ requireOnline, reportError: reportWorkspaceError, screen, setScreen, setActiveId });
 
@@ -1585,6 +1585,7 @@ export default function App() {
           revokeAccess={revokeAccess}
           pendingSignups={pendingSignups}
           isReviewer={isReviewer}
+          isPrimaryAdmin={isPrimaryAdmin}
           adminEmails={adminEmails}
           addAdminEmail={addAdminEmail}
           removeAdminEmail={removeAdminEmail}
