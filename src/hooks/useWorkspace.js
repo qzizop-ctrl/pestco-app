@@ -58,6 +58,12 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   // AuthScreen surfaces this as an "email not registered" style message
   // once we've signed the account back out. Cleared by clearAuthError().
   const [authError, setAuthError] = useState(false);
+  // TEMPORARY diagnostic: snapshot of exactly what this hook saw right
+  // before deciding to sign an account back out, so the reason is visible
+  // in the UI itself instead of guessing from Firebase console screenshots.
+  // Safe to delete this state and everywhere it's set/read once the real
+  // cause is found and fixed.
+  const [authErrorDebug, setAuthErrorDebug] = useState(null);
   const previousResolvedOwnerRef = useRef(null);
   const clearAuthError = () => setAuthError(false);
 
@@ -178,6 +184,15 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
           // signed in with no data and no way forward.
           if (!isReviewerEmail) {
             setAuthError(true);
+            // TEMPORARY diagnostic — see note above.
+            setAuthErrorDebug({
+              emailKey,
+              adminEmails,
+              isReviewerEmail,
+              externalOwnersCount: externalOwners.length,
+              accessByEmailDocExists: snap.exists(),
+              rawOwnersMap: ownersMap,
+            });
             signOut(auth).catch((e) => console.error("Sign-out for unauthorized account failed:", e));
           }
           return;
@@ -428,6 +443,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     authChecked,
     user,
     authError,
+    authErrorDebug,
     clearAuthError,
     ownerUid,
     availableOwners,
