@@ -300,6 +300,17 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     return () => unsub();
   }, [user]);
 
+  // The primary admin is whoever occupies the first slot in config/admins.emails
+  // — in practice the very first admin, hand-added in the Firebase console
+  // (see the comment above addAdminEmail). Every admin added afterwards from
+  // inside the app can add further admins, but only this one may remove any
+  // admin (including refusing to remove itself) — see removeAdminEmail below
+  // and the matching rule in firestore.rules.
+  const isPrimaryAdmin = Boolean(
+    user && adminEmails && adminEmails.length > 0
+      && adminEmails[0] === (user.email || "").trim().toLowerCase()
+  );
+
   const isReviewer = Boolean(
     user && adminEmails && adminEmails.includes((user.email || "").trim().toLowerCase())
   );
@@ -462,9 +473,16 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   };
 
   const removeAdminEmail = async (email) => {
-    if (!isReviewer) return;
+    // Only the primary admin may remove admins at all — any admin added
+    // from inside the app can add others, but not delete anyone (see the
+    // isPrimaryAdmin comment above and firestore.rules, which enforces this
+    // server-side too).
+    if (!isPrimaryAdmin) return;
     const cleanEmail = (email || "").trim().toLowerCase();
     if (!cleanEmail) return;
+    // The primary admin itself can never be removed, by itself or anyone
+    // else — it's the one fixed anchor the rest of the admin list depends on.
+    if (cleanEmail === adminEmails[0]) return;
     // Refuse to remove the last remaining admin — that would leave the
     // workspace with no one able to review signups or manage admins again
     // without going back into the Firebase console.
@@ -491,6 +509,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     members,
     pendingSignups,
     isReviewer,
+    isPrimaryAdmin,
     adminEmails,
     addAdminEmail,
     removeAdminEmail,
