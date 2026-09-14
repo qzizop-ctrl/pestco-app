@@ -30,6 +30,7 @@ export default function SettingsScreen({
   pendingSignups,
   isReviewer,
   isPrimaryAdmin,
+  primaryAdminEmail,
   adminEmails,
   addAdminEmail,
   removeAdminEmail,
@@ -213,8 +214,11 @@ export default function SettingsScreen({
           <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.adminsTitle}</p>
           <p className="text-xs mb-3" style={{ color: MUTED }}>{t.adminsHint}</p>
 
-          {(adminEmails || []).map((email, idx) => {
-            const isPrimary = idx === 0;
+          {(adminEmails || []).map((email) => {
+            // Match by the explicit primaryAdminEmail, not array position —
+            // relying on "whoever's first in the array" was the bug that
+            // let a newly added admin end up seeing the primary's email.
+            const isPrimary = primaryAdminEmail && email === primaryAdminEmail;
             // The primary admin's email is only ever shown to the primary
             // admin themself — everyone else just doesn't get this row at
             // all, per the request that it stay invisible to other admins.
