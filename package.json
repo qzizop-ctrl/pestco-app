@@ -24,6 +24,7 @@
     "@capacitor/filesystem": "^6.0.1",
     "@capacitor/local-notifications": "^6.1.0",
     "@capacitor/share": "^6.0.2",
+    "@sentry/react": "^8.35.0",
     "electron-updater": "^6.3.0",
     "firebase": "^10.12.2",
     "html2canvas": "^1.4.1",

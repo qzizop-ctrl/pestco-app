@@ -23,7 +23,9 @@ service cloud.firestore {
     }
 
     function isReviewer() {
-      return myEmail() == 'qzizop@gmail.com';
+      return hasEmail()
+        && exists(/databases/$(database)/documents/config/admins)
+        && myEmail() in get(/databases/$(database)/documents/config/admins).data.emails;
     }
 
     function isOwner(ownerUid) {
@@ -162,6 +164,23 @@ service cloud.firestore {
         && request.resource.data.email == myEmail();
 
       allow update: if false;
+    }
+
+
+    // ============================================================
+    // CONFIG (admin/reviewer list)
+    // ============================================================
+    // config/admins.emails replaces the old hardcoded REVIEWER_EMAIL — it's
+    // the list of accounts that can review signups and manage other admins
+    // (see isReviewer() above and src/hooks/useWorkspace.js). The very
+    // first entry has to be added by hand in the Firebase console (there's
+    // no admin yet to grant it from the app) — after that, any admin can
+    // add/remove others from Settings.
+    match /config/admins {
+
+      allow read: if hasEmail();
+
+      allow write: if isReviewer();
     }
 
 
