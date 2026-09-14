@@ -1,6 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import { initErrorReporting } from "./sentry";
+
+initErrorReporting();
 
 const rootEl = document.getElementById("root");
 

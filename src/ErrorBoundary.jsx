@@ -1,5 +1,6 @@
 import React from "react";
 import { AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
+import { reportException } from "./sentry";
 
 // Friendly copy for the two languages the app supports. Kept local (not in
 // constants.js/STRINGS) since this component has to render even if the rest
@@ -43,6 +44,7 @@ export default class ErrorBoundary extends React.Component {
     this.setState({ info });
     // Also log to the device console in case the person can pull logs later.
     console.error("App crashed:", error, info);
+    reportException(error, { componentStack: info?.componentStack });
   }
 
   render() {
