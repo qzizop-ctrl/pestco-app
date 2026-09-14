@@ -22,6 +22,10 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   // treating "not loaded" as "no admins" would incorrectly sign the real
   // admin back out on every fresh app open before this listener resolves.
   const [adminEmails, setAdminEmails] = useState(null);
+  // TEMPORARY diagnostic — see the note by authErrorDebug below. Lets us
+  // tell "server confirmed zero admins" apart from "the read itself
+  // failed/errored", which look identical if we only look at adminEmails.
+  const [adminsDocDebug, setAdminsDocDebug] = useState(null);
   useEffect(() => {
     const unsub = onSnapshot(
       doc(db, "config", "admins"),
@@ -41,8 +45,22 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
           .map((e) => String(e).trim().toLowerCase())
           .filter(Boolean);
         setAdminEmails(emails);
+        // TEMPORARY diagnostic
+        setAdminsDocDebug({
+          source: "server-confirmed-snapshot",
+          docExists: snap.exists(),
+          rawData: snap.data() || null,
+        });
       },
-      () => setAdminEmails([])
+      (error) => {
+        setAdminEmails([]);
+        // TEMPORARY diagnostic
+        setAdminsDocDebug({
+          source: "listener-error",
+          errorCode: error.code,
+          errorMessage: error.message,
+        });
+      }
     );
     return () => unsub();
   }, []);
@@ -188,6 +206,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
             setAuthErrorDebug({
               emailKey,
               adminEmails,
+              adminsDocDebug,
               isReviewerEmail,
               externalOwnersCount: externalOwners.length,
               accessByEmailDocExists: snap.exists(),
