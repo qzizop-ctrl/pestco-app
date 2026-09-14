@@ -22,6 +22,16 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   // treating "not loaded" as "no admins" would incorrectly sign the real
   // admin back out on every fresh app open before this listener resolves.
   const [adminEmails, setAdminEmails] = useState(null);
+  // The primary admin used to be inferred as "whichever email happens to
+  // sit first in the emails array" — fragile, since array order depends on
+  // exactly how/when the config/admins doc was hand-edited in the Firebase
+  // console, and a wrong guess here means the wrong account gets treated as
+  // primary (this caused a real bug: a newly added admin ended up seeing
+  // the actual primary's email). Now it's read from an explicit
+  // `primaryEmail` field on the same document, set by hand once in the
+  // console — no more guessing from position. `emails[0]` is kept only as
+  // a fallback for a doc that hasn't been migrated to have the field yet.
+  const [primaryAdminEmail, setPrimaryAdminEmail] = useState(null);
   // TEMPORARY diagnostic — see the note by authErrorDebug below. Lets us
   // tell "server confirmed zero admins" apart from "the read itself
   // failed/errored", which look identical if we only look at adminEmails.
@@ -43,6 +53,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     // subscription is made right after every sign-in.
     if (!user) {
       setAdminEmails(null);
+      setPrimaryAdminEmail(null);
       setAdminsDocDebug(null);
       return;
     }
@@ -54,9 +65,8 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
         // the server. On a device whose cache predates this doc existing
         // (or predates the current admin being added to it), that stale
         // cached read looks like "no admins" and was signing a legitimate
-        // admin account back out on every fresh app open, before the real
-        // server value ever had a chance to arrive. Wait for the confirmed
-        // read instead of acting on the cached one.
+        // admin account back out on every fresh app open. Wait for the
+        // confirmed read instead of acting on the cached one.
         if (snap.metadata.fromCache) {
           return;
         }
@@ -64,6 +74,11 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
           .map((e) => String(e).trim().toLowerCase())
           .filter(Boolean);
         setAdminEmails(emails);
+        // Explicit field wins; only fall back to "first in the array" for
+        // a doc that predates this field (see the comment on the state
+        // declaration above).
+        const explicitPrimary = String(snap.data()?.primaryEmail || "").trim().toLowerCase();
+        setPrimaryAdminEmail(explicitPrimary || emails[0] || null);
         // TEMPORARY diagnostic
         setAdminsDocDebug({
           source: "server-confirmed-snapshot",
@@ -73,6 +88,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       },
       (error) => {
         setAdminEmails([]);
+        setPrimaryAdminEmail(null);
         // TEMPORARY diagnostic
         setAdminsDocDebug({
           source: "listener-error",
@@ -300,15 +316,14 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     return () => unsub();
   }, [user]);
 
-  // The primary admin is whoever occupies the first slot in config/admins.emails
-  // — in practice the very first admin, hand-added in the Firebase console
-  // (see the comment above addAdminEmail). Every admin added afterwards from
-  // inside the app can add further admins, but only this one may remove any
-  // admin (including refusing to remove itself) — see removeAdminEmail below
-  // and the matching rule in firestore.rules.
+  // The primary admin is whoever's email matches config/admins.primaryEmail
+  // (see the comment on primaryAdminEmail above). Every admin added
+  // afterwards from inside the app can add further admins, but only this
+  // one may remove any admin (including refusing to remove itself) — see
+  // removeAdminEmail below and the matching rule in firestore.rules.
   const isPrimaryAdmin = Boolean(
-    user && adminEmails && adminEmails.length > 0
-      && adminEmails[0] === (user.email || "").trim().toLowerCase()
+    user && primaryAdminEmail
+      && primaryAdminEmail === (user.email || "").trim().toLowerCase()
   );
 
   const isReviewer = Boolean(
@@ -482,7 +497,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     if (!cleanEmail) return;
     // The primary admin itself can never be removed, by itself or anyone
     // else — it's the one fixed anchor the rest of the admin list depends on.
-    if (cleanEmail === adminEmails[0]) return;
+    if (cleanEmail === primaryAdminEmail) return;
     // Refuse to remove the last remaining admin — that would leave the
     // workspace with no one able to review signups or manage admins again
     // without going back into the Firebase console.
@@ -510,6 +525,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     pendingSignups,
     isReviewer,
     isPrimaryAdmin,
+    primaryAdminEmail,
     adminEmails,
     addAdminEmail,
     removeAdminEmail,
