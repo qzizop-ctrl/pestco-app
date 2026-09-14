@@ -29,6 +29,9 @@ export default function SettingsScreen({
   revokeAccess,
   pendingSignups,
   isReviewer,
+  adminEmails,
+  addAdminEmail,
+  removeAdminEmail,
   reviewSignup,
   dismissSignup,
   confirmAction,
@@ -53,6 +56,7 @@ export default function SettingsScreen({
   grantAccess,
 }) {
   const [exportTab, setExportTab] = useState("customers");
+  const [newAdminEmail, setNewAdminEmail] = useState("");
   return (
     <div className="px-4 pt-4 pb-24">
       {availableOwners.length > 1 && (
@@ -200,6 +204,60 @@ export default function SettingsScreen({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {isReviewer && (
+        <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+          <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.adminsTitle}</p>
+          <p className="text-xs mb-3" style={{ color: MUTED }}>{t.adminsHint}</p>
+
+          {(adminEmails || []).map((email) => (
+            <div
+              key={email}
+              className="flex items-center justify-between"
+              style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
+            >
+              <p className="text-sm" style={{ color: TEXT }}>{email}</p>
+              {(adminEmails || []).length > 1 && (
+                <button
+                  onClick={() => confirmAction(t.removeAdminConfirm, () => removeAdminEmail(email), { danger: true })}
+                  className="btn-press"
+                  style={{ color: MUTED }}
+                  aria-label={t.delete}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+          ))}
+
+          {(adminEmails || []).length <= 1 && (
+            <p className="text-xs mt-2" style={{ color: MUTED }}>{t.lastAdminHint}</p>
+          )}
+
+          <div className="flex items-center gap-2" style={{ marginTop: 12 }}>
+            <input
+              type="email"
+              value={newAdminEmail}
+              onChange={(e) => setNewAdminEmail(e.target.value)}
+              placeholder={t.addAdminPlaceholder}
+              className="field-bare"
+              style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 10px", fontSize: 13 }}
+            />
+            <button
+              onClick={() => {
+                const email = newAdminEmail.trim();
+                if (!email) return;
+                addAdminEmail(email);
+                setNewAdminEmail("");
+              }}
+              className="btn-press font-bold"
+              style={{ background: PRIMARY, color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13 }}
+            >
+              {t.addAdminBtn}
+            </button>
+          </div>
         </div>
       )}
 
