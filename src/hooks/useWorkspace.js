@@ -26,6 +26,17 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     const unsub = onSnapshot(
       doc(db, "config", "admins"),
       (snap) => {
+        // Same reasoning as the access_by_email listener below: a snapshot
+        // can arrive from the local cache before Firestore confirms it with
+        // the server. On a device whose cache predates this doc existing
+        // (or predates the current admin being added to it), that stale
+        // cached read looks like "no admins" and was signing a legitimate
+        // admin account back out on every fresh app open, before the real
+        // server value ever had a chance to arrive. Wait for the confirmed
+        // read instead of acting on the cached one.
+        if (snap.metadata.fromCache) {
+          return;
+        }
         const emails = (snap.data()?.emails || [])
           .map((e) => String(e).trim().toLowerCase())
           .filter(Boolean);
