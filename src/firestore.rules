@@ -28,14 +28,15 @@ service cloud.firestore {
         && myEmail() in get(/databases/$(database)/documents/config/admins).data.emails;
     }
 
-    // The primary admin is whoever sits in slot 0 of config/admins.emails —
-    // in practice the very first admin, hand-added in the Firebase console.
-    // Every admin added afterwards can add further admins, but only the
-    // primary admin may ever remove one (see the matching update rules on
-    // /config/admins below, and src/hooks/useWorkspace.js on the client).
+    // The primary admin is whoever's email matches config/admins.primaryEmail
+    // — an explicit field set by hand once in the Firebase console, not
+    // inferred from array position (array order is fragile and was the
+    // cause of a real bug: a newly added admin ended up seeing the actual
+    // primary's email). See the matching update rules on /config/admins
+    // below, and src/hooks/useWorkspace.js on the client.
     function isPrimaryAdmin() {
       return isReviewer()
-        && myEmail() == get(/databases/$(database)/documents/config/admins).data.emails[0];
+        && myEmail() == get(/databases/$(database)/documents/config/admins).data.primaryEmail.lower();
     }
 
     function isOwner(ownerUid) {
@@ -183,32 +184,39 @@ service cloud.firestore {
     // config/admins.emails replaces the old hardcoded REVIEWER_EMAIL — it's
     // the list of accounts that can review signups and manage other admins
     // (see isReviewer()/isPrimaryAdmin() above and
-    // src/hooks/useWorkspace.js). The very first entry — slot 0 — has to be
-    // added by hand in the Firebase console (there's no admin yet to grant
-    // it from the app); after that, any admin can add more admins from
-    // Settings, but only that original, primary admin can ever remove one,
-    // and it can never remove itself.
+    // src/hooks/useWorkspace.js). config/admins.primaryEmail names which of
+    // those emails is the primary admin. Both fields — the very first
+    // `emails` entry and `primaryEmail` — have to be added by hand in the
+    // Firebase console (there's no admin yet to grant either from the app);
+    // after that, any admin can add more admins from Settings, but only the
+    // primary admin can ever remove one, it can never remove itself, and
+    // primaryEmail itself can never be changed by any client write (that's
+    // a deliberate, manual console edit only, to avoid a client bug ever
+    // silently handing "primary" to the wrong account).
     match /config/admins {
 
       allow read: if hasEmail();
 
       // The document itself has to already exist for isReviewer()/
-      // isPrimaryAdmin() to resolve, so the very first entry can only ever
-      // be created by hand in the Firebase console — matches the comment
-      // above and the old behavior (isReviewer() was always false pre-doc).
+      // isPrimaryAdmin() to resolve, so both the first `emails` entry and
+      // `primaryEmail` can only ever be created by hand in the Firebase
+      // console — matches the comment above and the old behavior
+      // (isReviewer() was always false pre-doc).
       allow create: if false;
 
       // Any admin can add more admins: the new list must be a superset of
-      // the current one, i.e. no existing email — including slot 0 — is
-      // dropped from the array.
+      // the current one (no existing email dropped), and primaryEmail must
+      // stay exactly as it was.
       allow update: if isReviewer()
+        && request.resource.data.primaryEmail == resource.data.primaryEmail
         && request.resource.data.emails.hasAll(resource.data.emails);
 
-      // Only the primary admin (slot 0) can remove an admin, and even it
-      // can never remove itself — the new list must still contain whatever
-      // email currently occupies slot 0.
+      // Only the primary admin can remove an admin, and even it can never
+      // remove itself — the new list must still contain primaryEmail, and
+      // primaryEmail itself must stay exactly as it was.
       allow update: if isPrimaryAdmin()
-        && request.resource.data.emails.hasAll([resource.data.emails[0]]);
+        && request.resource.data.primaryEmail == resource.data.primaryEmail
+        && request.resource.data.emails.hasAll([resource.data.primaryEmail]);
 
       allow delete: if false;
     }
