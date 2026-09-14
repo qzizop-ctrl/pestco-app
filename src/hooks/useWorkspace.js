@@ -1,13 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, collection, onSnapshot, runTransaction, deleteDoc } from "firebase/firestore";
+import {
+  doc, collection, onSnapshot, runTransaction, deleteDoc,
+  setDoc, arrayUnion, arrayRemove,
+} from "firebase/firestore";
 import { auth, db } from "../firebase";
-
-// Matches firestore.rules' isReviewer() — the single hardcoded account
-// that can see and act on the "pending accounts" list in Settings. This
-// mirrors the app's current single-company/single-team usage, not a
-// general multi-tenant admin model.
-const REVIEWER_EMAIL = "qzizop@gmail.com";
 
 // Handles authentication plus multi-workspace permission resolution
 // (owner / editor / viewer) and the access-granting/revoking transactions.
@@ -18,6 +15,26 @@ const REVIEWER_EMAIL = "qzizop@gmail.com";
 export function useWorkspace({ requireOnline, reportError, screen, setScreen, setActiveId }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
+
+  // Mirrors firestore.rules' isReviewer() — replaces the old hardcoded
+  // REVIEWER_EMAIL. null means "not loaded yet"; every permission decision
+  // below waits for this instead of assuming an empty/no-admin state, since
+  // treating "not loaded" as "no admins" would incorrectly sign the real
+  // admin back out on every fresh app open before this listener resolves.
+  const [adminEmails, setAdminEmails] = useState(null);
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, "config", "admins"),
+      (snap) => {
+        const emails = (snap.data()?.emails || [])
+          .map((e) => String(e).trim().toLowerCase())
+          .filter(Boolean);
+        setAdminEmails(emails);
+      },
+      () => setAdminEmails([])
+    );
+    return () => unsub();
+  }, []);
 
   const [members, setMembers] = useState({});
   const [pendingSignups, setPendingSignups] = useState([]);
@@ -72,6 +89,11 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       return;
     }
 
+    // Wait for the admin list before resolving anything — see the comment
+    // on adminEmails above. permissionLoading stays true a moment longer
+    // instead of risking a wrong (and disruptive) sign-out decision below.
+    if (adminEmails === null) return;
+
     const lookupRef = doc(db, "access_by_email", emailKey);
 
     const unsub = onSnapshot(
@@ -103,17 +125,17 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
         // NOT be converted into a new owner workspace.
         //
         // Self-provisioning into an "owner" workspace is further restricted
-        // to REVIEWER_EMAIL only. This is a single-owner app: anyone else
-        // who signs up writes a `signups/{uid}` doc and must be explicitly
-        // granted editor/viewer access from Settings first. Without this
-        // check, any brand-new registration (or a dismissed/removed one)
-        // fell through to "no other access found" and was silently made
-        // owner of its own empty workspace — which is exactly what let an
-        // un-reviewed or dismissed account see the Settings screen and
-        // still use the app.
+        // to accounts in config/admins (see adminEmails above). This is a
+        // single-owner app: anyone else who signs up writes a
+        // `signups/{uid}` doc and must be explicitly granted editor/viewer
+        // access from Settings first. Without this check, any brand-new
+        // registration (or a dismissed/removed one) fell through to "no
+        // other access found" and was silently made owner of its own empty
+        // workspace — which is exactly what let an un-reviewed or dismissed
+        // account see the Settings screen and still use the app.
         const previousOwner = previousResolvedOwnerRef.current;
         const hasKnownExternalAccess = Boolean(previousOwner && previousOwner !== user.uid);
-        const isReviewerEmail = emailKey === REVIEWER_EMAIL;
+        const isReviewerEmail = adminEmails.includes(emailKey);
 
         let nextOwners = externalOwners;
         if (externalOwners.some((x) => x.uid === user.uid)) {
@@ -188,8 +210,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     );
 
     return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, adminEmails]);
 
   // Keep the selected workspace and role synchronized when the user changes
   // workspace from Settings.
@@ -215,7 +236,9 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     return () => unsub();
   }, [user]);
 
-  const isReviewer = Boolean(user && (user.email || "").trim().toLowerCase() === REVIEWER_EMAIL);
+  const isReviewer = Boolean(
+    user && adminEmails && adminEmails.includes((user.email || "").trim().toLowerCase())
+  );
 
   // Only the reviewer account subscribes to this collection at all — for
   // everyone else it would just be a permission-denied listener doing
@@ -357,6 +380,39 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     }
   };
 
+  // Lets an existing admin add/remove others from Settings, so a second
+  // admin no longer has to be added by editing code and redeploying — only
+  // the very first one still has to be created by hand in the Firebase
+  // console (config/admins with an `emails` array), since there's no admin
+  // yet at that point to grant it from inside the app.
+  const addAdminEmail = async (email) => {
+    if (!isReviewer) return;
+    const cleanEmail = (email || "").trim().toLowerCase();
+    if (!cleanEmail) return;
+    try {
+      await setDoc(doc(db, "config", "admins"), { emails: arrayUnion(cleanEmail) }, { merge: true });
+    } catch (e) {
+      console.error("addAdminEmail failed:", e);
+      reportError && reportError(e);
+    }
+  };
+
+  const removeAdminEmail = async (email) => {
+    if (!isReviewer) return;
+    const cleanEmail = (email || "").trim().toLowerCase();
+    if (!cleanEmail) return;
+    // Refuse to remove the last remaining admin — that would leave the
+    // workspace with no one able to review signups or manage admins again
+    // without going back into the Firebase console.
+    if ((adminEmails || []).length <= 1) return;
+    try {
+      await setDoc(doc(db, "config", "admins"), { emails: arrayRemove(cleanEmail) }, { merge: true });
+    } catch (e) {
+      console.error("removeAdminEmail failed:", e);
+      reportError && reportError(e);
+    }
+  };
+
   return {
     authChecked,
     user,
@@ -370,6 +426,9 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     members,
     pendingSignups,
     isReviewer,
+    adminEmails,
+    addAdminEmail,
+    removeAdminEmail,
     reviewSignup,
     dismissSignup,
     switchOwnerWorkspace,
