@@ -27,6 +27,25 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   // failed/errored", which look identical if we only look at adminEmails.
   const [adminsDocDebug, setAdminsDocDebug] = useState(null);
   useEffect(() => {
+    // This must be re-subscribed whenever `user` changes (not just once on
+    // mount). A Firestore onSnapshot listener that gets permission-denied
+    // is torn down for good — it does not silently retry once auth state
+    // later becomes valid. Previously this ran once with an empty
+    // dependency array, so it could open *before* sign-in resolved (no
+    // request.auth yet), get permission-denied per the rules (correctly,
+    // for that unauthenticated moment), and then just sit dead: never
+    // re-subscribing after a real, valid sign-in happened moments later.
+    // From then on adminEmails was permanently stuck at [] for the rest of
+    // the session, which made every admin account look unauthorized and
+    // get signed back out — even though the rules and the config/admins
+    // document were both completely correct. Keying this off `user` (and
+    // skipping entirely while signed out) means a fresh, authenticated
+    // subscription is made right after every sign-in.
+    if (!user) {
+      setAdminEmails(null);
+      setAdminsDocDebug(null);
+      return;
+    }
     const unsub = onSnapshot(
       doc(db, "config", "admins"),
       (snap) => {
@@ -63,7 +82,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       }
     );
     return () => unsub();
-  }, []);
+  }, [user]);
 
   const [members, setMembers] = useState({});
   const [pendingSignups, setPendingSignups] = useState([]);
