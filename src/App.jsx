@@ -22,6 +22,7 @@ import {
   arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { reportException } from "./sentry";
 import AuthScreen from "./AuthScreen";
 import {
   scheduleCallReminder, cancelCallReminder,
@@ -29,6 +30,8 @@ import {
 import { useAppPrefs } from "./hooks/useAppPrefs";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useLiveData } from "./hooks/useLiveData";
+import { useExcelExport } from "./hooks/useExcelExport";
+import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useReminders } from "./hooks/useReminders";
 import { useAndroidBackButton } from "./hooks/useAndroidBackButton";
 import { useResetViewOnOpen } from "./hooks/useResetViewOnOpen";
@@ -169,6 +172,7 @@ export default function App() {
   // live Firebase project are out of date (the firestore.rules file has to
   // be deployed on its own; having it in the repo doesn't apply it).
   const reportWorkspaceError = useCallback((e) => {
+    reportException(e, { source: "workspace" });
     const code = e && e.code ? ` (${e.code})` : "";
     showAlert(
       lang === "ar"
@@ -180,7 +184,7 @@ export default function App() {
   const {
     authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
     canEdit, isOwnerAccount, members,
-    pendingSignups, isReviewer, reviewSignup, dismissSignup,
+    pendingSignups, isReviewer, adminEmails, addAdminEmail, removeAdminEmail, reviewSignup, dismissSignup,
     switchOwnerWorkspace, grantAccess, revokeAccess,
   } = useWorkspace({ requireOnline, reportError: reportWorkspaceError, screen, setScreen, setActiveId });
 
@@ -836,99 +840,21 @@ export default function App() {
     setNewActivityText("");
   };
 
-  const visitsToRows = (rows) =>
-    rows.map((v) => ({
-      [t.companyLabel.replace(" *", "")]: v.companyName || "",
-      [t.contactLabel.replace(" *", "")]: v.contactName || "",
-      [t.sectorLabel]: t.sectors[v.sector] || v.sector || "",
-      [t.roleLabel]: t.roles[v.role] || v.role || "",
-      [t.pipelineLabel]: t.stages[v.stage] || v.stage || "",
-      [t.tagsLabel]: (v.tags || []).join(", "),
-      [t.phoneLabel]: v.phone || "",
-      [t.emailLabel]: v.email || "",
-      [t.visitDateLabel]: v.visitDate || "",
-      [t.callDateLabel]: v.callDateTime || "",
-      [t.notesLabel]: v.notes || "",
-    }));
-
-  const writeExcel = async (rows, filenameSuffix) => {
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet(visitsToRows(rows));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Visits");
-    const fileName = `pestco_visits_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-
-    if (Capacitor.isNativePlatform()) {
-      // XLSX.writeFile() is a plain browser Blob download under the hood,
-      // which has no native handler inside the Android WebView (same issue
-      // as the PDF export — see pdfReport.js). Write the bytes to disk via
-      // Capacitor Filesystem instead.
-      const { saveFileNative } = await import("./nativeFileSave");
-      const base64Data = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
-      await saveFileNative(
-        fileName,
-        base64Data,
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-    } else {
-      XLSX.writeFile(wb, fileName);
-    }
-  };
+  // Excel export lives in useExcelExport (src/hooks/useExcelExport.js) — see
+  // that file for visitsToRows/suppliersToRows and the actual xlsx writing.
+  const { exportVisits, exportSuppliers, saveBackupWorkbook } = useExcelExport({ t, canEdit });
 
   // The live listener already holds every customer (no pagination limit),
   // so exporting "all" is just exporting the current in-memory list.
-  const exportAllToExcel = async () => {
-    if (!canEdit) return;
-    await writeExcel(visibleVisits, "all");
-  };
+  const exportAllToExcel = () => exportVisits(visibleVisits, "all");
 
   // Exports only what's currently loaded and passing the active filters on
   // the customers list screen.
-  const exportFilteredToExcel = async () => {
-    if (!canEdit) return;
-    await writeExcel(filtered, "filtered");
-  };
+  const exportFilteredToExcel = () => exportVisits(filtered, "filtered");
 
-  const suppliersToRows = (rows) =>
-    rows.map((s) => ({
-      [t.supplierNameLabel.replace(" *", "")]: s.name || "",
-      [t.supplierContactLabel]: s.contactName || "",
-      [t.supplierCategoryLabel]: s.category || "",
-      [t.supplierTagsLabel]: (s.tags || []).join(", "),
-      [t.phoneLabel]: s.phone || "",
-      [t.emailLabel]: s.email || "",
-      [t.supplierNotesLabel]: s.notes || "",
-    }));
+  const exportSuppliersAllToExcel = () => exportSuppliers(visibleSuppliers, "all");
 
-  const writeSuppliersExcel = async (rows, filenameSuffix) => {
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet(suppliersToRows(rows));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Suppliers");
-    const fileName = `pestco_suppliers_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-
-    if (Capacitor.isNativePlatform()) {
-      const { saveFileNative } = await import("./nativeFileSave");
-      const base64Data = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
-      await saveFileNative(
-        fileName,
-        base64Data,
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-    } else {
-      XLSX.writeFile(wb, fileName);
-    }
-  };
-
-  const exportSuppliersAllToExcel = async () => {
-    if (!canEdit) return;
-    await writeSuppliersExcel(visibleSuppliers, "all");
-  };
-
-  const exportSuppliersFilteredToExcel = async () => {
-    if (!canEdit) return;
-    await writeSuppliersExcel(filteredSuppliers, "filtered");
-  };
+  const exportSuppliersFilteredToExcel = () => exportSuppliers(filteredSuppliers, "filtered");
 
   const triggerSupplierImportPicker = () => {
     if (!canEdit) return;
@@ -1310,6 +1236,20 @@ export default function App() {
     [suppliers, pendingSupplierDelete]
   );
 
+  // Weekly Excel backup, owner-only — see src/hooks/useAutoBackup.js. Placed
+  // here (not right after useExcelExport above) because it needs
+  // visibleVisits/visibleSuppliers, which aren't defined until this point.
+  useAutoBackup({
+    isOwnerAccount,
+    ready: loaded && suppliersLoaded,
+    visits: visibleVisits,
+    suppliers: visibleSuppliers,
+    saveBackupWorkbook,
+    confirmAction,
+    notify: showAlert,
+    t,
+  });
+
   // All unique product tags across every supplier, used to populate the
   // "filter by product" chip row on the Suppliers list.
   const allSupplierTags = useMemo(() => collectSupplierTags(visibleSuppliers), [visibleSuppliers]);
@@ -1644,6 +1584,9 @@ export default function App() {
           revokeAccess={revokeAccess}
           pendingSignups={pendingSignups}
           isReviewer={isReviewer}
+          adminEmails={adminEmails}
+          addAdminEmail={addAdminEmail}
+          removeAdminEmail={removeAdminEmail}
           reviewSignup={reviewSignup}
           dismissSignup={dismissSignup}
           confirmAction={confirmAction}
