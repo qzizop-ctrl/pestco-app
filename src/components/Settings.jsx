@@ -29,6 +29,7 @@ export default function SettingsScreen({
   revokeAccess,
   pendingSignups,
   isReviewer,
+  isPrimaryAdmin,
   adminEmails,
   addAdminEmail,
   removeAdminEmail,
@@ -212,25 +213,48 @@ export default function SettingsScreen({
           <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.adminsTitle}</p>
           <p className="text-xs mb-3" style={{ color: MUTED }}>{t.adminsHint}</p>
 
-          {(adminEmails || []).map((email) => (
-            <div
-              key={email}
-              className="flex items-center justify-between"
-              style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
-            >
-              <p className="text-sm" style={{ color: TEXT }}>{email}</p>
-              {(adminEmails || []).length > 1 && (
-                <button
-                  onClick={() => confirmAction(t.removeAdminConfirm, () => removeAdminEmail(email), { danger: true })}
-                  className="btn-press"
-                  style={{ color: MUTED }}
-                  aria-label={t.delete}
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-          ))}
+          {(adminEmails || []).map((email, idx) => {
+            const isPrimary = idx === 0;
+            // The primary admin's email is only ever shown to the primary
+            // admin themself — everyone else just doesn't get this row at
+            // all, per the request that it stay invisible to other admins.
+            if (isPrimary && !isPrimaryAdmin) return null;
+            const canRemoveThis = isPrimaryAdmin && !isPrimary && (adminEmails || []).length > 1;
+            return (
+              <div
+                key={email}
+                className="flex items-center justify-between"
+                style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
+              >
+                <div className="flex items-center gap-2">
+                  <p className="text-sm" style={{ color: TEXT }}>{email}</p>
+                  {isPrimary && (
+                    <span
+                      className="text-xs font-bold"
+                      style={{ background: "rgba(196,68,58,.08)", color: GOLD, borderRadius: 999, padding: "2px 8px" }}
+                      title={t.primaryAdminHint}
+                    >
+                      {t.primaryAdminBadge}
+                    </span>
+                  )}
+                </div>
+                {canRemoveThis && (
+                  <button
+                    onClick={() => confirmAction(t.removeAdminConfirm, () => removeAdminEmail(email), { danger: true })}
+                    className="btn-press"
+                    style={{ color: MUTED }}
+                    aria-label={t.delete}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {!isPrimaryAdmin && (adminEmails || []).length > 0 && (
+            <p className="text-xs mt-2" style={{ color: MUTED }}>{t.primaryAdminHiddenNote}</p>
+          )}
 
           {(adminEmails || []).length <= 1 && (
             <p className="text-xs mt-2" style={{ color: MUTED }}>{t.lastAdminHint}</p>
