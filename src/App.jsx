@@ -182,7 +182,7 @@ export default function App() {
   }, [lang, showAlert]);
 
   const {
-    authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
+    authChecked, user, authError, authErrorDebug, clearAuthError, ownerUid, availableOwners, permissionLoading,
     canEdit, isOwnerAccount, members,
     pendingSignups, isReviewer, adminEmails, addAdminEmail, removeAdminEmail, reviewSignup, dismissSignup,
     switchOwnerWorkspace, grantAccess, revokeAccess,
@@ -1324,6 +1324,7 @@ export default function App() {
         lang={lang}
         setLang={setLang}
         authError={authError}
+        authErrorDebug={authErrorDebug}
         onClearAuthError={clearAuthError}
       />
     );
