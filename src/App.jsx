@@ -1568,7 +1568,7 @@ export default function App() {
         />
       )}
 
-      {screen === "settings" && isOwnerAccount && (
+      {screen === "settings" && (isOwnerAccount || isReviewer) && (
         <SettingsScreen
           t={t}
           availableOwners={availableOwners}
