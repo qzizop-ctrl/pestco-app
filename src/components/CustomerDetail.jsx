@@ -360,7 +360,11 @@ export default function CustomerDetailScreen({
         </div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1" style={{ color: MUTED }}>
-            <User size={14} /> <span className="text-sm">{active.contactName}</span>
+            <User size={14} />
+            <span className="text-sm">
+              {active.contactName}
+              {active.role && t.roles[active.role] ? ` · ${t.roles[active.role]}` : ""}
+            </span>
           </div>
           <span className="text-xs font-bold" style={{ color: GOLD }}>
             {t.sectors[active.sector] || t.sectors.private}
