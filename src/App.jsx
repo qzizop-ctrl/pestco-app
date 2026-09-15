@@ -1670,7 +1670,7 @@ export default function App() {
         </div>
       )}
 
-      {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} isOwnerAccount={isOwnerAccount} />}
+      {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} isOwnerAccount={isOwnerAccount} isReviewer={isReviewer} />}
 
       {rejectionPrompt && (
         <RejectionReasonModal
