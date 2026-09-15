@@ -320,7 +320,7 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
   );
 });
 
-export function BottomNav({ screen, setScreen, t, isOwnerAccount }) {
+export function BottomNav({ screen, setScreen, t, isOwnerAccount, isReviewer }) {
   // كل قسم رئيسي له لون تمييز خاص بيه بدل ما الكل يستخدم نفس الكحلي —
   // بيسهّل على المستخدم يميّز القسم اللي هو فيه بنظرة واحدة على الشريط
   // السفلي، ونفس الألوان دي بتتكرر في هوية كل قسم (الذهبي مربوط أصلاً
@@ -329,7 +329,15 @@ export function BottomNav({ screen, setScreen, t, isOwnerAccount }) {
     { id: "dashboard", label: t.navDashboard, icon: LayoutDashboard, activeColor: PRIMARY },
     { id: "list", label: t.navCustomers, icon: UsersIcon, activeColor: PRIMARY_MID },
     { id: "suppliers", label: t.navSuppliers, icon: Truck, activeColor: GOLD },
-    ...(isOwnerAccount ? [{ id: "settings", label: t.navSettings, icon: Settings, activeColor: PRIMARY }] : []),
+    // Settings holds both workspace management (owner-only: grant/revoke
+    // access) AND admin tools (review signups, manage admins) — so any
+    // admin/reviewer needs this tab too, not just the workspace owner.
+    // Missing the isReviewer half of this check was a real bug: an admin
+    // who was also granted editor/viewer access on someone else's
+    // workspace (a very normal setup) never became "owner" of any
+    // workspace and so never saw Settings at all, despite being a full
+    // admin. See the matching guard in useWorkspace.js.
+    ...(isOwnerAccount || isReviewer ? [{ id: "settings", label: t.navSettings, icon: Settings, activeColor: PRIMARY }] : []),
   ];
   return (
     <div
