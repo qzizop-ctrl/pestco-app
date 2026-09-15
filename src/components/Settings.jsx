@@ -61,6 +61,45 @@ export default function SettingsScreen({
   const [newAdminEmail, setNewAdminEmail] = useState("");
   return (
     <div className="px-4 pt-4 pb-24">
+      {/* TEMPORARY diagnostic panel — delete this block once the "Settings
+          renders blank for an admin+editor account" bug is found and fixed.
+          Shows the raw permission flags this render actually received, so
+          we can see what's different about the account hitting the blank
+          page without needing device console access. */}
+      <pre
+        dir="ltr"
+        style={{
+          textAlign: "left",
+          fontSize: 10,
+          lineHeight: 1.4,
+          background: "#fff",
+          border: `1px solid ${DANGER}`,
+          borderRadius: 8,
+          padding: 8,
+          margin: "0 0 16px 0",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-all",
+          color: TEXT,
+        }}
+      >
+        {JSON.stringify(
+          {
+            userEmail: user?.email || null,
+            ownerUid: ownerUid || null,
+            isOwnerAccount,
+            isReviewer,
+            isPrimaryAdmin,
+            canEdit,
+            availableOwnersCount: (availableOwners || []).length,
+            adminEmails: adminEmails || null,
+            primaryAdminEmail: primaryAdminEmail || null,
+            pendingSignupsCount: (pendingSignups || []).length,
+          },
+          null,
+          2
+        )}
+      </pre>
+
       {availableOwners.length > 1 && (
         <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
           <p className="font-bold text-base mb-1" style={{ color: TEXT }}>مساحات العمل</p>
