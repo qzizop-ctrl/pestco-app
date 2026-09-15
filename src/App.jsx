@@ -206,11 +206,25 @@ export default function App() {
     },
   });
 
-  // Always reopen the app on the customer list with no filters active,
-  // regardless of whatever screen/filters were left on before it went to
-  // the background — see useResetViewOnOpen for why this is needed.
-  const resetToDefaultView = () => {
-    setScreen("list");
+  // Clears stale search/filter state whenever the app is reopened on
+  // mobile — see useResetViewOnOpen for why that part is needed (Capacitor
+  // just backgrounds the app on Home, so without this, old filters/search
+  // text could sit active indefinitely). Screen navigation is handled
+  // separately: if the person is actively looking at a specific
+  // customer/supplier ("detail"/"supplier-form"), jumping them back to the
+  // list every time the app merely comes back to the foreground was its
+  // own bug — e.g. stepping out to take a phone call and coming back to
+  // find the customer's page gone, notes still unwritten. Screens like that
+  // are left alone by default; falling back to "list" is still correct for
+  // transient/no-longer-meaningful screens (a half-filled "new customer"
+  // form, etc.) since there's no in-progress record identity to preserve.
+  // `force=true` always resets to "list" regardless — used on sign-out
+  // below, where staying on someone's customer/supplier record after
+  // logging out (e.g. a different person logging into a shared device)
+  // would be a real privacy problem, not a convenience to preserve.
+  const PRESERVED_SCREENS_ON_RESUME = ["detail", "supplier-form", "settings", "suppliers", "dashboard"];
+  const resetToDefaultView = (force = false) => {
+    setScreen((current) => (!force && PRESERVED_SCREENS_ON_RESUME.includes(current) ? current : "list"));
     setQuery("");
     setSectorFilter("all");
     setStageFilter("all");
@@ -230,7 +244,7 @@ export default function App() {
   const wasSignedIn = useRef(false);
   useEffect(() => {
     if (!user && wasSignedIn.current) {
-      resetToDefaultView();
+      resetToDefaultView(true);
     }
     wasSignedIn.current = !!user;
     // eslint-disable-next-line react-hooks/exhaustive-deps
