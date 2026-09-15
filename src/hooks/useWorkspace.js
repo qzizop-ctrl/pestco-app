@@ -348,15 +348,21 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     return () => unsub();
   }, [isReviewer, members]);
 
-  // Settings is owner-only. If a non-owner ever ends up on this screen
-  // (e.g. they switch to a workspace where they're a viewer/editor while
-  // already on Settings), bounce them back to the customer list.
+  // Settings is for the workspace owner (grant/revoke access) or any
+  // admin/reviewer (review signups, manage admins) — not plain
+  // editors/viewers. If someone outside those two groups ever ends up on
+  // this screen (e.g. they switch to a workspace where they're a
+  // viewer/editor while already on Settings), bounce them back to the
+  // customer list. See the matching gate on the Settings tab itself in
+  // BottomNav (Shared.jsx) — missing the isReviewer half of this check was
+  // a real bug that hid Settings entirely from an admin who wasn't also an
+  // "owner" of some workspace.
   useEffect(() => {
-    if (!permissionLoading && screen === "settings" && !isOwnerAccount) {
+    if (!permissionLoading && screen === "settings" && !isOwnerAccount && !isReviewer) {
       setScreen("list");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [permissionLoading, screen, isOwnerAccount]);
+  }, [permissionLoading, screen, isOwnerAccount, isReviewer]);
 
   const grantAccess = async (email, role) => {
     if (!isOwnerAccount || !user) return;
