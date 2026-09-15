@@ -38,13 +38,62 @@ export function useAppPrefs() {
     } catch (e) {}
   }, [darkMode]);
 
+  // `navigator.onLine` only reports whether the device has *a* network
+  // interface up (e.g. connected to wifi) — it stays true even when that
+  // wifi has no real internet access (router with no upstream, captive
+  // portal, etc.), which is exactly the case that was showing a green
+  // "online" indicator with no actual internet. `navigator.onLine === false`
+  // is still a reliable "definitely offline" signal on its own (no
+  // interface at all), so that half is kept as a fast path; the "true" case
+  // gets verified with an actual network request before being trusted.
+  // gstatic.com/generate_204 is the same lightweight, purpose-built
+  // endpoint Android/Chrome themselves use for connectivity checks — a
+  // fast 204 response with (almost) no bandwidth. `mode: "no-cors"` is used
+  // because only "did the request succeed at all" matters here, not the
+  // response body, which a cross-origin request can't read anyway.
   useEffect(() => {
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener("online", goOnline);
+    let cancelled = false;
+
+    const verifyRealConnectivity = async () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        if (!cancelled) setIsOnline(false);
+        return;
+      }
+      if (typeof fetch !== "function") {
+        if (!cancelled) setIsOnline(true);
+        return;
+      }
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        await fetch("https://www.gstatic.com/generate_204", {
+          method: "GET",
+          mode: "no-cors",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!cancelled) setIsOnline(true);
+      } catch (e) {
+        if (!cancelled) setIsOnline(false);
+      }
+    };
+
+    verifyRealConnectivity();
+    // Re-verify periodically too, not just on the browser's online/offline
+    // events — those events don't fire for "still connected to wifi, but
+    // the wifi itself lost its internet upstream" (the exact bug being
+    // fixed here), only for the network interface itself going up/down.
+    const intervalId = setInterval(verifyRealConnectivity, 20000);
+    window.addEventListener("online", verifyRealConnectivity);
+    // The browser's own "offline" event IS reliable (interface genuinely
+    // down), so it can set state directly without re-probing.
+    const goOffline = () => !cancelled && setIsOnline(false);
     window.addEventListener("offline", goOffline);
     return () => {
-      window.removeEventListener("online", goOnline);
+      cancelled = true;
+      clearInterval(intervalId);
+      window.removeEventListener("online", verifyRealConnectivity);
       window.removeEventListener("offline", goOffline);
     };
   }, []);
