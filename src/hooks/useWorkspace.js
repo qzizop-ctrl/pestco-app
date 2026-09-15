@@ -5,6 +5,7 @@ import {
   setDoc, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { normalizeEmail, isAdminEmail, resolvePrimaryAdminEmail, isPrimaryAdminEmail, canRemoveAdmin } from "../adminPermissions";
 
 // Handles authentication plus multi-workspace permission resolution
 // (owner / editor / viewer) and the access-granting/revoking transactions.
@@ -74,11 +75,9 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
           .map((e) => String(e).trim().toLowerCase())
           .filter(Boolean);
         setAdminEmails(emails);
-        // Explicit field wins; only fall back to "first in the array" for
-        // a doc that predates this field (see the comment on the state
-        // declaration above).
-        const explicitPrimary = String(snap.data()?.primaryEmail || "").trim().toLowerCase();
-        setPrimaryAdminEmail(explicitPrimary || emails[0] || null);
+        // See adminPermissions.js — explicit primaryEmail field wins, only
+        // falling back to "first in the array" for a doc that predates it.
+        setPrimaryAdminEmail(resolvePrimaryAdminEmail(snap.data()?.primaryEmail, emails));
         // TEMPORARY diagnostic
         setAdminsDocDebug({
           source: "server-confirmed-snapshot",
@@ -317,18 +316,14 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   }, [user]);
 
   // The primary admin is whoever's email matches config/admins.primaryEmail
-  // (see the comment on primaryAdminEmail above). Every admin added
-  // afterwards from inside the app can add further admins, but only this
-  // one may remove any admin (including refusing to remove itself) — see
-  // removeAdminEmail below and the matching rule in firestore.rules.
-  const isPrimaryAdmin = Boolean(
-    user && primaryAdminEmail
-      && primaryAdminEmail === (user.email || "").trim().toLowerCase()
-  );
+  // (see adminPermissions.js for the actual decision logic — kept there so
+  // it's unit-tested directly, see adminPermissions.test.js). Every admin
+  // added afterwards from inside the app can add further admins, but only
+  // this one may remove any admin (including refusing to remove itself) —
+  // see removeAdminEmail below and the matching rule in firestore.rules.
+  const isPrimaryAdmin = Boolean(user) && isPrimaryAdminEmail(primaryAdminEmail, user?.email);
 
-  const isReviewer = Boolean(
-    user && adminEmails && adminEmails.includes((user.email || "").trim().toLowerCase())
-  );
+  const isReviewer = Boolean(user) && isAdminEmail(adminEmails, user?.email);
 
   // Only the reviewer account subscribes to this collection at all — for
   // everyone else it would just be a permission-denied listener doing
@@ -488,20 +483,18 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   };
 
   const removeAdminEmail = async (email) => {
-    // Only the primary admin may remove admins at all — any admin added
-    // from inside the app can add others, but not delete anyone (see the
-    // isPrimaryAdmin comment above and firestore.rules, which enforces this
-    // server-side too).
-    if (!isPrimaryAdmin) return;
-    const cleanEmail = (email || "").trim().toLowerCase();
-    if (!cleanEmail) return;
-    // The primary admin itself can never be removed, by itself or anyone
-    // else — it's the one fixed anchor the rest of the admin list depends on.
-    if (cleanEmail === primaryAdminEmail) return;
-    // Refuse to remove the last remaining admin — that would leave the
-    // workspace with no one able to review signups or manage admins again
-    // without going back into the Firebase console.
-    if ((adminEmails || []).length <= 1) return;
+    // See adminPermissions.js: only the primary admin may remove admins at
+    // all, the primary itself can never be removed, and the last remaining
+    // admin can never be removed. firestore.rules enforces the same thing
+    // server-side.
+    const cleanEmail = normalizeEmail(email);
+    const allowed = canRemoveAdmin({
+      requesterIsPrimaryAdmin: isPrimaryAdmin,
+      targetEmail: cleanEmail,
+      primaryAdminEmail,
+      adminEmailsCount: (adminEmails || []).length,
+    });
+    if (!allowed) return;
     try {
       await setDoc(doc(db, "config", "admins"), { emails: arrayRemove(cleanEmail) }, { merge: true });
     } catch (e) {
