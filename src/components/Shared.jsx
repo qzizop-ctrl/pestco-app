@@ -276,6 +276,17 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
             )}
           </div>
           <div className="flex items-center gap-2">
+            {visit.email && (
+              <a
+                href={`mailto:${visit.email}`}
+                onClick={stop(() => {})}
+                className="btn-press flex items-center justify-center"
+                style={{ width: 32, height: 32, borderRadius: 10, background: "#EAEEF7", color: "#3B5BA5" }}
+                aria-label={t.emailRow}
+              >
+                <Mail size={14} />
+              </a>
+            )}
             {visit.phone && (
               <a
                 href={`tel:${visit.phone}`}
@@ -300,17 +311,6 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
                 aria-label={t.whatsapp}
               >
                 <MessageCircle size={14} />
-              </a>
-            )}
-            {visit.email && (
-              <a
-                href={`mailto:${visit.email}`}
-                onClick={stop(() => {})}
-                className="btn-press flex items-center justify-center"
-                style={{ width: 32, height: 32, borderRadius: 10, background: "#EAEEF7", color: "#3B5BA5" }}
-                aria-label={t.emailRow}
-              >
-                <Mail size={14} />
               </a>
             )}
           </div>
