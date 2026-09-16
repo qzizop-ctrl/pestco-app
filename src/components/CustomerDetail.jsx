@@ -1,12 +1,13 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   Star, User, Phone, MessageCircle, Mail, Calendar, Clock, History, Bell,
-  FileText, Wallet, Trash2, Pencil, MapPin, Truck, AlertTriangle, Check, RotateCcw
+  FileText, Wallet, Trash2, Pencil, MapPin, Truck,
 } from "lucide-react";
 import { TagChip } from "./Shared";
+import PendingChangeBanner from "./PendingChangeBanner";
 import SupplierPickerSheet from "./SupplierPickerSheet";
 import {
-  PRIMARY_MID, TEXT, MUTED, DANGER, SUCCESS, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
+  PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
   STATUS_COLORS, STAGE_IDS, CURRENCY_IDS, OFFER_STATUS_IDS, ACTIVITY_COLORS,
   stageColor, offerStatusColor, visitStatus, getVisitEvents,
   fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney, buildWhatsAppLink,
@@ -14,8 +15,8 @@ import {
 import { openWhatsApp } from "../nativeWhatsApp";
 import { mapsUrl } from "../geo";
 import { db } from "../firebase";
-import { doc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
-import { computeRollbackFields } from "../lastChange";
+import { doc } from "firebase/firestore";
+import { useLastChangeActions } from "../hooks/useLastChangeActions";
 
 export default function CustomerDetailScreen({
   t,
@@ -50,270 +51,44 @@ export default function CustomerDetailScreen({
   deleteVisit,
   setScreen,
 }) {
-  const [loadingAction, setLoadingAction] = useState(false);
-
-  if (!active) return null;
-
-  const isPendingDelete = active.last_change?.type === "delete";
-
   // مرجع مستند العميل الصحيح في Firestore — نفس المسار المستخدم في باقي
   // التطبيق (App.jsx وuseLiveData.js): users/{ownerUid}/visits/{id}.
   // العميل مخزّن في كولكشن اسمه "visits" مش "customers"، وownerUid بييجي
   // من الـ workspace الحالي مش من بيانات العميل نفسه.
   const getDocRef = () => {
-    if (!ownerUid) return null;
+    if (!ownerUid || !active?.id) return null;
     return doc(db, "users", ownerUid, "visits", active.id);
   };
 
-  // 1. دالة الاعتماد (حذف تنبيه التعديل وتنظيف المساحة)
-  const handleApprove = async () => {
-    if (!isOwnerAccount || !active?.id) return;
-    const docRef = getDocRef();
-    if (!docRef) {
-      alert("تعذّر تحديد مساحة العمل الحالية.");
-      return;
-    }
-    setLoadingAction(true);
-    try {
-      await updateDoc(docRef, { last_change: deleteField() });
-      alert("تم اعتماد البيانات وتنظيف المساحة بنجاح.");
-    } catch (err) {
-      console.error("خطأ أثناء الاعتماد:", err);
-      alert("حدث خطأ أثناء الاعتماد: " + err.message);
-    } finally {
-      setLoadingAction(false);
-    }
-  };
+  const {
+    loadingAction, handleApprove, handleRollback, handleConfirmDelete, handleRestoreDeleted,
+  } = useLastChangeActions({
+    getDocRef,
+    isOwnerAccount,
+    lastChange: active?.last_change,
+    t,
+    deleteSuccessMsg: t.deleteApprovedMsg,
+    restoreSuccessMsg: t.deleteRestoredMsg,
+    onDeleteSuccess: () => setScreen && setScreen("list"),
+  });
 
-  // 2. دالة التراجع عن التعديل (إعادة القيم القديمة وحذف التنبيه)
-  const handleRollback = async () => {
-    if (!isOwnerAccount || !active?.id || !active.last_change) return;
-    const docRef = getDocRef();
-    if (!docRef) {
-      alert("تعذّر تحديد مساحة العمل الحالية.");
-      return;
-    }
-    setLoadingAction(true);
-    try {
-      const rollbackPayload = computeRollbackFields(active.last_change);
-      rollbackPayload.last_change = deleteField();
-
-      await updateDoc(docRef, rollbackPayload);
-
-      alert("تم التراجع عن التعديلات وإعادة البيانات بنجاح.");
-    } catch (err) {
-      console.error("خطأ أثناء التراجع:", err);
-      alert("حدث خطأ أثناء التراجع: " + err.message);
-    } finally {
-      setLoadingAction(false);
-    }
-  };
-
-  // 3. اعتماد الحذف نهائيًا — بيمسح المستند فعليًا من Firestore (بديل
-  // handleApprove العادي، اللي بيكتفي بمسح last_change فقط).
-  const handleConfirmDelete = async () => {
-    if (!isOwnerAccount || !active?.id) return;
-    const docRef = getDocRef();
-    if (!docRef) {
-      alert("تعذّر تحديد مساحة العمل الحالية.");
-      return;
-    }
-    setLoadingAction(true);
-    try {
-      await deleteDoc(docRef);
-      alert("تم حذف العميل نهائيًا.");
-      setScreen && setScreen("list");
-    } catch (err) {
-      console.error("خطأ أثناء اعتماد الحذف:", err);
-      alert("حدث خطأ أثناء اعتماد الحذف: " + err.message);
-    } finally {
-      setLoadingAction(false);
-    }
-  };
-
-  // 4. استرجاع العميل — بيلغي علامة الحذف وينظّف last_change، فيرجع العميل
-  // يظهر تاني في القايمة العادية كأن حد ماحذفوش.
-  const handleRestoreDeleted = async () => {
-    if (!isOwnerAccount || !active?.id) return;
-    const docRef = getDocRef();
-    if (!docRef) {
-      alert("تعذّر تحديد مساحة العمل الحالية.");
-      return;
-    }
-    setLoadingAction(true);
-    try {
-      await updateDoc(docRef, { deleted: deleteField(), last_change: deleteField() });
-      alert("تم استرجاع العميل بنجاح.");
-    } catch (err) {
-      console.error("خطأ أثناء استرجاع العميل:", err);
-      alert("حدث خطأ أثناء استرجاع العميل: " + err.message);
-    } finally {
-      setLoadingAction(false);
-    }
-  };
+  if (!active) return null;
 
   return (
     <div className="px-4 pt-4 pb-10">
 
-      {/* ----------------- صندوق تنبيه طلب حذف ----------------- */}
-      {/* يظهر لصاحب الـworkspace فقط عشان يعتمد الحذف نهائيًا أو يسترجع العميل */}
-      {isOwnerAccount && isPendingDelete && (
-        <div
-          className="mb-4 shadow-sm"
-          style={{
-            background: "#FEF2F2",
-            border: "1px solid #FCA5A5",
-            borderRadius: 16,
-            padding: 14,
-          }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-bold text-xs flex items-center gap-1" style={{ color: "#991B1B" }}>
-              <Trash2 size={15} color={DANGER} /> {t.deletePendingTitle}
-            </span>
-            <span className="text-xs" style={{ color: MUTED }}>
-              {active.last_change.updatedAt
-                ? new Date(active.last_change.updatedAt).toLocaleString("ar-EG")
-                : ""}
-            </span>
-          </div>
-
-          <div className="text-xs mb-3" style={{ color: TEXT }}>
-            {t.deletePendingBy(active.last_change.updatedBy || "غير معروف")}
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleConfirmDelete}
-              disabled={loadingAction}
-              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
-              style={{ background: DANGER, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
-            >
-              <Trash2 size={14} /> {t.confirmDeleteFinalBtn}
-            </button>
-            <button
-              onClick={handleRestoreDeleted}
-              disabled={loadingAction}
-              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
-              style={{ background: SUCCESS, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
-            >
-              <RotateCcw size={14} /> {t.restoreCustomerBtn}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ----------------- صندوق تنبيه تعديل البيانات ----------------- */}
-      {/* يظهر لصاحب الـworkspace (المالك) فقط — مش لأي editor عنده صلاحية تعديل عادية */}
-      {isOwnerAccount && active.last_change && !isPendingDelete && (
-        <div 
-          className="mb-4 shadow-sm"
-          style={{ 
-            background: "#FFFBEB", 
-            border: "1px solid #FCD34D", 
-            borderRadius: 16, 
-            padding: 14 
-          }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-bold text-xs flex items-center gap-1" style={{ color: "#92400E" }}>
-              <AlertTriangle size={15} color="#D97706" /> تنبيه تعديل بيانات (خاص بك)
-            </span>
-            <span className="text-xs" style={{ color: MUTED }}>
-              {active.last_change.updated_at
-                ? new Date(active.last_change.updated_at).toLocaleString("ar-EG")
-                : active.last_change.updatedAt
-                ? new Date(active.last_change.updatedAt).toLocaleString("ar-EG")
-                : ""}
-            </span>
-          </div>
-
-          <div className="text-xs mb-2" style={{ color: TEXT }}>
-            قام المستخدم{" "}
-            <span className="font-bold">
-              {active.last_change.changed_by || active.last_change.updatedBy || "غير معروف"}
-            </span>{" "}
-            بتعديل البيانات التالية:
-          </div>
-
-          <div 
-            className="flex flex-col gap-1.5 text-xs mb-3" 
-            style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 10, padding: 10 }}
-          >
-            {(() => {
-              const fieldLabels = {
-                companyName: "اسم الشركة",
-                contactName: "الشخص المسؤول",
-                phone: "رقم الهاتف",
-                email: "البريد الإلكتروني",
-                notes: "الملاحظات",
-                sector: "القطاع",
-                stage: "مرحلة المشروع",
-                visitDate: "تاريخ الزيارة",
-                callDateTime: "موعد التذكير",
-              };
-
-              const ignoreKeys = [
-                "changed_by", "updatedBy", "updatedById", "updated_at", 
-                "updatedAt", "changes", "details", "last_change"
-              ];
-
-              const rawChanges = active.last_change.changes || active.last_change.details || active.last_change;
-              
-              if (!rawChanges || typeof rawChanges !== "object") {
-                return <div style={{ color: MUTED }}>تعديلات عامة على السجل</div>;
-              }
-
-              const entries = Object.entries(rawChanges).filter(([k]) => !ignoreKeys.includes(k));
-
-              if (entries.length === 0) {
-                return <div style={{ color: MUTED }}>تم إجراء تعديل على بيانات السجل (بدون تفاصيل قيم قديمة)</div>;
-              }
-
-              return entries.map(([field, val]) => {
-                const arabicLabel = fieldLabels[field] || field;
-                const oldValue = typeof val === "object" && val !== null ? val.old_value : undefined;
-                const newValue = typeof val === "object" && val !== null ? val.new_value : val;
-
-                return (
-                  <div key={field} className="flex items-center gap-2 border-b border-gray-100 last:border-0 pb-1">
-                    <span className="font-semibold min-w-[90px]" style={{ color: MUTED }}>{arabicLabel}:</span>
-                    {oldValue !== undefined && (
-                      <>
-                        <span className="line-through font-bold px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: DANGER }}>
-                          {String(oldValue || "—")}
-                        </span>
-                        <span>←</span>
-                      </>
-                    )}
-                    <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: "#D1FAE5", color: "#047857" }}>
-                      {String(newValue !== undefined && newValue !== null ? newValue : "—")}
-                    </span>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleApprove}
-              disabled={loadingAction}
-              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
-              style={{ background: SUCCESS, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
-            >
-              <Check size={14} /> اعتماد (تنظيف المساحة)
-            </button>
-            <button
-              onClick={handleRollback}
-              disabled={loadingAction}
-              className="btn-press flex-1 flex items-center justify-center gap-1 text-xs font-bold"
-              style={{ background: DANGER, color: "#fff", borderRadius: 10, padding: "8px 0", opacity: loadingAction ? 0.6 : 1 }}
-            >
-              <RotateCcw size={14} /> تراجع عن التعديل
-            </button>
-          </div>
-        </div>
+      {/* صندوق تنبيه طلب حذف أو تعديل بيانات — لصاحب الـworkspace فقط */}
+      {isOwnerAccount && (
+        <PendingChangeBanner
+          t={t}
+          kind="customer"
+          lastChange={active.last_change}
+          loadingAction={loadingAction}
+          onApprove={handleApprove}
+          onRollback={handleRollback}
+          onConfirmDelete={handleConfirmDelete}
+          onRestore={handleRestoreDeleted}
+        />
       )}
 
       {/* ----------------- باقي الواجهة والبيانات ----------------- */}
