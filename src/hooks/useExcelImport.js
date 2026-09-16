@@ -1,20 +1,36 @@
 import { useState, useRef } from "react";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { scheduleCallReminder } from "../notifications";
 import {
   STRINGS, parseTagsCell, findSectorId, findRoleId, findStageId,
   normalizeExcelDate, normalizeExcelDateTime, buildActivity,
+  MAX_IMPORT_ROWS, IMPORT_BATCH_SIZE,
 } from "../constants";
 
 // Excel *import* only — export lives in useExcelExport.js (the write side
 // uses a very different shape, so keeping them apart avoids one bloated
 // "excel stuff" file). Split out of App.jsx.
+//
+// Writes go through writeBatch() in chunks of IMPORT_BATCH_SIZE instead of
+// one addDoc() per row awaited in sequence. The old sequential version made
+// a large file (hundreds of rows) noticeably slow with the UI reporting
+// nothing beyond a static "Importing..." the whole time — this reports
+// (done/total) progress as each chunk commits, and cuts the number of
+// network round-trips roughly in half by writing the row's initial
+// activityLog entry directly instead of a separate appendActivity()
+// updateDoc() call afterward. MAX_IMPORT_ROWS caps a single import so an
+// oversized or wrong file fails fast with a clear message rather than
+// churning through thousands of rows silently.
 export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, showAlert, appendActivity }) {
   const fileInputRef = useRef(null);
   const supplierFileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [importingSuppliers, setImportingSuppliers] = useState(false);
+  // null while idle; {done, total} while a batch import is running, so the
+  // UI can show "Importing... (120/450)" instead of a static label.
+  const [importProgress, setImportProgress] = useState(null);
+  const [supplierImportProgress, setSupplierImportProgress] = useState(null);
 
   const triggerImportPicker = () => {
     if (!canEdit) return;
@@ -36,6 +52,11 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
       const wb = XLSX.read(data, { type: "array", cellDates: true });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      if (rows.length > MAX_IMPORT_ROWS) {
+        showAlert(t.importTooLarge(MAX_IMPORT_ROWS));
+        return;
+      }
 
       const headerMap = {
         companyName: [
@@ -64,7 +85,10 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         return "";
       };
 
-      let count = 0;
+      // Build the full list of valid rows up front so the total is known
+      // for progress reporting, and so an empty row never counts toward it.
+      const visitsCollection = collection(db, "users", ownerUid, "visits");
+      const pending = [];
       for (const row of rows) {
         const companyName = String(getField(row, "companyName") || "").trim();
         const contactName = String(getField(row, "contactName") || "").trim();
@@ -84,28 +108,42 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
           notes: String(getField(row, "notes") || "").trim(),
           callDateTime,
           notified: false,
-          activityLog: [],
+          activityLog: [buildActivity("created", t.activityCreated)],
           offers: [],
           createdAt: serverTimestamp(),
         };
 
-        const ref = await addDoc(collection(db, "users", ownerUid, "visits"), visitData);
-        await appendActivity(ref.id, buildActivity("created", t.activityCreated));
-        if (callDateTime) {
-          await scheduleCallReminder(
-            ref.id,
-            callDateTime,
-            `${t.reminderTitle} ${companyName}`,
-            t.reminderBody(contactName)
-          );
+        pending.push({ ref: doc(visitsCollection), visitData, companyName, contactName, callDateTime });
+      }
+
+      setImportProgress({ done: 0, total: pending.length });
+
+      let count = 0;
+      for (let i = 0; i < pending.length; i += IMPORT_BATCH_SIZE) {
+        const chunk = pending.slice(i, i + IMPORT_BATCH_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(({ ref, visitData }) => batch.set(ref, visitData));
+        await batch.commit();
+
+        for (const { ref, companyName, contactName, callDateTime } of chunk) {
+          if (callDateTime) {
+            await scheduleCallReminder(
+              ref.id,
+              callDateTime,
+              `${t.reminderTitle} ${companyName}`,
+              t.reminderBody(contactName)
+            );
+          }
         }
-        count++;
+        count += chunk.length;
+        setImportProgress({ done: count, total: pending.length });
       }
       showAlert(t.importSuccess(count));
     } catch (err) {
       showAlert(t.importError);
     } finally {
       setImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -130,6 +168,11 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
+      if (rows.length > MAX_IMPORT_ROWS) {
+        showAlert(t.importSuppliersTooLarge(MAX_IMPORT_ROWS));
+        return;
+      }
+
       const headerMap = {
         name: [
           STRINGS.ar.supplierNameLabel, STRINGS.en.supplierNameLabel,
@@ -150,7 +193,8 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         return "";
       };
 
-      let count = 0;
+      const suppliersCollection = collection(db, "users", ownerUid, "suppliers");
+      const pending = [];
       for (const row of rows) {
         const name = String(getField(row, "name") || "").trim();
         const contactName = String(getField(row, "contactName") || "").trim();
@@ -168,19 +212,32 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
           createdAt: serverTimestamp(),
         };
 
-        await addDoc(collection(db, "users", ownerUid, "suppliers"), supplierData);
-        count++;
+        pending.push({ ref: doc(suppliersCollection), supplierData });
+      }
+
+      setSupplierImportProgress({ done: 0, total: pending.length });
+
+      let count = 0;
+      for (let i = 0; i < pending.length; i += IMPORT_BATCH_SIZE) {
+        const chunk = pending.slice(i, i + IMPORT_BATCH_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(({ ref, supplierData }) => batch.set(ref, supplierData));
+        await batch.commit();
+        count += chunk.length;
+        setSupplierImportProgress({ done: count, total: pending.length });
       }
       showAlert(t.importSuppliersSuccess(count));
     } catch (err) {
       showAlert(t.importSuppliersError);
     } finally {
       setImportingSuppliers(false);
+      setSupplierImportProgress(null);
     }
   };
 
   return {
     fileInputRef, supplierFileInputRef, importing, importingSuppliers,
+    importProgress, supplierImportProgress,
     triggerImportPicker, handleImportFile, triggerSupplierImportPicker, handleImportSupplierFile,
   };
 }

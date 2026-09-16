@@ -5,7 +5,7 @@ import {
   setDoc, arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { normalizeEmail, isAdminEmail, resolvePrimaryAdminEmail, isPrimaryAdminEmail, canRemoveAdmin } from "../adminPermissions";
+import { normalizeEmail, isAdminEmail, resolvePrimaryAdminEmail, isPrimaryAdminEmail, canRemoveAdmin, canGrantAccess, canRevokeAccess } from "../adminPermissions";
 
 // Handles authentication plus multi-workspace permission resolution
 // (owner / editor / viewer) and the access-granting/revoking transactions.
@@ -332,11 +332,11 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   }, [permissionLoading, screen, isOwnerAccount, isReviewer]);
 
   const grantAccess = async (email, role) => {
-    if (!isOwnerAccount || !user) return;
+    if (!user) return;
+    if (!canGrantAccess({ isOwnerAccount, email, role })) return;
     if (!requireOnline()) return;
 
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !["editor", "viewer"].includes(role)) return;
+    const cleanEmail = normalizeEmail(email);
 
     const accessRef = doc(db, "access", user.uid);
     const lookupRef = doc(db, "access_by_email", cleanEmail);
@@ -377,11 +377,11 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   };
 
   const revokeAccess = async (email) => {
-    if (!isOwnerAccount || !user) return;
+    if (!user) return;
+    if (!canRevokeAccess({ isOwnerAccount, email })) return;
     if (!requireOnline()) return;
 
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) return;
+    const cleanEmail = normalizeEmail(email);
 
     const accessRef = doc(db, "access", user.uid);
     const lookupRef = doc(db, "access_by_email", cleanEmail);
