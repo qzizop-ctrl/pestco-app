@@ -20,6 +20,11 @@ updates:
       sentry:
         patterns:
           - "@sentry/*"
+      eslint:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
     ignore:
       # vite, @vitejs/plugin-react and vitest have to stay on compatible
       # major versions with each other (a solo major bump broke npm
@@ -32,6 +37,22 @@ updates:
       - dependency-name: "@vitejs/plugin-react"
         update-types: ["version-update:semver-major"]
       - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      # Same problem, same fix: eslint 10 broke npm install because
+      # eslint-plugin-react@7.37.5 only accepts eslint ^3-^9.7. The whole
+      # eslint + eslint-plugin-* + @eslint/js family needs to move
+      # together on a major bump, done by hand.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-plugin-react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-plugin-react-hooks"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-plugin-react-refresh"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-prettier"
         update-types: ["version-update:semver-major"]
 
   # The GitHub Actions used in .github/workflows/ (actions/checkout,
