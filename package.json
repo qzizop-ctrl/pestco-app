@@ -17,7 +17,8 @@
     "electron:build": "npm run build && electron-builder --win",
     "electron:release": "npm run build && electron-builder --win --publish always",
     "android:patch": "node scripts/patch-android-storage.cjs",
-    "android:setup": "npm run build && (test -d android || npx cap add android) && npm run android:patch && npx cap sync android"
+    "android:setup": "npm run build && (test -d android || npx cap add android) && npm run android:patch && npx cap sync android",
+    "firebase:deploy-rules": "firebase deploy --only firestore:rules"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",
