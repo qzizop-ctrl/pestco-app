@@ -33,7 +33,7 @@
     "@capacitor/share": "^8.0.1",
     "@sentry/react": "^10.74.0",
     "electron-updater": "^6.3.0",
-    "firebase": "^10.12.2",
+    "firebase": "^12.19.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.45.0",
