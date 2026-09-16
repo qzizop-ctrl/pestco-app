@@ -56,7 +56,7 @@ jobs:
       # GitHub Release for Windows
       # =========================
       - name: Create GitHub Release with Windows App
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: "win-v1.0.${{ github.run_number }}"
           name: "Windows Release v1.0.${{ github.run_number }}"
