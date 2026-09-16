@@ -20,6 +20,19 @@ updates:
       sentry:
         patterns:
           - "@sentry/*"
+    ignore:
+      # vite, @vitejs/plugin-react and vitest have to stay on compatible
+      # major versions with each other (a solo major bump broke npm
+      # install once already — vite 8 vs. a plugin-react still on the
+      # v4-v7 peer range). Minor/patch updates auto-PR as normal; a major
+      # bump needs to be done by hand for all three together, after
+      # checking they actually support each other.
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
 
   # The GitHub Actions used in .github/workflows/ (actions/checkout,
   # actions/setup-node, etc.)
