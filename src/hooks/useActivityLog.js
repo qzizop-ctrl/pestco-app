@@ -1,6 +1,6 @@
 import { doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { db } from "../firebase";
-import { buildActivity } from "../constants";
+import { buildActivity } from "../helpers";
 
 // A visit's activity timeline is written to from several places (customer
 // CRUD, offers, and the activity feed itself), so `appendActivity` is kept

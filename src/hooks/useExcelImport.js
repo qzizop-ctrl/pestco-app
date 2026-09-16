@@ -2,11 +2,9 @@ import { useState, useRef } from "react";
 import { collection, doc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { scheduleCallReminder } from "../notifications";
-import {
-  STRINGS, parseTagsCell, findSectorId, findRoleId, findStageId,
-  normalizeExcelDate, normalizeExcelDateTime, buildActivity,
-  MAX_IMPORT_ROWS, IMPORT_BATCH_SIZE,
-} from "../constants";
+import { STRINGS } from "../i18n";
+import { MAX_IMPORT_ROWS, IMPORT_BATCH_SIZE } from "../domain";
+import { parseTagsCell, findSectorId, findRoleId, findStageId, normalizeExcelDate, normalizeExcelDateTime, buildActivity } from "../helpers";
 
 // Excel *import* only — export lives in useExcelExport.js (the write side
 // uses a very different shape, so keeping them apart avoids one bloated

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { collection, doc, addDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
-import { parseTagsCell, emptySupplierForm } from "../constants";
+import { emptySupplierForm } from "../domain";
+import { parseTagsCell } from "../helpers";
 
 // Suppliers CRUD (simple contact records — no visits/pipeline/offers).
 // Split out of App.jsx; mirrors useCustomerRecords but for the much

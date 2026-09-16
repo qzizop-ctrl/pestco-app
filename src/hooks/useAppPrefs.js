@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { STRINGS } from "../constants";
+import { STRINGS } from "../i18n";
 
 // Small, self-contained preferences: language + dark mode (persisted to
 // localStorage) and the browser's online/offline status. Extracted out of

@@ -5,10 +5,8 @@ import {
 import { db } from "../firebase";
 import { scheduleCallReminder, cancelCallReminder } from "../notifications";
 import { getCurrentLocation } from "../geo";
-import {
-  parseTagsCell, buildActivity, buildVisitEntry, corePhoneDigits,
-  emptyForm, fmtReminder, toISODate,
-} from "../constants";
+import { emptyForm } from "../domain";
+import { parseTagsCell, buildActivity, buildVisitEntry, corePhoneDigits, fmtReminder, toISODate } from "../helpers";
 
 // Everything to do with a single customer ("visit") record: the edit form,
 // opening/closing the detail screen, saving, soft-deleting, pinning,
