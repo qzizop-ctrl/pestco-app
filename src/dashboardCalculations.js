@@ -136,22 +136,26 @@ export function computeAvgDealSizeForCurrency(offersInRange, currency) {
   return total / offers.length;
 }
 
-// Win rate: purchased / (purchased + rejected). Offers still pending or
-// installed aren't "decided" yet, so they're excluded from the denominator.
+// Win rate: won / (won + rejected). "Won" = purchased OR installed — an
+// installed offer was necessarily bought first (same reasoning as
+// buildOfferBreakdown's "convertedCount" below), so excluding it here would
+// silently undercount the win rate for exactly the cases that succeeded the
+// most. Offers still pending aren't "decided" yet, so they're excluded from
+// the denominator entirely.
 export function computeWinRate(offersByStatus) {
-  const purchased = (offersByStatus.purchased || {}).count || 0;
+  const won = ((offersByStatus.purchased || {}).count || 0) + ((offersByStatus.installed || {}).count || 0);
   const rejected = (offersByStatus.rejected || {}).count || 0;
-  const decided = purchased + rejected;
-  return decided > 0 ? (purchased / decided) * 100 : null;
+  const decided = won + rejected;
+  return decided > 0 ? (won / decided) * 100 : null;
 }
 
 // Sample size behind the win rate — shown alongside the percentage so a
 // rate computed from very few deals (e.g. 100% from 2 deals) isn't read
 // with the same confidence as one computed from a large sample.
 export function computeDecidedCount(offersByStatus) {
-  const purchased = (offersByStatus.purchased || {}).count || 0;
+  const won = ((offersByStatus.purchased || {}).count || 0) + ((offersByStatus.installed || {}).count || 0);
   const rejected = (offersByStatus.rejected || {}).count || 0;
-  return purchased + rejected;
+  return won + rejected;
 }
 
 // Groups per-status offer stats into the three buckets shown by the split

@@ -422,6 +422,49 @@ export const STRINGS = {
     deleteApprovedMsgSupplier: "تم حذف المورد نهائيًا.",
     deleteRestoredMsgSupplier: "تم استرجاع المورد بنجاح.",
 
+    // Edit-approval banner — shared between CustomerDetail and the supplier
+    // form (see useLastChangeActions.js). titleCustomer/titleSupplier let
+    // one shared <PendingChangeBanner> pick the right heading.
+    pendingEditTitleCustomer: "تنبيه تعديل بيانات (خاص بك)",
+    pendingEditTitleSupplier: "تنبيه تعديل بيانات مورد (خاص بك)",
+    pendingEditBy: (name) => `قام المستخدم ${name} بتعديل البيانات التالية:`,
+    approveEditBtn: "اعتماد (تنظيف المساحة)",
+    rollbackEditBtn: "تراجع عن التعديل",
+    genericEditNote: "تعديلات عامة على السجل",
+    editNoDetailsNote: "تم إجراء تعديل على بيانات السجل (بدون تفاصيل قيم قديمة)",
+    unknownUser: "غير معروف",
+
+    // Generic outcome messages for the approve/rollback/delete/restore
+    // actions on a pending last_change (customer or supplier alike).
+    workspaceResolveError: "تعذّر تحديد مساحة العمل الحالية.",
+    approveSuccessMsg: "تم اعتماد البيانات وتنظيف المساحة بنجاح.",
+    approveErrorMsg: (msg) => `حدث خطأ أثناء الاعتماد: ${msg}`,
+    rollbackSuccessMsg: "تم التراجع عن التعديلات وإعادة البيانات بنجاح.",
+    rollbackErrorMsg: (msg) => `حدث خطأ أثناء التراجع: ${msg}`,
+    deleteFinalErrorMsg: (msg) => `حدث خطأ أثناء اعتماد الحذف: ${msg}`,
+    restoreErrorMsg: (msg) => `حدث خطأ أثناء الاسترجاع: ${msg}`,
+
+    // Field labels shown inside the edit-approval banner's diff list.
+    customerChangeFieldLabels: {
+      companyName: "اسم الشركة",
+      contactName: "الشخص المسؤول",
+      phone: "رقم الهاتف",
+      email: "البريد الإلكتروني",
+      notes: "الملاحظات",
+      sector: "القطاع",
+      stage: "مرحلة المشروع",
+      visitDate: "تاريخ الزيارة",
+      callDateTime: "موعد التذكير",
+    },
+    supplierChangeFieldLabels: {
+      name: "اسم المورد",
+      contactName: "الشخص المسؤول",
+      phone: "رقم الهاتف",
+      email: "البريد الإلكتروني",
+      category: "نوع الخدمة/المنتج",
+      notes: "الملاحظات",
+    },
+
     // PDF report export
     dashExportPdfBtn: "تصدير تقرير PDF",
     dashPdfGenerating: "جارِ تجهيز التقرير...",
@@ -814,6 +857,49 @@ export const STRINGS = {
     restoreSupplierBtn: "Restore supplier",
     deleteApprovedMsgSupplier: "Supplier permanently deleted.",
     deleteRestoredMsgSupplier: "Supplier restored successfully.",
+
+    // Edit-approval banner — shared between CustomerDetail and the supplier
+    // form (see useLastChangeActions.js). titleCustomer/titleSupplier let
+    // one shared <PendingChangeBanner> pick the right heading.
+    pendingEditTitleCustomer: "Data edit pending review (yours to review)",
+    pendingEditTitleSupplier: "Supplier data edit pending review (yours to review)",
+    pendingEditBy: (name) => `${name} edited the following fields:`,
+    approveEditBtn: "Approve (clear pending edit)",
+    rollbackEditBtn: "Undo edit",
+    genericEditNote: "General edit to this record",
+    editNoDetailsNote: "This record was edited (no previous values recorded)",
+    unknownUser: "Unknown",
+
+    // Generic outcome messages for the approve/rollback/delete/restore
+    // actions on a pending last_change (customer or supplier alike).
+    workspaceResolveError: "Could not determine the current workspace.",
+    approveSuccessMsg: "Approved and cleared successfully.",
+    approveErrorMsg: (msg) => `Error while approving: ${msg}`,
+    rollbackSuccessMsg: "Edit rolled back and previous values restored.",
+    rollbackErrorMsg: (msg) => `Error while rolling back: ${msg}`,
+    deleteFinalErrorMsg: (msg) => `Error while confirming deletion: ${msg}`,
+    restoreErrorMsg: (msg) => `Error while restoring: ${msg}`,
+
+    // Field labels shown inside the edit-approval banner's diff list.
+    customerChangeFieldLabels: {
+      companyName: "Company name",
+      contactName: "Contact person",
+      phone: "Phone",
+      email: "Email",
+      notes: "Notes",
+      sector: "Sector",
+      stage: "Pipeline stage",
+      visitDate: "Visit date",
+      callDateTime: "Reminder time",
+    },
+    supplierChangeFieldLabels: {
+      name: "Supplier name",
+      contactName: "Contact person",
+      phone: "Phone",
+      email: "Email",
+      category: "Product/service type",
+      notes: "Notes",
+    },
 
     // PDF report export
     dashExportPdfBtn: "Export PDF Report",
