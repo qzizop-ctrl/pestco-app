@@ -43,6 +43,16 @@ jobs:
         run: npm install
 
       # =========================
+      # Run tests
+      # =========================
+      # Blocking on purpose: this covers the business-logic tests
+      # (permissions, dashboard calculations, etc.) — a red test here
+      # means the build below would ship a real regression, not just a
+      # style nit, so it should stop the release.
+      - name: Run tests
+        run: npm run test
+
+      # =========================
       # Build Web App
       # =========================
       - name: Build web app
