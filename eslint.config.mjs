@@ -13,6 +13,7 @@ import globals from "globals";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import prettierConfig from "eslint-config-prettier";
 
 export default [
   {
@@ -104,4 +105,9 @@ export default [
       globals: { ...globals.node },
     },
   },
+
+  // --- Prettier integration: turn off ESLint stylistic rules that would
+  // otherwise conflict with Prettier's own formatting. Must stay last so
+  // it overrides everything above it.
+  prettierConfig,
 ];
