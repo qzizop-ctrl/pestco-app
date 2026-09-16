@@ -63,7 +63,7 @@ export function canRemoveAdmin({ requesterIsPrimaryAdmin, targetEmail, primaryAd
 // The only two roles an owner can grant a workspace member (see
 // firestore.rules' canRead()/canWrite() — 'owner' is never granted, it's
 // implicit from being the doc's own uid).
-export const ACCESS_ROLES = ["editor", "viewer"];
+const ACCESS_ROLES = ["editor", "viewer"];
 
 // Guards useWorkspace.js's grantAccess(): only the workspace owner may
 // grant access, only to a real (non-empty, once normalized) email, and only

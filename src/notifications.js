@@ -19,7 +19,7 @@ function idToNumber(id) {
   return Math.abs(hash) || 1;
 }
 
-export const isNative = () => Capacitor.isNativePlatform();
+const isNative = () => Capacitor.isNativePlatform();
 
 export async function requestNotificationPermission() {
   if (!isNative()) return;

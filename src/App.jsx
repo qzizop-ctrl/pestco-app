@@ -4,7 +4,7 @@ import {
   ChevronRight, Languages, LogOut, Settings,
   Wifi, WifiOff, Moon, Sun,
 } from "lucide-react";
-import { Logo, BrandMark, TagChip, VisitCard, BottomNav, beep, SkeletonList } from "./components/Shared";
+import { BrandMark, BottomNav, SkeletonList } from "./components/Shared";
 import { SuppliersListScreen, SupplierFormScreen } from "./components/Suppliers";
 import SettingsScreen from "./components/Settings";
 import CustomerListScreen from "./components/CustomerList";

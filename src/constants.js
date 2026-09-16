@@ -6,10 +6,8 @@
 
 export const PRIMARY = "#0F2E5E";
 export const PRIMARY_MID = "#2A5FA8";
-export const BG = "var(--bg)";
 export const SURFACE = "var(--surface)";
 export const SURFACE_SUBTLE = "var(--surface-subtle)";
-export const CARD_BG = "var(--surface)";
 export const TEXT = "var(--text)";
 export const MUTED = "var(--muted)";
 export const DANGER = "#B3401F";
@@ -928,13 +926,6 @@ export const STRINGS = {
 };
 
 export const ROLE_IDS = ["purchasing", "it", "technical", "other"];
-export const ROLE_COLORS = {
-  purchasing: "#B9832A",
-  it: "#2C6E8C",
-  technical: "#0F5132",
-  other: "#6B7168",
-};
-export const roleColor = (id) => ROLE_COLORS[id] || ROLE_COLORS.other;
 
 export const SECTOR_IDS = ["construction", "education", "consultants", "private"];
 export const SECTOR_COLORS = {
@@ -1387,4 +1378,3 @@ export const emptySupplierForm = {
   isPinned: false,
 };
 
-export const OWNER_EMAIL = "qzizop@gmail.com"; // ضع إيميلك هنا بدقة
