@@ -85,24 +85,6 @@ export function BrandMark({ size = 22, color = "#F6F3EC", showUnderline = false 
 // الموجودة في أيقونة التطبيق الخارجية — واحدة بس، بتغطي المنتصف بشكل مايل.
 export const BADGE_WATERMARK = "linear-gradient(-45deg, transparent 42%, rgba(255,255,255,0.22) 50%, transparent 58%)";
 
-export function Logo({ size = 36 }) {
-  return (
-    <div
-      className="flex items-center justify-center"
-      style={{
-        width: size,
-        height: size,
-        background: "rgba(255,255,255,0.12)",
-        backgroundImage: BADGE_WATERMARK,
-        borderRadius: 12,
-        overflow: "hidden",
-      }}
-    >
-      <BrandMark size={size * 0.4} color="#F6F3EC" />
-    </div>
-  );
-}
-
 export function TagChip({ label, onRemove }) {
   return (
     <span

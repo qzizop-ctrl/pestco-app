@@ -8,7 +8,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { X, Check, Search } from "lucide-react";
-import { TEXT, MUTED, LINE, SURFACE, PRIMARY, GOLD_SOFT } from "../constants";
+import { TEXT, MUTED, SURFACE, PRIMARY, GOLD_SOFT } from "../constants";
 
 export default function SupplierPickerSheet({
   t, open, onClose,
