@@ -15,6 +15,7 @@ import { openWhatsApp } from "../nativeWhatsApp";
 import { mapsUrl } from "../geo";
 import { db } from "../firebase";
 import { doc, updateDoc, deleteDoc, deleteField } from "firebase/firestore";
+import { computeRollbackFields } from "../lastChange";
 
 export default function CustomerDetailScreen({
   t,
@@ -94,22 +95,7 @@ export default function CustomerDetailScreen({
     }
     setLoadingAction(true);
     try {
-      const rawChanges = active.last_change.changes || active.last_change.details || active.last_change;
-      const rollbackPayload = {};
-
-      if (typeof rawChanges === "object" && rawChanges !== null) {
-        Object.entries(rawChanges).forEach(([field, val]) => {
-          const ignoreKeys = ["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details"];
-          if (!ignoreKeys.includes(field)) {
-            if (val && typeof val === "object" && "old_value" in val) {
-              rollbackPayload[field] = val.old_value;
-            } else if (typeof val !== "object") {
-              rollbackPayload[field] = val;
-            }
-          }
-        });
-      }
-
+      const rollbackPayload = computeRollbackFields(active.last_change);
       rollbackPayload.last_change = deleteField();
 
       await updateDoc(docRef, rollbackPayload);

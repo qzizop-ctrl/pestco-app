@@ -42,6 +42,7 @@ export default function SettingsScreen({
   filteredCount,
   triggerImportPicker,
   importing,
+  importProgress,
   fileInputRef,
   handleImportFile,
   exportSuppliersAllToExcel,
@@ -49,6 +50,7 @@ export default function SettingsScreen({
   filteredSuppliersCount,
   triggerSupplierImportPicker,
   importingSuppliers,
+  supplierImportProgress,
   supplierFileInputRef,
   handleImportSupplierFile,
   newMemberEmail,
@@ -373,7 +375,12 @@ export default function SettingsScreen({
                   opacity: importing ? 0.6 : 1,
                 }}
               >
-                <Upload size={16} /> {importing ? t.importing : t.importBtn}
+                <Upload size={16} />{" "}
+                {importing
+                  ? importProgress && importProgress.total > 0
+                    ? t.importProgress(importProgress.done, importProgress.total)
+                    : t.importing
+                  : t.importBtn}
               </button>
               <input
                 ref={fileInputRef}
@@ -431,7 +438,12 @@ export default function SettingsScreen({
                   opacity: importingSuppliers ? 0.6 : 1,
                 }}
               >
-                <Upload size={16} /> {importingSuppliers ? t.importingSuppliers : t.importSuppliersBtn}
+                <Upload size={16} />{" "}
+                {importingSuppliers
+                  ? supplierImportProgress && supplierImportProgress.total > 0
+                    ? t.importSuppliersProgress(supplierImportProgress.done, supplierImportProgress.total)
+                    : t.importingSuppliers
+                  : t.importSuppliersBtn}
               </button>
               <input
                 ref={supplierFileInputRef}
