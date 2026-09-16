@@ -6,12 +6,9 @@ import {
 import { TagChip } from "./Shared";
 import PendingChangeBanner from "./PendingChangeBanner";
 import SupplierPickerSheet from "./SupplierPickerSheet";
-import {
-  PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
-  STATUS_COLORS, STAGE_IDS, CURRENCY_IDS, OFFER_STATUS_IDS, ACTIVITY_COLORS,
-  stageColor, offerStatusColor, visitStatus, getVisitEvents,
-  fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney, buildWhatsAppLink,
-} from "../constants";
+import { PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE, STATUS_COLORS, ACTIVITY_COLORS, stageColor, offerStatusColor } from "../theme";
+import { STAGE_IDS, CURRENCY_IDS, OFFER_STATUS_IDS } from "../domain";
+import { visitStatus, getVisitEvents, fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney, buildWhatsAppLink } from "../helpers";
 import { openWhatsApp } from "../nativeWhatsApp";
 import { mapsUrl } from "../geo";
 import { db } from "../firebase";

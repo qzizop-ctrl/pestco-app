@@ -10,7 +10,7 @@
 
 import React, { useState } from "react";
 import { X } from "lucide-react";
-import { PRIMARY_MID, TEXT, MUTED, LINE, SURFACE } from "../constants";
+import { PRIMARY_MID, TEXT, MUTED, LINE, SURFACE } from "../theme";
 
 export default function RejectionReasonModal({ t, initialReason, onConfirm, onCancel }) {
   const [reason, setReason] = useState(initialReason || "");

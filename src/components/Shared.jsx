@@ -10,11 +10,9 @@ import {
   X, Phone, Calendar, User, Star, MessageCircle, Mail,
   Settings, LayoutDashboard, Users as UsersIcon, Truck, Speaker, Monitor,
 } from "lucide-react";
-import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
-  STATUS_COLORS, STALE_ACTIVITY_DAYS,
-  stageColor, visitStatus, fmtReminder, isStaleCustomer, buildWhatsAppLink,
-} from "../constants";
+import { PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE, STATUS_COLORS, stageColor } from "../theme";
+import { STALE_ACTIVITY_DAYS } from "../domain";
+import { visitStatus, fmtReminder, isStaleCustomer, buildWhatsAppLink } from "../helpers";
 import { openWhatsApp } from "../nativeWhatsApp";
 
 // Loading placeholder shown instead of a plain "loading..." line while

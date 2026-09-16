@@ -12,11 +12,8 @@ import { VisitCard, SkeletonList } from "./Shared";
 import AlertsCenter from "./AlertsCenter";
 import FilterSheet from "./FilterSheet";
 import PendingEditsSheet from "./PendingEditsSheet";
-import {
-  PRIMARY, TEXT, MUTED, GOLD, LINE, SURFACE,
-  SECTOR_IDS,
-  sectorColor,
-} from "../constants";
+import { PRIMARY, TEXT, MUTED, GOLD, LINE, SURFACE, sectorColor } from "../theme";
+import { SECTOR_IDS } from "../domain";
 
 export default function CustomerListScreen({
   t,

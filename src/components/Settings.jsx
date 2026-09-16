@@ -9,9 +9,7 @@
 
 import React, { useState } from "react";
 import { Copy, Trash2, Download, Upload, UserCheck, Eye, X } from "lucide-react";
-import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
-} from "../constants";
+import { PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
 
 export default function SettingsScreen({
   t,

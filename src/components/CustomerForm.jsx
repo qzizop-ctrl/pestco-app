@@ -9,10 +9,9 @@ import {
   LayoutGrid, Flag, Tag, CalendarDays, PhoneCall, StickyNote,
 } from "lucide-react";
 import { TagChip } from "./Shared";
-import {
-  PRIMARY, PRIMARY_MID, DANGER, MUTED, LINE, SURFACE,
-  STAGE_IDS, SECTOR_IDS, ROLE_IDS, parseTagsCell,
-} from "../constants";
+import { PRIMARY, PRIMARY_MID, DANGER, MUTED, LINE, SURFACE } from "../theme";
+import { STAGE_IDS, SECTOR_IDS, ROLE_IDS } from "../domain";
+import { parseTagsCell } from "../helpers";
 
 // Bordered, rounded wrapper that puts a small leading icon in front of a
 // field so a form with many inputs is easier to scan at a glance. The

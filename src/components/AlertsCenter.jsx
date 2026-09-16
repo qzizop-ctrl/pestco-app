@@ -15,10 +15,9 @@
 
 import React, { useState } from "react";
 import { Bell, ChevronDown, WifiOff, AlertTriangle } from "lucide-react";
-import {
-  TEXT, MUTED, LINE, SURFACE, STATUS_COLORS, STALE_ACTIVITY_DAYS,
-  fmtReminder,
-} from "../constants";
+import { TEXT, MUTED, LINE, SURFACE, STATUS_COLORS } from "../theme";
+import { STALE_ACTIVITY_DAYS } from "../domain";
+import { fmtReminder } from "../helpers";
 
 export default function AlertsCenter({
   t, isOnline, dueReminders, staleOffers, staleCustomers, openDetail,

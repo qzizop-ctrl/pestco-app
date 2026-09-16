@@ -13,10 +13,8 @@ import {
   X, Tag, ListFilter, Clock, CalendarDays,
   Building2, GitBranch, SlidersHorizontal,
 } from "lucide-react";
-import {
-  PRIMARY, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE,
-  SECTOR_IDS, STAGE_IDS, sectorColor, stageColor,
-} from "../constants";
+import { PRIMARY, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE, sectorColor, stageColor } from "../theme";
+import { SECTOR_IDS, STAGE_IDS } from "../domain";
 
 function ChipRow({ children }) {
   return (

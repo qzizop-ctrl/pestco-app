@@ -17,10 +17,8 @@ import { TagChip, SkeletonList } from "./Shared";
 import { FormSection, IconField } from "./CustomerForm";
 import SupplierFilterSheet from "./SupplierFilterSheet";
 import PendingEditsSheet from "./PendingEditsSheet";
-import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE,
-  parseTagsCell, buildWhatsAppLink,
-} from "../constants";
+import { PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE } from "../theme";
+import { parseTagsCell, buildWhatsAppLink } from "../helpers";
 import { openWhatsApp } from "../nativeWhatsApp";
 import { db } from "../firebase";
 import { doc } from "firebase/firestore";

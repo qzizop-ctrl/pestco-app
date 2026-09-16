@@ -1,6 +1,6 @@
 import React from "react";
 import { Trash2, AlertTriangle, Check, RotateCcw } from "lucide-react";
-import { DANGER, SUCCESS, TEXT, MUTED, LINE, SURFACE } from "../constants";
+import { DANGER, SUCCESS, TEXT, MUTED, LINE, SURFACE } from "../theme";
 
 // Shown to the workspace owner (or reviewer) only, on either a customer or
 // a supplier record that has a pending last_change: either a pending delete
