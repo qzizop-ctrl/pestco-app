@@ -17,13 +17,13 @@ jobs:
       # Checkout
       # =========================
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       # =========================
       # Node.js
       # =========================
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -66,7 +66,7 @@ jobs:
       # GitHub Release for Windows
       # =========================
       - name: Create GitHub Release with Windows App
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: "win-v1.0.${{ github.run_number }}"
           name: "Windows Release v1.0.${{ github.run_number }}"
