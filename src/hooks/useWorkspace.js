@@ -33,10 +33,6 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   // console — no more guessing from position. `emails[0]` is kept only as
   // a fallback for a doc that hasn't been migrated to have the field yet.
   const [primaryAdminEmail, setPrimaryAdminEmail] = useState(null);
-  // TEMPORARY diagnostic — see the note by authErrorDebug below. Lets us
-  // tell "server confirmed zero admins" apart from "the read itself
-  // failed/errored", which look identical if we only look at adminEmails.
-  const [adminsDocDebug, setAdminsDocDebug] = useState(null);
   useEffect(() => {
     // This must be re-subscribed whenever `user` changes (not just once on
     // mount). A Firestore onSnapshot listener that gets permission-denied
@@ -55,7 +51,6 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     if (!user) {
       setAdminEmails(null);
       setPrimaryAdminEmail(null);
-      setAdminsDocDebug(null);
       return;
     }
     const unsub = onSnapshot(
@@ -78,22 +73,10 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
         // See adminPermissions.js — explicit primaryEmail field wins, only
         // falling back to "first in the array" for a doc that predates it.
         setPrimaryAdminEmail(resolvePrimaryAdminEmail(snap.data()?.primaryEmail, emails));
-        // TEMPORARY diagnostic
-        setAdminsDocDebug({
-          source: "server-confirmed-snapshot",
-          docExists: snap.exists(),
-          rawData: snap.data() || null,
-        });
       },
       (error) => {
         setAdminEmails([]);
         setPrimaryAdminEmail(null);
-        // TEMPORARY diagnostic
-        setAdminsDocDebug({
-          source: "listener-error",
-          errorCode: error.code,
-          errorMessage: error.message,
-        });
       }
     );
     return () => unsub();
@@ -110,12 +93,6 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   // AuthScreen surfaces this as an "email not registered" style message
   // once we've signed the account back out. Cleared by clearAuthError().
   const [authError, setAuthError] = useState(false);
-  // TEMPORARY diagnostic: snapshot of exactly what this hook saw right
-  // before deciding to sign an account back out, so the reason is visible
-  // in the UI itself instead of guessing from Firebase console screenshots.
-  // Safe to delete this state and everywhere it's set/read once the real
-  // cause is found and fixed.
-  const [authErrorDebug, setAuthErrorDebug] = useState(null);
   const previousResolvedOwnerRef = useRef(null);
   const clearAuthError = () => setAuthError(false);
 
@@ -236,16 +213,6 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
           // signed in with no data and no way forward.
           if (!isReviewerEmail) {
             setAuthError(true);
-            // TEMPORARY diagnostic — see note above.
-            setAuthErrorDebug({
-              emailKey,
-              adminEmails,
-              adminsDocDebug,
-              isReviewerEmail,
-              externalOwnersCount: externalOwners.length,
-              accessByEmailDocExists: snap.exists(),
-              rawOwnersMap: ownersMap,
-            });
             signOut(auth).catch((e) => console.error("Sign-out for unauthorized account failed:", e));
           }
           return;
@@ -513,7 +480,6 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     authChecked,
     user,
     authError,
-    authErrorDebug,
     clearAuthError,
     ownerUid,
     availableOwners,
