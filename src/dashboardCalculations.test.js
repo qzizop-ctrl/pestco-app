@@ -54,9 +54,10 @@ describe("resolvePeriod", () => {
       new Date(2026, 5, 1),
       t
     );
-    // from (May) / to (March) given reversed -> should normalize to March..May
+    // from (June, 0-indexed: month 5) / to (March, month 2) given reversed
+    // -> should normalize to March..June
     expect(r.start).toEqual(new Date(2026, 2, 1, 0, 0, 0));
-    expect(r.end).toEqual(new Date(2026, 5, 0, 23, 59, 59));
+    expect(r.end).toEqual(new Date(2026, 6, 0, 23, 59, 59));
     expect(r.granularity).toBe("month");
   });
 
