@@ -5,6 +5,8 @@ import {
   resolvePrimaryAdminEmail,
   isPrimaryAdminEmail,
   canRemoveAdmin,
+  canGrantAccess,
+  canRevokeAccess,
 } from "./adminPermissions";
 
 describe("normalizeEmail", () => {
@@ -119,5 +121,45 @@ describe("canRemoveAdmin", () => {
 
   it("is case/whitespace-insensitive when comparing to the primary email", () => {
     expect(canRemoveAdmin({ ...base, targetEmail: "  Owner@X.com  " })).toBe(false);
+  });
+});
+
+describe("canGrantAccess", () => {
+  const base = { isOwnerAccount: true, email: "member@x.com", role: "editor" };
+
+  it("allows the owner to grant editor or viewer to a real email", () => {
+    expect(canGrantAccess(base)).toBe(true);
+    expect(canGrantAccess({ ...base, role: "viewer" })).toBe(true);
+  });
+
+  it("refuses a non-owner account, even with a valid email/role", () => {
+    expect(canGrantAccess({ ...base, isOwnerAccount: false })).toBe(false);
+  });
+
+  it("refuses an empty or whitespace-only email", () => {
+    expect(canGrantAccess({ ...base, email: "" })).toBe(false);
+    expect(canGrantAccess({ ...base, email: "   " })).toBe(false);
+    expect(canGrantAccess({ ...base, email: null })).toBe(false);
+  });
+
+  it("refuses a role that isn't editor/viewer (e.g. 'owner' should never be grantable)", () => {
+    expect(canGrantAccess({ ...base, role: "owner" })).toBe(false);
+    expect(canGrantAccess({ ...base, role: "admin" })).toBe(false);
+    expect(canGrantAccess({ ...base, role: "" })).toBe(false);
+  });
+});
+
+describe("canRevokeAccess", () => {
+  it("allows the owner to revoke a real email", () => {
+    expect(canRevokeAccess({ isOwnerAccount: true, email: "member@x.com" })).toBe(true);
+  });
+
+  it("refuses a non-owner account", () => {
+    expect(canRevokeAccess({ isOwnerAccount: false, email: "member@x.com" })).toBe(false);
+  });
+
+  it("refuses an empty/missing email", () => {
+    expect(canRevokeAccess({ isOwnerAccount: true, email: "" })).toBe(false);
+    expect(canRevokeAccess({ isOwnerAccount: true, email: null })).toBe(false);
   });
 });

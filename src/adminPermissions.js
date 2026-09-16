@@ -59,3 +59,27 @@ export function canRemoveAdmin({ requesterIsPrimaryAdmin, targetEmail, primaryAd
   if ((adminEmailsCount || 0) <= 1) return false;
   return true;
 }
+
+// The only two roles an owner can grant a workspace member (see
+// firestore.rules' canRead()/canWrite() — 'owner' is never granted, it's
+// implicit from being the doc's own uid).
+export const ACCESS_ROLES = ["editor", "viewer"];
+
+// Guards useWorkspace.js's grantAccess(): only the workspace owner may
+// grant access, only to a real (non-empty, once normalized) email, and only
+// as one of the two grantable roles. Kept here — free of React/Firebase —
+// so the validation itself is testable without mocking a Firestore
+// transaction, the same reasoning as the rest of this file.
+export function canGrantAccess({ isOwnerAccount, email, role }) {
+  if (!isOwnerAccount) return false;
+  if (!normalizeEmail(email)) return false;
+  return ACCESS_ROLES.includes(role);
+}
+
+// Guards useWorkspace.js's revokeAccess(): only the owner, and only for a
+// real email — revoking role validity doesn't matter, since any existing
+// entry (valid or not) should be removable.
+export function canRevokeAccess({ isOwnerAccount, email }) {
+  if (!isOwnerAccount) return false;
+  return Boolean(normalizeEmail(email));
+}

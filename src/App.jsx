@@ -298,6 +298,7 @@ export default function App() {
 
   const {
     fileInputRef, supplierFileInputRef, importing, importingSuppliers,
+    importProgress, supplierImportProgress,
     triggerImportPicker, handleImportFile, triggerSupplierImportPicker, handleImportSupplierFile,
   } = useExcelImport({ ownerUid, user, canEdit, requireOnline, t, showAlert, appendActivity });
 
@@ -672,6 +673,7 @@ export default function App() {
           filteredCount={filtered.length}
           triggerImportPicker={triggerImportPicker}
           importing={importing}
+          importProgress={importProgress}
           fileInputRef={fileInputRef}
           handleImportFile={handleImportFile}
           exportSuppliersAllToExcel={exportSuppliersAllToExcel}
@@ -679,6 +681,7 @@ export default function App() {
           filteredSuppliersCount={filteredSuppliers.length}
           triggerSupplierImportPicker={triggerSupplierImportPicker}
           importingSuppliers={importingSuppliers}
+          supplierImportProgress={supplierImportProgress}
           supplierFileInputRef={supplierFileInputRef}
           handleImportSupplierFile={handleImportSupplierFile}
           newMemberEmail={newMemberEmail}

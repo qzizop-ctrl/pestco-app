@@ -26,6 +26,17 @@ export const THEME_VARS = {
 export const STALE_OFFER_DAYS = 30;
 export const STALE_ACTIVITY_DAYS = 90;
 
+// Upper bound on rows accepted by a single Excel import (visits or
+// suppliers). Two reasons: a very large file run sequentially used to be
+// slow with no feedback, and it protects against pasting in the wrong file
+// (e.g. thousands of rows) by mistake. Comfortably above any realistic
+// manual import; someone with more data should split the file.
+export const MAX_IMPORT_ROWS = 2000;
+
+// Firestore's writeBatch() hard limit is 500 operations; kept a bit under
+// that so a batch that also needed a stray extra write would still fit.
+export const IMPORT_BATCH_SIZE = 400;
+
 export const STATUS_COLORS = {
   overdue: "#C4443A",
   today: "#DB9A2C",
@@ -169,6 +180,8 @@ export const STRINGS = {
     importSuccess: (n) => `تم استيراد ${n} زيارة بنجاح`,
     importError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
     importing: "جارِ الاستيراد...",
+    importProgress: (done, total) => `جارِ الاستيراد... (${done}/${total})`,
+    importTooLarge: (max) => `الملف فيه أكتر من ${max} صف. قسّم الملف لأجزاء أصغر وحاول تاني.`,
     duplicatePhoneWarning: (company) => `رقم الهاتف ده مسجل بالفعل عند "${company}". هل تريد الإضافة برضو؟`,
     pipelineLabel: "مرحلة المشروع",
     pipelineAll: "كل المراحل",
@@ -233,6 +246,8 @@ export const STRINGS = {
     importSuppliersHint: "الملف لازم يكون بنفس أعمدة ملف تصدير الموردين (اسم المورد، نوع البضاعة، إلخ). الصفوف هتتضاف كموردين جدد.",
     importSuppliersSuccess: (n) => `تم استيراد ${n} مورد بنجاح`,
     importSuppliersError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+    importSuppliersProgress: (done, total) => `جارِ استيراد الموردين... (${done}/${total})`,
+    importSuppliersTooLarge: (max) => `الملف فيه أكتر من ${max} صف. قسّم الملف لأجزاء أصغر وحاول تاني.`,
 
     // Member invite hint
     memberInviteHint: "لو الشخص ده لسه معملش حساب على التطبيق بنفس الإيميل ده، الصلاحية هتتفعل تلقائيًا أول ما يعمل تسجيل.",
@@ -566,6 +581,8 @@ export const STRINGS = {
     importSuccess: (n) => `Successfully imported ${n} visit${n === 1 ? "" : "s"}`,
     importError: "Something went wrong reading the file, please check the file format",
     importing: "Importing...",
+    importProgress: (done, total) => `Importing... (${done}/${total})`,
+    importTooLarge: (max) => `The file has more than ${max} rows. Split it into smaller files and try again.`,
     duplicatePhoneWarning: (company) => `This phone number is already saved for "${company}". Add anyway?`,
     pipelineLabel: "Project Stage",
     pipelineAll: "All Stages",
@@ -622,6 +639,8 @@ export const STRINGS = {
     importSuppliersHint: "The file must use the same columns as the exported suppliers file (Supplier Name, Goods/Service Type, etc). Rows will be added as new suppliers.",
     importSuppliersSuccess: (n) => `Successfully imported ${n} supplier${n === 1 ? "" : "s"}`,
     importSuppliersError: "Something went wrong reading the file, please check the file format",
+    importSuppliersProgress: (done, total) => `Importing suppliers... (${done}/${total})`,
+    importSuppliersTooLarge: (max) => `The file has more than ${max} rows. Split it into smaller files and try again.`,
 
     // Member invite hint
     memberInviteHint: "If this person hasn't signed up with this email yet, their access will activate automatically as soon as they do.",
