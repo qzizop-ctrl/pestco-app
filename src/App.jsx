@@ -35,11 +35,10 @@ import { useSupplierRecords } from "./hooks/useSupplierRecords";
 import { useOfferActions } from "./hooks/useOfferActions";
 import { useActivityLog, makeAppendActivity } from "./hooks/useActivityLog";
 import { useFilteredData } from "./hooks/useFilteredData";
-import {
-  PRIMARY, TEXT, MUTED, GOLD,
-  STRINGS, STAGE_IDS, THEME_VARS,
-  parseVisitDate, fmtOffersTotals, sumOffersByCurrency,
-} from "./constants";
+import { PRIMARY, TEXT, MUTED, GOLD, THEME_VARS } from "./theme";
+import { STRINGS } from "./i18n";
+import { STAGE_IDS } from "./domain";
+import { parseVisitDate, fmtOffersTotals, sumOffersByCurrency } from "./helpers";
 
 const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
 

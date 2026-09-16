@@ -7,7 +7,7 @@ import {
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Languages } from "lucide-react";
 import { auth, db } from "./firebase";
-import { PRIMARY } from "./constants";
+import { PRIMARY } from "./theme";
 import { BrandMark, BADGE_WATERMARK } from "./components/Shared";
 
 const BG = "#F7F6F2";

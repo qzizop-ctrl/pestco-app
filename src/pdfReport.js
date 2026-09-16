@@ -42,11 +42,9 @@
 // ============================================================================
 
 import { Capacitor } from "@capacitor/core";
-import {
-  fmtMoney, fmtOffersTotals,
-  STAGE_IDS, OFFER_STATUS_IDS, stageColor,
-  PRIMARY,
-} from "./constants";
+import { stageColor, PRIMARY } from "./theme";
+import { STAGE_IDS, OFFER_STATUS_IDS } from "./domain";
+import { fmtMoney, fmtOffersTotals } from "./helpers";
 
 // The report always renders on a plain white/light background regardless of
 // the app's current theme (dark mode) — a report meant for printing/sharing

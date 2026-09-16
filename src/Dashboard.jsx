@@ -3,12 +3,10 @@ import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLef
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import {
-  STRINGS, SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS,
-  stageColor, offerStatusColor,
-  parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, toJsDate,
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE, SURFACE_SUBTLE,
-} from "./constants";
+import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE, SURFACE_SUBTLE } from "./theme";
+import { STRINGS } from "./i18n";
+import { SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS } from "./domain";
+import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, toJsDate } from "./helpers";
 import { generateDashboardPdf } from "./pdfReport";
 import {
   resolvePeriod, pctChange, computeAvgDealSizeForCurrency, computeWinRate,
