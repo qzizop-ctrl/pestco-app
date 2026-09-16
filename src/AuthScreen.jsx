@@ -76,7 +76,7 @@ const STRINGS = {
   },
 };
 
-export default function AuthScreen({ lang, setLang, authError, authErrorDebug, onClearAuthError }) {
+export default function AuthScreen({ lang, setLang, authError, onClearAuthError }) {
   const t = STRINGS[lang];
   const [mode, setMode] = useState("login"); // login | register | reset
   const [email, setEmail] = useState("");
@@ -270,30 +270,6 @@ export default function AuthScreen({ lang, setLang, authError, authErrorDebug, o
 
           {error && <p style={{ color: DANGER, fontSize: 13, fontWeight: 700, margin: 0 }}>{error}</p>}
           {info && <p style={{ color: PRIMARY, fontSize: 13, fontWeight: 700, margin: 0 }}>{info}</p>}
-
-          {/* TEMPORARY diagnostic panel — delete this block once the
-              access-control bug is found and fixed. Shows exactly what
-              useWorkspace saw right before signing the account back out. */}
-          {authErrorDebug && (
-            <pre
-              dir="ltr"
-              style={{
-                textAlign: "left",
-                fontSize: 10,
-                lineHeight: 1.4,
-                background: "#fff",
-                border: `1px solid ${DANGER}`,
-                borderRadius: 8,
-                padding: 8,
-                margin: 0,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-all",
-                color: TEXT,
-              }}
-            >
-              {JSON.stringify(authErrorDebug, null, 2)}
-            </pre>
-          )}
 
           <button
             type="submit"

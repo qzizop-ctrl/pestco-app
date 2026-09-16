@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { Capacitor } from "@capacitor/core";
 import {
   ChevronRight, Languages, LogOut, Settings,
@@ -15,36 +15,30 @@ import ConfirmModal from "./components/ConfirmModal";
 // xlsx is loaded lazily (dynamic import) only when Export/Import is
 // actually used from Settings, instead of top-level here — it's a sizeable
 // library that most sessions never touch, so this keeps it out of the
-// app's initial bundle/load.
+// app's initial bundle/load. See useExcelExport / useExcelImport.
 import { signOut } from "firebase/auth";
-import {
-  collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp,
-  arrayUnion, arrayRemove,
-} from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { auth } from "./firebase";
 import { reportException } from "./sentry";
 import AuthScreen from "./AuthScreen";
-import {
-  scheduleCallReminder, cancelCallReminder,
-} from "./notifications";
 import { useAppPrefs } from "./hooks/useAppPrefs";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useLiveData } from "./hooks/useLiveData";
 import { useExcelExport } from "./hooks/useExcelExport";
+import { useExcelImport } from "./hooks/useExcelImport";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useReminders } from "./hooks/useReminders";
 import { useAndroidBackButton } from "./hooks/useAndroidBackButton";
 import { useResetViewOnOpen } from "./hooks/useResetViewOnOpen";
-import { getCurrentLocation } from "./geo";
+import { useNavRestore } from "./hooks/useNavRestore";
+import { useCustomerRecords } from "./hooks/useCustomerRecords";
+import { useSupplierRecords } from "./hooks/useSupplierRecords";
+import { useOfferActions } from "./hooks/useOfferActions";
+import { useActivityLog, makeAppendActivity } from "./hooks/useActivityLog";
+import { useFilteredData } from "./hooks/useFilteredData";
 import {
-  PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD,
-  STRINGS, SECTOR_IDS, STAGE_IDS, THEME_VARS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS,
-  findSectorId, findRoleId, findStageId, parseTagsCell,
-  parseVisitDate, toISODate, normalizeExcelDate, normalizeExcelDateTime,
-  buildActivity, buildOffer, buildVisitEntry,
-  visitStatus, fmtReminder, fmtOffersTotals, sumOffersByCurrency, corePhoneDigits,
-  findDuplicateGroups, isStaleCustomer, collectSupplierTags, collectSupplierCategories, getVisitEvents,
-  emptyForm, emptySupplierForm, toJsDate,
+  PRIMARY, TEXT, MUTED, GOLD,
+  STRINGS, STAGE_IDS, THEME_VARS,
+  parseVisitDate, fmtOffersTotals, sumOffersByCurrency,
 } from "./constants";
 
 const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
@@ -76,45 +70,22 @@ export default function App() {
   // "all" or a "YYYY-MM" key — filters by when the customer record was
   // created, independent of visit/pipeline status (see availableAddedMonths).
   const [dateAddedFilter, setDateAddedFilter] = useState("all");
-  const [form, setForm] = useState(emptyForm);
-  const [activeId, setActiveId] = useState(null);
-  const [errors, setErrors] = useState({});
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("viewer");
-  const [importing, setImporting] = useState(false);
-  const [importingSuppliers, setImportingSuppliers] = useState(false);
   // True only while an actual Firestore write from the customer/supplier
   // save button is in flight — lets the save button show a "saving..."
-  // state instead of looking unresponsive on a slow connection.
+  // state instead of looking unresponsive on a slow connection. Shared
+  // between the customer and supplier forms, same as before the split.
   const [isSaving, setIsSaving] = useState(false);
+  // Part of the "reset when a different customer's detail screen is
+  // opened" group, alongside useOfferActions' newOffer — kept here (not
+  // inside useActivityLog) to avoid a circular hook dependency; see the
+  // comment in useActivityLog.js.
   const [newActivityText, setNewActivityText] = useState("");
-  const [newOffer, setNewOffer] = useState({
-    name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
-    supplierIds: [], supplierNames: [],
-  });
-  // Drives the "select suppliers" bottom sheet on the new-offer form — kept
-  // here (not local state in CustomerDetail) only because every other piece
-  // of `newOffer` editing state already lives in App.jsx; the sheet itself
-  // is presentational.
-  const [supplierPickerOpen, setSupplierPickerOpen] = useState(false);
-  const toggleOfferSupplier = (supplier) => {
-    setNewOffer((prev) => {
-      const supplierIds = prev.supplierIds || [];
-      const supplierNames = prev.supplierNames || [];
-      const isSelected = supplierIds.includes(supplier.id);
-      return {
-        ...prev,
-        supplierIds: isSelected
-          ? supplierIds.filter((id) => id !== supplier.id)
-          : [...supplierIds, supplier.id],
-        supplierNames: isSelected
-          ? supplierNames.filter((n) => n !== supplier.name)
-          : [...supplierNames, supplier.name],
-      };
-    });
-  };
-  const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
-  const [pendingSupplierDelete, setPendingSupplierDelete] = useState(null); // { id, companyName, timeoutId }
+  // `activeId` also has to live here (not inside useCustomerRecords) because
+  // useWorkspace resets it directly on sign-out/workspace-switch, and that
+  // hook is called before useCustomerRecords below.
+  const [activeId, setActiveId] = useState(null);
   // Drives the in-app rejection-reason modal (replaces window.prompt).
   // { initialReason, onConfirm(reason) } while the modal is open, else null.
   const [rejectionPrompt, setRejectionPrompt] = useState(null);
@@ -132,7 +103,6 @@ export default function App() {
     setConfirmDialog({ message, variant: "alert", onConfirm: () => setConfirmDialog(null) });
   }, []);
   const [showDuplicates, setShowDuplicates] = useState(false);
-  const [expandedOfferId, setExpandedOfferId] = useState(null);
 
   // ---- Suppliers (separate from customers — contacts only) ----
   const [supplierQuery, setSupplierQuery] = useState("");
@@ -144,13 +114,8 @@ export default function App() {
     const id = setTimeout(() => setDebouncedSupplierQuery(supplierQuery), 250);
     return () => clearTimeout(id);
   }, [supplierQuery]);
-  const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
-  const [activeSupplierId, setActiveSupplierId] = useState(null);
-  const [supplierErrors, setSupplierErrors] = useState({});
   const [supplierTagFilter, setSupplierTagFilter] = useState("all");
   const [supplierCategoryFilter, setSupplierCategoryFilter] = useState("all");
-  const fileInputRef = useRef(null);
-  const supplierFileInputRef = useRef(null);
 
   const t = STRINGS[lang];
   const isRootScreen = ROOT_SCREENS.includes(screen);
@@ -181,8 +146,25 @@ export default function App() {
     );
   }, [lang, showAlert]);
 
+  // Surfaces a save failure to the user instead of swallowing it silently.
+  // A "permission-denied" here almost always means the signed-in account's
+  // role in Firestore doesn't actually match what Settings shows (e.g. it's
+  // still "viewer" server-side) — this makes that visible instead of the
+  // save just silently doing nothing.
+  const reportSaveError = (e) => {
+    console.error("Save failed:", e);
+    const isPermissionError = e && (e.code === "permission-denied" || String(e.code || "").includes("permission-denied"));
+    showAlert(
+      isPermissionError
+        ? (lang === "ar"
+            ? "معنديش صلاحية أكتب في البيانات دي. تأكد إن الدور بتاعك مضبوط 'يشوف ويعدل' فعليًا."
+            : "You don't have permission to write this data. Confirm your role is actually set to 'editor'.")
+        : (lang === "ar" ? `حصل خطأ أثناء الحفظ: ${e && e.message ? e.message : e}` : `Save failed: ${e && e.message ? e.message : e}`)
+    );
+  };
+
   const {
-    authChecked, user, authError, authErrorDebug, clearAuthError, ownerUid, availableOwners, permissionLoading,
+    authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
     canEdit, isOwnerAccount, members,
     pendingSignups, isReviewer, isPrimaryAdmin, primaryAdminEmail, adminEmails, addAdminEmail, removeAdminEmail, reviewSignup, dismissSignup,
     switchOwnerWorkspace, grantAccess, revokeAccess,
@@ -190,9 +172,51 @@ export default function App() {
 
   const { visits, loaded, visitsError, suppliers, suppliersLoaded } = useLiveData(user, ownerUid);
 
+  useReminders({ visits, user, ownerUid, canEdit, t });
+
+  // Written to from customer CRUD, offers, and the activity feed itself —
+  // kept as a plain helper (not a hook) since it only needs ownerUid. See
+  // useActivityLog.js.
+  const appendActivity = makeAppendActivity(ownerUid, reportSaveError);
+
+  // Offers don't depend on which customer's detail screen is open (they
+  // always act on an explicit `visit` argument), so this can be created
+  // before useCustomerRecords/`active` below.
+  const {
+    newOffer, setNewOffer, resetNewOffer,
+    supplierPickerOpen, setSupplierPickerOpen, toggleOfferSupplier,
+    expandedOfferId, setExpandedOfferId,
+    addOffer, updateOfferStatus, deleteOffer,
+  } = useOfferActions({ ownerUid, canEdit, requireOnline, confirmAction, setRejectionPrompt, appendActivity, reportSaveError, t });
+
+  const {
+    form, setForm, errors, pendingDelete,
+    openNew, openEdit, openDetail, removeTagFromForm, saveForm,
+    deleteVisit, undoDelete, changeStage, togglePin, logVisitToday, clearCallReminder,
+  } = useCustomerRecords({
+    ownerUid, user, visits, canEdit, requireOnline, confirmAction, reportSaveError,
+    appendActivity, t, lang, setScreen, setIsSaving, activeId, setActiveId,
+    resetDetailPanels: () => {
+      setNewActivityText("");
+      resetNewOffer();
+    },
+  });
+
   const active = visits.find((v) => v.id === activeId) || null;
 
-  useReminders({ visits, user, ownerUid, canEdit, t });
+  const { deleteActivity, submitActivity } = useActivityLog({
+    ownerUid, active, canEdit, requireOnline, confirmAction, appendActivity, reportSaveError, t,
+    newActivityText, setNewActivityText,
+  });
+
+  const {
+    supplierForm, setSupplierForm, activeSupplierId, supplierErrors, pendingSupplierDelete,
+    openNewSupplier, openEditSupplier, removeTagFromSupplierForm, saveSupplierForm,
+    deleteSupplier, undoSupplierDelete, togglePinSupplier,
+  } = useSupplierRecords({
+    ownerUid, user, suppliers, canEdit, requireOnline, confirmAction, reportSaveError,
+    t, setScreen, setIsSaving,
+  });
 
   useAndroidBackButton({
     screen,
@@ -268,661 +292,28 @@ export default function App() {
     );
   }, [visitsError, ownerUid, lang, showAlert]);
 
-  // Surfaces a save failure to the user instead of swallowing it silently.
-  // A "permission-denied" here almost always means the signed-in account's
-  // role in Firestore doesn't actually match what Settings shows (e.g. it's
-  // still "viewer" server-side) — this makes that visible instead of the
-  // save just silently doing nothing.
-  const reportSaveError = (e) => {
-    console.error("Save failed:", e);
-    const isPermissionError = e && (e.code === "permission-denied" || String(e.code || "").includes("permission-denied"));
-    showAlert(
-      isPermissionError
-        ? (lang === "ar"
-            ? "معنديش صلاحية أكتب في البيانات دي. تأكد إن الدور بتاعك مضبوط 'يشوف ويعدل' فعليًا."
-            : "You don't have permission to write this data. Confirm your role is actually set to 'editor'.")
-        : (lang === "ar" ? `حصل خطأ أثناء الحفظ: ${e && e.message ? e.message : e}` : `Save failed: ${e && e.message ? e.message : e}`)
-    );
-  };
-
-  // Appends one entry to a visit's activity timeline without overwriting the rest of the log.
-  const appendActivity = async (visitId, activity) => {
-    if (!ownerUid) return;
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", visitId), {
-        activityLog: arrayUnion(activity),
-      });
-    } catch (e) {
-      reportSaveError(e);
-    }
-  };
-
-  // Removes one entry from a visit's activity timeline (with confirmation).
-  const deleteActivity = (entry) => {
-    if (!canEdit || !active || !ownerUid) return;
-    if (!requireOnline()) return;
-    confirmAction(t.deleteActivityConfirm, async () => {
-      try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", active.id), {
-          activityLog: arrayRemove(entry),
-        });
-      } catch (e) {
-        reportSaveError(e);
-      }
-    }, { danger: true });
-  };
-
-  // ---- Offers CRUD (stored as an array field on the customer document, same
-  // pattern as activityLog, so a customer's offers always stay attached to
-  // their own record and inherit the customer's sector automatically). ----
-
-  const addOffer = async (visit) => {
-    if (!canEdit || !visit || !ownerUid) return;
-    if (!requireOnline()) return;
-    if (!newOffer.name.trim()) return;
-
-    const saveOffer = async (offerToSave) => {
-      const offer = buildOffer(offerToSave);
-      try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
-          offers: arrayUnion(offer),
-        });
-        await appendActivity(visit.id, buildActivity("offer", t.activityOfferAdded(offer.name)));
-        setNewOffer({
-          name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending",
-          supplierIds: [], supplierNames: [],
-        });
-      } catch (e) {
-        reportSaveError(e);
-      }
-    };
-
-    if (newOffer.status === "rejected") {
-      setRejectionPrompt({
-        initialReason: "",
-        onConfirm: (reason) => saveOffer({ ...newOffer, rejectionReason: reason }),
-      });
-      return;
-    }
-    await saveOffer(newOffer);
-  };
-
-  const updateOfferStatus = async (visit, offer, newStatus) => {
-    if (!canEdit || !visit || !ownerUid) return;
-    if (!requireOnline()) return;
-    if (newStatus === offer.status) return;
-
-    const saveStatus = async (rejectionReason) => {
-      const updated = (visit.offers || []).map((o) =>
-        o.id === offer.id ? { ...o, status: newStatus, rejectionReason: newStatus === "rejected" ? rejectionReason : "" } : o
-      );
-      try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { offers: updated });
-        await appendActivity(visit.id, buildActivity("offer", t.activityOfferStatus(offer.name, t.offerStatuses[newStatus] || newStatus)));
-      } catch (e) {
-        reportSaveError(e);
-      }
-    };
-
-    if (newStatus === "rejected") {
-      setRejectionPrompt({
-        initialReason: offer.rejectionReason || "",
-        onConfirm: (reason) => saveStatus(reason),
-      });
-      return;
-    }
-    await saveStatus("");
-  };
-
-  const deleteOffer = (visit, offer) => {
-    if (!canEdit || !visit || !ownerUid) return;
-    if (!requireOnline()) return;
-    confirmAction(t.deleteOfferConfirm, async () => {
-      try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
-          offers: arrayRemove(offer),
-        });
-      } catch (e) {
-        reportSaveError(e);
-      }
-    }, { danger: true });
-  };
-
-  const openNew = () => {
-    if (!canEdit) return;
-    setForm(emptyForm);
-    setErrors({});
-    setScreen("form");
-  };
-
-  const openEdit = (visit) => {
-    if (!canEdit) return;
-    setForm({
-      ...emptyForm,
-      ...visit,
-      stage: visit.stage || "",
-      visitDate: toISODate(visit.visitDate),
-      tagsInput: (visit.tags || []).join(", "),
-    });
-    setErrors({});
-    setScreen("form");
-  };
-
-  // Stable reference (empty deps — only calls setState setters, which React
-  // guarantees never change) so VisitCard's React.memo can actually skip
-  // re-rendering rows on unrelated App re-renders, e.g. while typing in
-  // the search box.
-  const openDetail = useCallback((visit) => {
-    setActiveId(visit.id);
-    setNewActivityText("");
-    setNewOffer({ name: "", offerNumber: "", amount: "", currency: "EGP", offerDate: new Date().toISOString().slice(0, 10), status: "pending" });
-    setExpandedOfferId(null);
-    setScreen("detail");
-  }, []);
-
-  // ---- Suppliers CRUD (simple contact records — no visits/pipeline/offers) ----
-
-  const openNewSupplier = () => {
-    if (!canEdit) return;
-    setSupplierForm(emptySupplierForm);
-    setSupplierErrors({});
-    setActiveSupplierId(null);
-    setScreen("supplier-form");
-  };
-
-  // Loads the supplier's tags array back into the comma-separated text field
-  // the form uses, the same way openEdit does for customer tags.
-  const openEditSupplier = (supplier) => {
-    if (!canEdit) return;
-    setSupplierForm({
-      ...emptySupplierForm,
-      ...supplier,
-      tagsInput: (supplier.tags || []).join(", "),
-    });
-    setSupplierErrors({});
-    setActiveSupplierId(supplier.id);
-    setScreen("supplier-form");
-  };
-
-  // ---- Resume where you left off after the app is killed in the background ----
-  //
-  // On Android especially, switching to another app doesn't just pause this
-  // one — under memory pressure the OS can kill the whole process outright.
-  // When the person comes back, this is a fresh React mount: `screen` resets
-  // to its default ("list") and whatever detail/supplier they had open is
-  // gone, even though from their side they never closed the app. This
-  // persists just enough (which screen, which record id) to reopen the same
-  // place — not full in-progress form data, since restoring a half-typed
-  // "form"/new-supplier screen with blank fields would be worse than just
-  // landing on the list.
-  const NAV_RESTORE_KEY = "pestco_nav_state";
-  const RESTORABLE_SCREENS = ["dashboard", "list", "suppliers", "settings", "detail", "supplier-form"];
-
-  useEffect(() => {
-    if (!RESTORABLE_SCREENS.includes(screen)) return;
-    // Only persist "supplier-form" when it's actually viewing/editing an
-    // existing supplier (has an id to restore with) — a blank new-supplier
-    // form isn't worth resuming into.
-    if (screen === "supplier-form" && !activeSupplierId) return;
-    if (screen === "detail" && !activeId) return;
-    try {
-      localStorage.setItem(NAV_RESTORE_KEY, JSON.stringify({ screen, activeId, activeSupplierId }));
-    } catch (e) {
-      // Storage can be unavailable (private mode, quota, etc.) — losing the
-      // "resume where I left off" convenience is fine; nothing else here
-      // depends on this succeeding.
-    }
-  }, [screen, activeId, activeSupplierId]);
-
-  const [navRestored, setNavRestored] = useState(false);
-  useEffect(() => {
-    if (navRestored) return;
-    let saved = null;
-    try {
-      saved = JSON.parse(localStorage.getItem(NAV_RESTORE_KEY) || "null");
-    } catch (e) {
-      saved = null;
-    }
-    if (!saved || !RESTORABLE_SCREENS.includes(saved.screen)) {
-      setNavRestored(true);
-      return;
-    }
-    if (saved.screen === "detail") {
-      if (!loaded) return; // wait for visits to actually load before deciding
-      const visit = visits.find((v) => v.id === saved.activeId);
-      if (visit) openDetail(visit);
-      else setScreen("list");
-      setNavRestored(true);
-      return;
-    }
-    if (saved.screen === "supplier-form") {
-      // openEditSupplier silently no-ops until canEdit resolves, so wait
-      // for permission resolution too, not just the supplier list.
-      if (!suppliersLoaded || permissionLoading) return;
-      const supplier = suppliers.find((s) => s.id === saved.activeSupplierId);
-      if (supplier) openEditSupplier(supplier);
-      else setScreen("suppliers");
-      setNavRestored(true);
-      return;
-    }
-    setScreen(saved.screen);
-    setNavRestored(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navRestored, loaded, suppliersLoaded, permissionLoading, visits, suppliers]);
-
-  const validateSupplier = () => {
-    const e = {};
-    if (!supplierForm.name.trim()) e.name = t.supplierNameError;
-    setSupplierErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  // Removes one tag from the supplier form's comma-separated tags text,
-  // mirroring removeTagFromForm for customers.
-  const removeTagFromSupplierForm = (tag) => {
-    const remaining = (supplierForm.tagsInput || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s && s !== tag);
-    setSupplierForm({ ...supplierForm, tagsInput: remaining.join(", ") });
-  };
-
-  const saveSupplierForm = async () => {
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (!validateSupplier() || !user || !ownerUid) return;
-
-    const { id, tagsInput, last_change, ...rest } = supplierForm;
-    const data = { ...rest, tags: parseTagsCell(tagsInput) };
-    const original = activeSupplierId ? suppliers.find((s) => s.id === activeSupplierId) : null;
-
-    // Same audit-trail approach as saveForm for customers: diff the new data
-    // against the record actually in Firestore (suppliers state) so
-    // last_change.changes carries real old/new values, and flag the record
-    // with last_change so it surfaces in the owner's pending-edits bell
-    // (shared with customer edits) for review.
-    const auditIgnoreKeys = ["tags", "createdAt", "updatedAt", "isPinned", "deleted"];
-    const changes = {};
-    if (original) {
-      Object.keys(data).forEach((key) => {
-        if (auditIgnoreKeys.includes(key)) return;
-        const oldVal = original[key];
-        const newVal = data[key];
-        const oldCompare = oldVal ?? "";
-        const newCompare = newVal ?? "";
-        if (oldCompare !== newCompare) {
-          changes[key] = { old_value: oldVal ?? "فارغ", new_value: newVal ?? "فارغ" };
-        }
-      });
-    }
-
-    const lastChangeData = {
-      updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-      updatedById: user?.uid || null,
-      updatedAt: new Date().toISOString(),
-      ...(Object.keys(changes).length > 0 ? { changes } : {}),
-    };
-
-    setIsSaving(true);
-    try {
-      if (activeSupplierId) {
-        await updateDoc(doc(db, "users", ownerUid, "suppliers", activeSupplierId), {
-          ...data,
-          last_change: lastChangeData,
-        });
-      } else {
-        await addDoc(collection(db, "users", ownerUid, "suppliers"), {
-          ...data,
-          last_change: lastChangeData,
-          createdAt: serverTimestamp(),
-        });
-      }
-      setScreen("suppliers");
-    } catch (e) {
-      reportSaveError(e);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const deleteSupplier = (id) => {
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (!user || !ownerUid) return;
-    confirmAction(t.deleteSupplierConfirm, () => {
-      proceedDeleteSupplier(id);
-    }, { danger: true });
-  };
-
-  // Soft delete: same pattern as proceedDeleteVisit for customers — hide it
-  // immediately (self-undo window), then flag it with deleted + a
-  // last_change of type "delete" instead of actually removing the document.
-  // That's what lets it show up in the owner's pending-edits bell/sheet and
-  // be approved (final delete) or rolled back (restored) from
-  // SupplierFormScreen, mirroring the customer review flow.
-  const proceedDeleteSupplier = async (id) => {
-    const supplier = suppliers.find((s) => s.id === id);
-    setScreen("suppliers");
-
-    const timeoutId = setTimeout(async () => {
-      try {
-        await updateDoc(doc(db, "users", ownerUid, "suppliers", id), {
-          deleted: true,
-          last_change: {
-            type: "delete",
-            updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-            updatedById: user?.uid || null,
-            updatedAt: new Date().toISOString(),
-          },
-        });
-      } catch (e) {
-        reportSaveError(e);
-      }
-      setPendingSupplierDelete((cur) => (cur && cur.id === id ? null : cur));
-    }, 5000);
-
-    setPendingSupplierDelete({ id, companyName: supplier ? supplier.name : "", timeoutId });
-  };
-
-  const undoSupplierDelete = () => {
-    if (!pendingSupplierDelete) return;
-    clearTimeout(pendingSupplierDelete.timeoutId);
-    setPendingSupplierDelete(null);
-  };
-
-  const togglePinSupplier = async (supplier) => {
-    if (!canEdit || !ownerUid) return;
-    if (!requireOnline()) return;
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "suppliers", supplier.id), { isPinned: !supplier.isPinned });
-    } catch (e) {
-      reportSaveError(e);
-    }
-  };
-
-  const validate = () => {
-    const e = {};
-    if (!form.companyName.trim()) e.companyName = t.companyError;
-    if (!form.contactName.trim()) e.contactName = t.contactError;
-    if (!form.sector) e.sector = t.sectorError;
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const findDuplicatePhone = (phone, excludeId) => {
-    const clean = corePhoneDigits(phone);
-    if (!clean) return null;
-    return (
-      visits.find(
-        (v) => v.id !== excludeId && corePhoneDigits(v.phone) === clean
-      ) || null
-    );
-  };
-
-  const removeTagFromForm = (tag) => {
-    const remaining = (form.tagsInput || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s && s !== tag);
-    setForm({ ...form, tagsInput: remaining.join(", ") });
-  };
-
-  const saveForm = () => {
-    // Defense in depth: even if the UI hid the buttons, never let a
-    // viewer's client write. The Firestore rules enforce this too.
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (!validate() || !user || !ownerUid) return;
-
-    const proceedSave = async () => {
-      const { id, tagsInput, activityLog, offers, visitHistory, last_change, originalCustomer, ...rest } = form;
-      const data = { ...rest, tags: parseTagsCell(tagsInput) };
-      const original = id ? visits.find((v) => v.id === id) : null;
-
-      // تجهيز كائن التتبع (Audit Log) — بيقارن كل حقل في البيانات الجديدة
-      // بالسجل الأصلي الموجود فعليًا في Firestore (visits state)، عشان
-      // القيم القديمة في last_change.changes تبقى حقيقية، مش "فارغ" لكل حقل.
-      const auditIgnoreKeys = ["tags", "createdAt", "updatedAt"];
-      const changes = {};
-      if (original) {
-        Object.keys(data).forEach((key) => {
-          if (auditIgnoreKeys.includes(key)) return;
-          const oldVal = original[key];
-          const newVal = data[key];
-          const oldCompare = oldVal ?? "";
-          const newCompare = newVal ?? "";
-          if (oldCompare !== newCompare) {
-            changes[key] = { old_value: oldVal ?? "فارغ", new_value: newVal ?? "فارغ" };
-          }
-        });
-      }
-
-      const lastChangeData = {
-        updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-        updatedById: user?.uid || null,
-        updatedAt: new Date().toISOString(),
-        ...(Object.keys(changes).length > 0 ? { changes } : {}),
-      };
-
-      setIsSaving(true);
-      try {
-        let savedId = id;
-        if (id) {
-          const updatePayload = {
-            ...data,
-            last_change: lastChangeData,
-            updatedAt: new Date().toISOString()
-          };
-          if (original && original.visitDate !== data.visitDate && data.visitDate) {
-            updatePayload.visitHistory = arrayUnion(buildVisitEntry(data.visitDate));
-          }
-          await updateDoc(doc(db, "users", ownerUid, "visits", id), updatePayload);
-        } else {
-          const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
-            ...data,
-            last_change: lastChangeData,
-            activityLog: [],
-            offers: [],
-            visitHistory: data.visitDate ? [buildVisitEntry(data.visitDate)] : [],
-            createdAt: serverTimestamp(),
-            updatedAt: new Date().toISOString()
-          });
-          savedId = ref.id;
-        }
-
-        if (!id) {
-          await appendActivity(savedId, buildActivity("created", t.activityCreated));
-        } else {
-          if (original && original.stage !== data.stage) {
-            await appendActivity(
-              savedId,
-              buildActivity(
-                "stage",
-                data.stage ? t.activityStageChanged(t.stages[data.stage] || data.stage) : t.activityStageCleared
-              )
-            );
-          }
-          if (original && original.callDateTime !== data.callDateTime && data.callDateTime) {
-            await appendActivity(savedId, buildActivity("call", t.activityCallSet(fmtReminder(data.callDateTime, t.locale))));
-          }
-        }
-
-        if (data.callDateTime) {
-          await scheduleCallReminder(
-            savedId,
-            data.callDateTime,
-            `${t.reminderTitle} ${data.companyName}`,
-            t.reminderBody(data.contactName)
-          );
-        } else {
-          await cancelCallReminder(savedId);
-        }
-        setScreen("list");
-      } catch (e) {
-        reportSaveError(e);
-      } finally {
-        setIsSaving(false);
-      }
-    };
-
-    // Chain: phone-missing warning -> duplicate-phone warning -> actual save.
-    // Each step only runs once the previous one's confirm modal is accepted.
-    const checkDuplicateThenSave = () => {
-      const duplicate = form.phone ? findDuplicatePhone(form.phone, form.id) : null;
-      if (duplicate) {
-        confirmAction(t.duplicatePhoneWarning(duplicate.companyName), proceedSave);
-        return;
-      }
-      proceedSave();
-    };
-
-    if (!form.phone.trim()) {
-      confirmAction(t.phoneMissingWarning, checkDuplicateThenSave);
-      return;
-    }
-    checkDuplicateThenSave();
-  };
-
-  const deleteVisit = (id) => {
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (!user || !ownerUid) return;
-    const confirmMsg = lang === "ar"
-      ? "هل أنت متأكد من حذف هذا العميل؟"
-      : "Are you sure you want to delete this customer?";
-    confirmAction(confirmMsg, () => {
-      proceedDeleteVisit(id);
-    }, { danger: true });
-  };
-
-  const proceedDeleteVisit = async (id) => {
-
-    const visit = visits.find((v) => v.id === id);
-    setScreen("list");
-
-    // Soft delete: hide immediately from the UI (self-undo window for the
-    // person deleting), then — after a few seconds — flag the document as
-    // deleted instead of actually removing it from Firestore. Flagging it
-    // (rather than deleteDoc) sets last_change just like a normal edit does,
-    // so it shows up in the owner's pending-edits bell/sheet and can be
-    // approved (final delete) or rolled back (restored) from CustomerDetail,
-    // the same review flow edits already get. Only the owner's approval
-    // actually calls deleteDoc.
-    const timeoutId = setTimeout(async () => {
-      try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", id), {
-          deleted: true,
-          last_change: {
-            type: "delete",
-            updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-            updatedById: user?.uid || null,
-            updatedAt: new Date().toISOString(),
-          },
-        });
-        await cancelCallReminder(id);
-      } catch (e) {
-        reportSaveError(e);
-      }
-      setPendingDelete((cur) => (cur && cur.id === id ? null : cur));
-    }, 5000);
-
-    setPendingDelete({ id, companyName: visit ? visit.companyName : "", timeoutId });
-  };
-
-  const undoDelete = () => {
-    if (!pendingDelete) return;
-    clearTimeout(pendingDelete.timeoutId);
-    setPendingDelete(null);
-  };
-
-  // Quick stage change from the detail screen, without opening the full edit form.
-  // Tapping the currently-active stage again clears it instead of no-op'ing.
-  const changeStage = async (visit, newStage) => {
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (!ownerUid) return;
-    const current = visit.stage || "";
-    const target = newStage === current ? "" : newStage;
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { stage: target });
-      await appendActivity(
-        visit.id,
-        buildActivity(
-          "stage",
-          target ? t.activityStageChanged(t.stages[target] || target) : t.activityStageCleared
-        )
-      );
-    } catch (e) {
-      reportSaveError(e);
-    }
-  };
-
-  // Pins/unpins a customer so it stays sorted to the top of the list.
-  // Stable across renders unless canEdit/ownerUid/requireOnline actually
-  // change — same reasoning as openDetail above.
-  const togglePin = useCallback(async (visit) => {
-    if (!canEdit || !ownerUid) return;
-    if (!requireOnline()) return;
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { isPinned: !visit.isPinned });
-    } catch (e) {
-      reportSaveError(e);
-    }
-  }, [canEdit, ownerUid, requireOnline]);
-
-  // Records that an actual visit happened today: pushes a new visit-history
-  // entry (so the Dashboard's visit count reflects real repeat visits) and
-  // bumps the customer's visitDate to today.
-  const logVisitToday = async (visit) => {
-    if (!canEdit || !visit || !ownerUid) return;
-    if (!requireOnline()) return;
-    const today = new Date().toISOString().slice(0, 10);
-    // Best-effort GPS capture: never blocks the save. If the user denies the
-    // permission, the browser/WebView doesn't support it, or it times out,
-    // `location` just resolves to null and the visit is logged with no pin
-    // — same as before this feature existed.
-    const location = await getCurrentLocation();
-    try {
-      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
-        visitDate: today,
-        visitHistory: arrayUnion(buildVisitEntry(today, location)),
-        // Kept as a top-level field (in addition to living inside the
-        // visitHistory entry above) so the detail screen can show an
-        // "open on map" link for the latest visit without having to scan
-        // the whole history array.
-        lastVisitLocation: location || null,
-      });
-      await appendActivity(visit.id, buildActivity("visit", t.activityVisitLogged(today)));
-    } catch (e) {
-      reportSaveError(e);
-    }
-  };
-
-  // Clears a customer's pending call reminder: cancels the local
-  // notification and logs it as a completed call in the activity feed.
-  const clearCallReminder = async (visit) => {
-    if (!requireOnline()) return;
-    if (!user || !ownerUid || !visit) return;
-    updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
-      callDateTime: "",
-      notified: false,
-    }).catch(() => {});
-    cancelCallReminder(visit.id);
-    await appendActivity(visit.id, buildActivity("call", t.activityCallDone));
-  };
-
-  const submitActivity = async () => {
-    if (!canEdit || !active) return;
-    if (!requireOnline()) return;
-    const text = newActivityText.trim();
-    if (!text) return;
-    await appendActivity(active.id, buildActivity("note", text));
-    setNewActivityText("");
-  };
-
   // Excel export lives in useExcelExport (src/hooks/useExcelExport.js) — see
   // that file for visitsToRows/suppliersToRows and the actual xlsx writing.
   const { exportVisits, exportSuppliers, saveBackupWorkbook } = useExcelExport({ t, canEdit });
+
+  const {
+    fileInputRef, supplierFileInputRef, importing, importingSuppliers,
+    triggerImportPicker, handleImportFile, triggerSupplierImportPicker, handleImportSupplierFile,
+  } = useExcelImport({ ownerUid, user, canEdit, requireOnline, t, showAlert, appendActivity });
+
+  const {
+    visibleVisits, dueReminders, staleOffers, staleCustomers,
+    pendingEdits, pendingSupplierEdits, duplicateGroups,
+    allTags, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
+    dateAddedScopeTotal, availableAddedMonths, filtered,
+    visibleSuppliers, allSupplierTags, allSupplierCategories, filteredSuppliers,
+  } = useFilteredData({
+    visits, suppliers, pendingDelete, pendingSupplierDelete,
+    sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly,
+    dateAddedFilter, setDateAddedFilter, debouncedQuery,
+    supplierTagFilter, supplierCategoryFilter, debouncedSupplierQuery,
+    t,
+  });
 
   // The live listener already holds every customer (no pagination limit),
   // so exporting "all" is just exporting the current in-memory list.
@@ -936,239 +327,17 @@ export default function App() {
 
   const exportSuppliersFilteredToExcel = () => exportSuppliers(filteredSuppliers, "filtered");
 
-  const triggerSupplierImportPicker = () => {
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (supplierFileInputRef.current) supplierFileInputRef.current.click();
-  };
-
-  const handleImportSupplierFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (!file || !user || !ownerUid) return;
-
-    setImportingSuppliers(true);
-    try {
-      const XLSX = await import("xlsx");
-      const data = await file.arrayBuffer();
-      const wb = XLSX.read(data, { type: "array", cellDates: true });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-      const headerMap = {
-        name: [
-          STRINGS.ar.supplierNameLabel, STRINGS.en.supplierNameLabel,
-          STRINGS.ar.supplierNameLabel.replace(" *", ""), STRINGS.en.supplierNameLabel.replace(" *", ""),
-        ],
-        contactName: [STRINGS.ar.supplierContactLabel, STRINGS.en.supplierContactLabel],
-        category: [STRINGS.ar.supplierCategoryLabel, STRINGS.en.supplierCategoryLabel],
-        tags: [STRINGS.ar.supplierTagsLabel, STRINGS.en.supplierTagsLabel],
-        phone: [STRINGS.ar.phoneLabel, STRINGS.en.phoneLabel],
-        email: [STRINGS.ar.emailLabel, STRINGS.en.emailLabel],
-        notes: [STRINGS.ar.supplierNotesLabel, STRINGS.en.supplierNotesLabel],
-      };
-
-      const getField = (row, key) => {
-        for (const candidate of headerMap[key]) {
-          if (row[candidate] !== undefined && row[candidate] !== "") return row[candidate];
-        }
-        return "";
-      };
-
-      let count = 0;
-      for (const row of rows) {
-        const name = String(getField(row, "name") || "").trim();
-        const contactName = String(getField(row, "contactName") || "").trim();
-        if (!name && !contactName) continue;
-
-        const supplierData = {
-          name,
-          contactName,
-          category: String(getField(row, "category") || "").trim(),
-          tags: parseTagsCell(getField(row, "tags")),
-          phone: String(getField(row, "phone") || "").trim(),
-          email: String(getField(row, "email") || "").trim(),
-          notes: String(getField(row, "notes") || "").trim(),
-          isPinned: false,
-          createdAt: serverTimestamp(),
-        };
-
-        await addDoc(collection(db, "users", ownerUid, "suppliers"), supplierData);
-        count++;
-      }
-      showAlert(t.importSuppliersSuccess(count));
-    } catch (err) {
-      showAlert(t.importSuppliersError);
-    } finally {
-      setImportingSuppliers(false);
-    }
-  };
-
-  const triggerImportPicker = () => {
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (fileInputRef.current) fileInputRef.current.click();
-  };
-
-  const handleImportFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!canEdit) return;
-    if (!requireOnline()) return;
-    if (!file || !user || !ownerUid) return;
-
-    setImporting(true);
-    try {
-      const XLSX = await import("xlsx");
-      const data = await file.arrayBuffer();
-      const wb = XLSX.read(data, { type: "array", cellDates: true });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-      const headerMap = {
-        companyName: [
-          STRINGS.ar.companyLabel, STRINGS.en.companyLabel,
-          STRINGS.ar.companyLabel.replace(" *", ""), STRINGS.en.companyLabel.replace(" *", ""),
-        ],
-        contactName: [
-          STRINGS.ar.contactLabel, STRINGS.en.contactLabel,
-          STRINGS.ar.contactLabel.replace(" *", ""), STRINGS.en.contactLabel.replace(" *", ""),
-        ],
-        sector: [STRINGS.ar.sectorLabel, STRINGS.en.sectorLabel],
-        role: [STRINGS.ar.roleLabel, STRINGS.en.roleLabel],
-        stage: [STRINGS.ar.pipelineLabel, STRINGS.en.pipelineLabel],
-        tags: [STRINGS.ar.tagsLabel, STRINGS.en.tagsLabel],
-        phone: [STRINGS.ar.phoneLabel, STRINGS.en.phoneLabel],
-        email: [STRINGS.ar.emailLabel, STRINGS.en.emailLabel],
-        visitDate: [STRINGS.ar.visitDateLabel, STRINGS.en.visitDateLabel],
-        callDateTime: [STRINGS.ar.callDateLabel, STRINGS.en.callDateLabel],
-        notes: [STRINGS.ar.notesLabel, STRINGS.en.notesLabel],
-      };
-
-      const getField = (row, key) => {
-        for (const candidate of headerMap[key]) {
-          if (row[candidate] !== undefined && row[candidate] !== "") return row[candidate];
-        }
-        return "";
-      };
-
-      let count = 0;
-      for (const row of rows) {
-        const companyName = String(getField(row, "companyName") || "").trim();
-        const contactName = String(getField(row, "contactName") || "").trim();
-        if (!companyName && !contactName) continue;
-
-        const callDateTime = normalizeExcelDateTime(getField(row, "callDateTime"));
-        const visitData = {
-          companyName,
-          contactName,
-          sector: findSectorId(getField(row, "sector")),
-          role: findRoleId(getField(row, "role")),
-          stage: findStageId(getField(row, "stage")),
-          tags: parseTagsCell(getField(row, "tags")),
-          phone: String(getField(row, "phone") || "").trim(),
-          email: String(getField(row, "email") || "").trim(),
-          visitDate: normalizeExcelDate(getField(row, "visitDate")),
-          notes: String(getField(row, "notes") || "").trim(),
-          callDateTime,
-          notified: false,
-          activityLog: [],
-          offers: [],
-          createdAt: serverTimestamp(),
-        };
-
-        const ref = await addDoc(collection(db, "users", ownerUid, "visits"), visitData);
-        await appendActivity(ref.id, buildActivity("created", t.activityCreated));
-        if (callDateTime) {
-          await scheduleCallReminder(
-            ref.id,
-            callDateTime,
-            `${t.reminderTitle} ${companyName}`,
-            t.reminderBody(contactName)
-          );
-        }
-        count++;
-      }
-      showAlert(t.importSuccess(count));
-    } catch (err) {
-      showAlert(t.importError);
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  // Bucketed to the minute rather than Date.now() directly: using the raw
-  // timestamp as a useMemo dependency below would defeat the memoization
-  // (it's a different value on every render), but none of these lists need
-  // finer-than-a-minute precision to be correct.
-  const nowBucket = Math.floor(Date.now() / 60000);
-  const now = nowBucket * 60000;
-  const visibleVisits = useMemo(
-    () =>
-      visits.filter(
-        (v) => v.id !== pendingDelete?.id && !v.deleted
-      ),
-    [visits, pendingDelete]
-  );
-
-  // These were recomputed from scratch on every render (including unrelated
-  // ones, e.g. typing in a form field elsewhere), each scanning the full
-  // customer list. With 500+ customers that showed up as visible jank while
-  // typing in the search box. useMemo skips the work unless the customer
-  // list actually changed or a minute has passed.
-  const dueReminders = useMemo(
-    () =>
-      visibleVisits
-        .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
-        .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime)),
-    [visibleVisits, nowBucket]
-  );
-
-  const staleOffers = useMemo(
-    () =>
-      visibleVisits.flatMap((v) =>
-        (v.offers || [])
-          .filter((o) => {
-            if (o.status !== "pending") return false;
-            const d = parseVisitDate(o.offerDate);
-            if (!d) return false;
-            return (now - d.getTime()) / (1000 * 3600 * 24) > STALE_OFFER_DAYS;
-          })
-          .map((o) => ({ ...o, customer: v }))
-      ),
-    [visibleVisits, nowBucket]
-  );
-
-  // Customers with no recent activity (visit, call, or note) — a nudge to
-  // follow up before they go completely cold.
-  const staleCustomers = useMemo(
-    () => visibleVisits.filter((v) => isStaleCustomer(v, STALE_ACTIVITY_DAYS)),
-    [visibleVisits, nowBucket]
-  );
-
-  // Customers with a pending edit OR a pending deletion awaiting the owner's
-  // اعتماد/تراجع decision (last_change set but not yet cleared). Feeds the
-  // bell icon on the customer list ONLY — kept independent from the
-  // suppliers bell below, each section shows its own review queue rather
-  // than a merged one, so tapping a section's bell always stays in that
-  // section.
-  const pendingEdits = useMemo(
-    () => visits.filter((v) => v.last_change && v.id !== pendingDelete?.id),
-    [visits, pendingDelete]
-  );
-
-  // Same idea, mirrored for suppliers (last_change set by saveSupplierForm /
-  // proceedDeleteSupplier) but feeding a separate bell on the suppliers
-  // list, independent of the customer one above.
-  const pendingSupplierEdits = useMemo(
-    () =>
-      suppliers
-        .filter((s) => s.last_change && s.id !== pendingSupplierDelete?.id)
-        .map((s) => ({ ...s, companyName: s.name })),
-    [suppliers, pendingSupplierDelete]
-  );
+  // Weekly Excel backup, owner-only — see src/hooks/useAutoBackup.js.
+  useAutoBackup({
+    isOwnerAccount,
+    ready: loaded && suppliersLoaded,
+    visits: visibleVisits,
+    suppliers: visibleSuppliers,
+    saveBackupWorkbook,
+    confirmAction,
+    notify: showAlert,
+    t,
+  });
 
   // Opens a tapped row from the customer pending-edits sheet, looking the
   // record up fresh from `visits` (rather than trusting the passed-in copy).
@@ -1183,187 +352,13 @@ export default function App() {
     if (original) openEditSupplier(original);
   };
 
-  // Possible duplicate customers (same phone or a near-identical company
-  // name), reviewed from the Settings screen.
-  const duplicateGroups = useMemo(() => findDuplicateGroups(visibleVisits), [visibleVisits]);
-
-  // Memoized: these were recomputed from scratch on every render (including
-  // unrelated ones, e.g. typing in a form field elsewhere), scanning the
-  // full customer list. useMemo skips that work unless the
-  // underlying data or the relevant filter actually changed.
-  const allTags = useMemo(
-    () => Array.from(new Set(visibleVisits.flatMap((v) => v.tags || []))).sort(),
-    [visibleVisits]
-  );
-
-  const sectorCounts = useMemo(
-    () =>
-      SECTOR_IDS.reduce((acc, id) => {
-        acc[id] = visibleVisits.filter((v) => v.sector === id).length;
-        return acc;
-      }, {}),
-    [visibleVisits]
-  );
-  const totalCustomers = visibleVisits.length;
-  const missingDataCount = useMemo(
-    () => visibleVisits.filter((v) => !v.phone || !v.email).length,
-    [visibleVisits]
-  );
-  const noVisitsCount = useMemo(
-    () => visibleVisits.filter((v) => getVisitEvents(v).length === 0).length,
-    [visibleVisits]
-  );
-
-  // Every "YYYY-MM" that at least one customer was actually added in,
-  // together with how many — newest first — used to populate the "date
-  // added" filter dropdown so it only ever offers months that have real
-  // data behind them, with a count next to each just like the other filters.
-  //
-  // Scoped to whatever the sector/stage/tag/missing-data/no-visits filters
-  // above it currently select (but not to dateAddedFilter itself, since
-  // that's the one being computed here) — so picking e.g. "Contracting"
-  // narrows these counts down to just that sector, the same way the
-  // sector/stage chips already narrow each other.
-  const dateAddedScopeVisits = useMemo(
-    () =>
-      visibleVisits
-        .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
-        .filter((v) => stageFilter === "all" || v.stage === stageFilter)
-        .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
-        .filter((v) => !missingDataOnly || !v.phone || !v.email)
-        .filter((v) => !noVisitsOnly || getVisitEvents(v).length === 0),
-    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly]
-  );
-  const dateAddedScopeTotal = dateAddedScopeVisits.length;
-
-  const availableAddedMonths = useMemo(() => {
-    const counts = {};
-    dateAddedScopeVisits.forEach((v) => {
-      const d = toJsDate(v.createdAt);
-      if (!d) return;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return Object.keys(counts)
-      .sort((a, b) => (a < b ? 1 : -1))
-      .map((key) => ({ key, count: counts[key] }));
-  }, [dateAddedScopeVisits]);
-
-  // If the sector/stage/tag/etc. filters above narrow the list so far that
-  // the currently-picked month no longer has any customers in it, fall
-  // back to "all" automatically instead of silently showing zero results
-  // for a month that's no longer even in the dropdown.
-  useEffect(() => {
-    if (dateAddedFilter === "all") return;
-    if (!availableAddedMonths.some((m) => m.key === dateAddedFilter)) {
-      setDateAddedFilter("all");
-    }
-  }, [availableAddedMonths, dateAddedFilter]);
-
-  const filtered = useMemo(
-    () =>
-      visibleVisits
-        .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
-        .filter((v) => stageFilter === "all" || v.stage === stageFilter)
-        .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
-        .filter((v) => !missingDataOnly || !v.phone || !v.email)
-        .filter((v) => !noVisitsOnly || getVisitEvents(v).length === 0)
-        .filter((v) => {
-          // Filters by when the record was added, regardless of visit/
-          // pipeline status — deliberately kept independent of noVisitsOnly.
-          if (dateAddedFilter === "all") return true;
-          const d = toJsDate(v.createdAt);
-          if (!d) return false;
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` === dateAddedFilter;
-        })
-        .filter((v) => {
-          const q = debouncedQuery.trim().toLowerCase();
-          if (!q) return true;
-          return (
-            v.companyName.toLowerCase().includes(q) ||
-            v.contactName.toLowerCase().includes(q) ||
-            (v.phone || "").toLowerCase().includes(q) ||
-            (v.notes || "").toLowerCase().includes(q) ||
-            (v.visitDate || "").toLowerCase().includes(q) ||
-            (v.callDateTime || "").toLowerCase().includes(q) ||
-            (v.tags || []).some((tag) => tag.toLowerCase().includes(q)) ||
-            (v.activityLog || []).some((entry) => (entry.text || "").toLowerCase().includes(q)) ||
-            fmtReminder(v.callDateTime, t.locale).toLowerCase().includes(q)
-          );
-        })
-        .sort((a, b) => {
-          if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
-          const sa = visitStatus(a);
-          const sb = visitStatus(b);
-          const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
-          if (order[sa] !== order[sb]) return order[sa] - order[sb];
-          const da = parseVisitDate(a.visitDate);
-          const db = parseVisitDate(b.visitDate);
-          if (!da && !db) return 0;
-          if (!da) return 1;
-          if (!db) return -1;
-          return db - da;
-        }),
-    [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly, dateAddedFilter, debouncedQuery, t.locale]
-  );
-
-  // Suppliers with a pending deletion hidden, same as visibleVisits does for
-  // customers: a pending deletion is flagged with `deleted: true` (and kept
-  // out of the self-undo window via pendingSupplierDelete) rather than
-  // actually removed, so it still needs to stay out of the normal list.
-  const visibleSuppliers = useMemo(
-    () => suppliers.filter((s) => s.id !== pendingSupplierDelete?.id && !s.deleted),
-    [suppliers, pendingSupplierDelete]
-  );
-
-  // Weekly Excel backup, owner-only — see src/hooks/useAutoBackup.js. Placed
-  // here (not right after useExcelExport above) because it needs
-  // visibleVisits/visibleSuppliers, which aren't defined until this point.
-  useAutoBackup({
-    isOwnerAccount,
-    ready: loaded && suppliersLoaded,
-    visits: visibleVisits,
-    suppliers: visibleSuppliers,
-    saveBackupWorkbook,
-    confirmAction,
-    notify: showAlert,
-    t,
+  // Resume where you left off after the app is killed in the background —
+  // see src/hooks/useNavRestore.js.
+  useNavRestore({
+    screen, setScreen, activeId, activeSupplierId,
+    loaded, suppliersLoaded, permissionLoading, visits, suppliers,
+    openDetail, openEditSupplier,
   });
-
-  // All unique product tags across every supplier, used to populate the
-  // "filter by product" chip row on the Suppliers list.
-  const allSupplierTags = useMemo(() => collectSupplierTags(visibleSuppliers), [visibleSuppliers]);
-
-  // All unique "goods/service type" values across every supplier, used to
-  // populate a separate "filter by category" chip row — distinct from the
-  // product tags above, since a supplier's category (e.g. "كاميرات مراقبة")
-  // and its individual product tags aren't the same field.
-  const allSupplierCategories = useMemo(() => collectSupplierCategories(visibleSuppliers), [visibleSuppliers]);
-
-  const filteredSuppliers = useMemo(
-    () =>
-      visibleSuppliers
-        .filter((s) => supplierTagFilter === "all" || (s.tags || []).includes(supplierTagFilter))
-        .filter((s) => supplierCategoryFilter === "all" || (s.category || "").trim() === supplierCategoryFilter)
-        .filter((s) => {
-          const q = debouncedSupplierQuery.trim().toLowerCase();
-          if (!q) return true;
-          return (
-            (s.name || "").toLowerCase().includes(q) ||
-            (s.contactName || "").toLowerCase().includes(q) ||
-            (s.phone || "").toLowerCase().includes(q) ||
-            (s.email || "").toLowerCase().includes(q) ||
-            (s.category || "").toLowerCase().includes(q) ||
-            (s.notes || "").toLowerCase().includes(q) ||
-            (s.tags || []).some((tag) => tag.toLowerCase().includes(q))
-          );
-        })
-        .sort((a, b) => {
-          if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
-          return (a.name || "").localeCompare(b.name || "", "ar");
-        }),
-    [visibleSuppliers, supplierTagFilter, supplierCategoryFilter, debouncedSupplierQuery]
-  );
 
   const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
   const activityLog = active ? [...(active.activityLog || [])].sort((a, b) => (a.at < b.at ? 1 : -1)) : [];
@@ -1404,7 +399,6 @@ export default function App() {
         lang={lang}
         setLang={setLang}
         authError={authError}
-        authErrorDebug={authErrorDebug}
         onClearAuthError={clearAuthError}
       />
     );
