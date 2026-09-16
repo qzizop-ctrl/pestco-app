@@ -1,8 +1,10 @@
 // ============================================================================
 // All UI copy (Arabic + English), keyed by language then by section. Split
 // out of the old constants.js purely because of its size — nothing here
-// depends on theme.js, domain.js, or helpers.js.
+// depends on theme.js or helpers.js; it imports STALE_OFFER_DAYS from
+// domain.js because the stale-offers banner text interpolates that number.
 // ============================================================================
+import { STALE_OFFER_DAYS } from "./domain";
 
 export const STRINGS = {
   ar: {

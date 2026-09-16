@@ -4,7 +4,7 @@
 // reminders), and small data-shape utilities (tags, duplicate detection,
 // WhatsApp links). No React/Firebase — split out of the old constants.js.
 // ============================================================================
-import { SECTOR_IDS, ROLE_IDS, STAGE_IDS } from "./domain";
+import { SECTOR_IDS, ROLE_IDS, STAGE_IDS, CURRENCY_IDS } from "./domain";
 import { STRINGS } from "./i18n";
 
 // Splits a comma separated Excel cell into a clean tag array.
