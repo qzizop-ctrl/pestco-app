@@ -300,13 +300,19 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
   );
 });
 
-export function BottomNav({ screen, setScreen, t, isOwnerAccount, isReviewer }) {
+export function BottomNav({ screen, setScreen, t, isOwnerAccount, isReviewer, canViewDashboard }) {
   // كل قسم رئيسي له لون تمييز خاص بيه بدل ما الكل يستخدم نفس الكحلي —
   // بيسهّل على المستخدم يميّز القسم اللي هو فيه بنظرة واحدة على الشريط
   // السفلي، ونفس الألوان دي بتتكرر في هوية كل قسم (الذهبي مربوط أصلاً
   // بالموردين/التثبيت، والأزرق المتوسط مربوط بالعملاء).
   const items = [
-    { id: "dashboard", label: t.navDashboard, icon: LayoutDashboard, activeColor: PRIMARY },
+    // Dashboard is off by default for everyone except the owner — the
+    // owner turns it on per-person from Settings (see
+    // setMemberDashboardAccess in useWorkspace.js). Missing this check
+    // would just leave the tab there, and tapping it would then get
+    // redirected straight back by the guard in useWorkspace.js — confusing
+    // rather than actually hidden.
+    ...(canViewDashboard ? [{ id: "dashboard", label: t.navDashboard, icon: LayoutDashboard, activeColor: PRIMARY }] : []),
     { id: "list", label: t.navCustomers, icon: UsersIcon, activeColor: PRIMARY_MID },
     { id: "suppliers", label: t.navSuppliers, icon: Truck, activeColor: GOLD },
     // Settings holds both workspace management (owner-only: grant/revoke

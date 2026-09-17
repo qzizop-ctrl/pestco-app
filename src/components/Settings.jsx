@@ -8,7 +8,7 @@
 // ============================================================================
 
 import React, { useState } from "react";
-import { Copy, Trash2, Download, Upload, UserCheck, Eye, X } from "lucide-react";
+import { Copy, Trash2, Download, Upload, UserCheck, Eye, X, LayoutDashboard } from "lucide-react";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
 
 export default function SettingsScreen({
@@ -24,6 +24,8 @@ export default function SettingsScreen({
   openDetail,
   isOwnerAccount,
   members,
+  dashboardAccess,
+  setMemberDashboardAccess,
   revokeAccess,
   pendingSignups,
   isReviewer,
@@ -140,26 +142,51 @@ export default function SettingsScreen({
             <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noMembers}</p>
           )}
 
-          {Object.entries(members).map(([email, role]) => (
-            <div
-              key={email}
-              className="flex items-center justify-between"
-              style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
-            >
-              <div>
-                <p className="text-sm font-bold" style={{ color: TEXT }}>{email}</p>
-                <p className="text-xs" style={{ color: MUTED }}>{role === "editor" ? t.roleEditor : t.roleViewer}</p>
-              </div>
-              <button
-                onClick={() => confirmAction(t.removeConfirm, () => revokeAccess(email), { danger: true })}
-                className="btn-press"
-                style={{ color: DANGER }}
-                aria-label={t.delete}
+          {Object.entries(members).map(([email, role]) => {
+            const hasDashboardAccess = dashboardAccess?.[email] === true;
+            return (
+              <div
+                key={email}
+                className="flex items-center justify-between"
+                style={{ padding: "8px 0", borderBottom: `0.5px solid ${LINE}` }}
               >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))}
+                <div>
+                  <p className="text-sm font-bold" style={{ color: TEXT }}>{email}</p>
+                  <p className="text-xs" style={{ color: MUTED }}>{role === "editor" ? t.roleEditor : t.roleViewer}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Off by default for everyone but the owner — this is the
+                      only place Dashboard access for another person can be
+                      turned on, independent of their editor/viewer role. */}
+                  <button
+                    onClick={() => setMemberDashboardAccess(email, !hasDashboardAccess)}
+                    className="btn-press flex items-center gap-1 font-bold"
+                    aria-label={`${t.dashboardAccessLabel}: ${hasDashboardAccess ? t.dashboardAccessOn : t.dashboardAccessOff}`}
+                    title={t.dashboardAccessHint}
+                    style={{
+                      fontSize: 11,
+                      padding: "5px 9px",
+                      borderRadius: 999,
+                      border: `1.4px solid ${hasDashboardAccess ? PRIMARY : LINE}`,
+                      background: hasDashboardAccess ? PRIMARY : SURFACE_SUBTLE,
+                      color: hasDashboardAccess ? "#fff" : MUTED,
+                    }}
+                  >
+                    <LayoutDashboard size={12} />
+                    {hasDashboardAccess ? t.dashboardAccessOn : t.dashboardAccessOff}
+                  </button>
+                  <button
+                    onClick={() => confirmAction(t.removeConfirm, () => revokeAccess(email), { danger: true })}
+                    className="btn-press"
+                    style={{ color: DANGER }}
+                    aria-label={t.delete}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
