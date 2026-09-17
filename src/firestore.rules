@@ -134,17 +134,26 @@ service cloud.firestore {
       allow read: if hasEmail()
         && (myEmail() == email || isReviewer());
 
+      // dashboardAccess is optional: a plain boolean mirror of whether the
+      // owner has turned on Dashboard visibility for this email (source of
+      // truth is access/{ownerUid}.dashboardAccess — see grantAccess /
+      // setMemberDashboardAccess in useWorkspace.js). It's duplicated here,
+      // same as `owners`, because a plain editor/viewer is only allowed to
+      // read their OWN access_by_email doc, never the owner's access/
+      // {ownerUid} doc directly.
       allow create: if hasEmail()
-        && request.resource.data.keys().hasOnly(['owners'])
+        && request.resource.data.keys().hasOnly(['owners', 'dashboardAccess'])
         && request.resource.data.owners is map
         && request.resource.data.owners.keys().hasOnly([
              request.auth.uid
            ])
         && request.resource.data.owners[request.auth.uid]
-             in ['editor', 'viewer'];
+             in ['editor', 'viewer']
+        && (!request.resource.data.keys().hasAny(['dashboardAccess'])
+            || request.resource.data.dashboardAccess is bool);
 
       allow update: if hasEmail()
-        && request.resource.data.keys().hasOnly(['owners'])
+        && request.resource.data.keys().hasOnly(['owners', 'dashboardAccess'])
         && request.resource.data.owners
              .diff(resource.data.owners)
              .affectedKeys()
@@ -155,7 +164,9 @@ service cloud.firestore {
           ||
           request.resource.data.owners[request.auth.uid]
             in ['editor', 'viewer']
-        );
+        )
+        && (!request.resource.data.keys().hasAny(['dashboardAccess'])
+            || request.resource.data.dashboardAccess is bool);
 
       allow delete: if false;
     }

@@ -141,7 +141,7 @@ export default function App() {
 
   const {
     authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
-    canEdit, isOwnerAccount, members,
+    canEdit, isOwnerAccount, canViewDashboard, members, dashboardAccess, setMemberDashboardAccess,
     pendingSignups, isReviewer, isPrimaryAdmin, primaryAdminEmail, adminEmails, addAdminEmail, removeAdminEmail, reviewSignup, dismissSignup,
     switchOwnerWorkspace, grantAccess, revokeAccess,
   } = useWorkspace({ requireOnline, reportError: reportWorkspaceError, screen, setScreen, setActiveId });
@@ -484,7 +484,7 @@ export default function App() {
       </div>
 
       <div key={screen} className="animate-screen-in">
-      {screen === "dashboard" && (
+      {screen === "dashboard" && canViewDashboard && (
         <Suspense fallback={<div className="px-4 pt-4"><SkeletonList count={3} /></div>}>
           <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} showAlert={showAlert} />
         </Suspense>
@@ -633,6 +633,8 @@ export default function App() {
           openDetail={openDetail}
           isOwnerAccount={isOwnerAccount}
           members={members}
+          dashboardAccess={dashboardAccess}
+          setMemberDashboardAccess={setMemberDashboardAccess}
           revokeAccess={revokeAccess}
           pendingSignups={pendingSignups}
           isReviewer={isReviewer}
@@ -723,7 +725,7 @@ export default function App() {
         </div>
       )}
 
-      {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} isOwnerAccount={isOwnerAccount} isReviewer={isReviewer} />}
+      {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} isOwnerAccount={isOwnerAccount} isReviewer={isReviewer} canViewDashboard={canViewDashboard} />}
 
       {rejectionPrompt && (
         <RejectionReasonModal
