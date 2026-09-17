@@ -20,7 +20,9 @@ import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 import { reportException } from "./sentry";
 import AuthScreen from "./AuthScreen";
+import UpdateRequiredScreen from "./UpdateRequiredScreen";
 import { useAppPrefs } from "./hooks/useAppPrefs";
+import { useAppVersionGate } from "./hooks/useAppVersionGate";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useLiveData } from "./hooks/useLiveData";
 import { useExcelExport } from "./hooks/useExcelExport";
@@ -52,6 +54,10 @@ const Dashboard = lazy(() => import("./Dashboard"));
 
 export default function App() {
   const { lang, setLang, darkMode, setDarkMode, isOnline } = useAppPrefs();
+  // Checked as early as possible and rendered before authChecked/user below
+  // — an old build has to be blocked whether or not it's already logged
+  // in. See useAppVersionGate.js and firestore.rules' config/appVersion.
+  const { outdated: versionOutdated, currentVersion, minVersion, updateUrl } = useAppVersionGate();
 
   const [screen, setScreen] = useState("list"); // dashboard | list | form | detail | settings
   const {
@@ -351,6 +357,17 @@ export default function App() {
   const activeOffersValueText = fmtOffersTotals(activeOffersTotals, t);
 
   const themeVars = darkMode ? THEME_VARS.dark : THEME_VARS.light;
+
+  if (versionOutdated) {
+    return (
+      <UpdateRequiredScreen
+        lang={lang}
+        currentVersion={currentVersion}
+        minVersion={minVersion}
+        updateUrl={updateUrl}
+      />
+    );
+  }
 
   if (!authChecked) {
     return (

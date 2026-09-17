@@ -7,6 +7,26 @@
 import { SECTOR_IDS, ROLE_IDS, STAGE_IDS, CURRENCY_IDS } from "./domain";
 import { STRINGS } from "./i18n";
 
+// Compares two loose "1.2.3"-style version strings numerically, part by
+// part (NOT a string compare — "1.9.0" must read as older than "1.10.0",
+// which "<" on the raw strings gets wrong). Missing/non-numeric parts
+// count as 0, and extra parts on the longer string still count (so
+// "1.2.1" > "1.2"). Returns -1 / 0 / 1 like a normal comparator. Used by
+// useAppVersionGate to decide whether this build is older than the
+// minimum version published in Firestore — see that hook and
+// firestore.rules' config/appVersion.
+export function compareVersions(a, b) {
+  const partsA = String(a || "0").split(".");
+  const partsB = String(b || "0").split(".");
+  const len = Math.max(partsA.length, partsB.length);
+  for (let i = 0; i < len; i++) {
+    const na = parseInt(partsA[i], 10) || 0;
+    const nb = parseInt(partsB[i], 10) || 0;
+    if (na !== nb) return na < nb ? -1 : 1;
+  }
+  return 0;
+}
+
 // Splits a comma separated Excel cell into a clean tag array.
 // Shared by both customer tags and supplier product tags.
 export function parseTagsCell(value) {

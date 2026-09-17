@@ -232,6 +232,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // config/appVersion is the kill-switch for old installed app builds
+    // (see src/hooks/useAppVersionGate.js): it holds a `minVersion` string
+    // that every client compares itself against on load, before auth even
+    // resolves. Read is open to *everyone*, signed in or not — an old,
+    // already-logged-in session has to be caught by this just as much as a
+    // fresh install, and it has to work before we know who (if anyone) the
+    // user is. Write is hard-denied for every client, including admins:
+    // this app has no cross-workspace "super admin" concept (isReviewer/
+    // isPrimaryAdmin are scoped per config/admins doc, i.e. per business),
+    // so there's no safe role to hand this to from the app UI. Bumping
+    // minVersion is a deliberate, manual edit in the Firebase console (or
+    // via the Admin SDK) only — see the README section on forcing old
+    // clients to update.
+    match /config/appVersion {
+      allow read: if true;
+      allow write: if false;
+    }
+
 
     // ============================================================
     // DENY EVERYTHING ELSE
