@@ -59,12 +59,36 @@ jobs:
       # =========================
       # Package Windows App
       # =========================
+      # --publish always is what electron.js's initAutoUpdate() comment
+      # already says this needs: electron-builder itself creates/updates a
+      # GitHub Release (tagged v<package.json version>, standard behavior
+      # for the "github" publish provider already configured in
+      # package.json's "build" block) AND uploads latest.yml alongside the
+      # installer — that file is what autoUpdater.checkForUpdatesAndNotify()
+      # actually reads to know a newer version exists. Previously this was
+      # `--publish never`, which built the installer but never produced
+      # latest.yml at all, so every already-installed Windows client's
+      # update check was silently failing (caught by the .on('error')
+      # handler, logged to console, never shown to the user).
+      # GH_TOKEN is electron-builder's expected env var name for this
+      # (falls back to GITHUB_TOKEN too); the default Actions token already
+      # has the "contents: write" permission this workflow declares above.
       - name: Package Windows App (Electron Builder)
-        run: npx electron-builder --win --publish never
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # =========================
       # GitHub Release for Windows
       # =========================
+      # Left as-is on purpose — this still creates its own separate
+      # release (tag "win-v1.0.<run number>") alongside the one
+      # electron-builder now also creates above (tag "v<package.json
+      # version>"). That's redundant (two releases per push with the same
+      # .exe) but harmless — different tags, no overwrite, nothing reads
+      # this one for auto-update. Not touched here to keep this fix
+      # minimal; worth deciding later whether to drop this step now that
+      # electron-builder's own release covers the same need.
       - name: Create GitHub Release with Windows App
         uses: softprops/action-gh-release@v2
         with:

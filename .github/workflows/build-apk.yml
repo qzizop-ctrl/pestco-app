@@ -106,6 +106,40 @@ jobs:
         run: ./gradlew assembleDebug
 
       # =========================
+      # Stage APK for Firebase Hosting
+      # =========================
+      # Copies the APK to hosting-download/pest-latest.apk — a fixed
+      # filename/URL that never changes across releases. See
+      # scripts/publish-apk-hosting.cjs and the README section on forcing
+      # old clients to update. This only copies the file locally in the
+      # runner; the next step actually deploys it.
+      - name: Stage APK for hosting
+        run: npm run apk:stage
+
+      # =========================
+      # Deploy to Firebase Hosting
+      # =========================
+      # Publishes hosting-download/ (just the APK + its landing page) to
+      # the fixed URL that config/appVersion.updateUrl points to in
+      # Firestore. Needs two repo secrets:
+      #   - FIREBASE_SERVICE_ACCOUNT: a Firebase service account JSON key
+      #     (Firebase Console → Project settings → Service accounts →
+      #     Generate new private key), pasted in as-is.
+      #   - FIREBASE_PROJECT_ID: the Firebase project ID (same one `firebase
+      #     use --add` picks locally).
+      # channelId is explicit ("live") so this always deploys for real,
+      # not to a temporary preview channel — this action's default channel
+      # choice depends on the GitHub event, which we don't want to rely on
+      # here.
+      - name: Deploy APK to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          channelId: live
+
+      # =========================
       # GitHub Release
       # =========================
       - name: Create GitHub Release with APK
