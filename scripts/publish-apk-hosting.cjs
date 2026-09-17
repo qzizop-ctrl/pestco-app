@@ -46,6 +46,14 @@ function main() {
   fs.mkdirSync(DEST_DIR, { recursive: true });
   fs.copyFileSync(src, DEST_FILE);
 
+  // Firebase Hosting's free (Spark) plan rejects any file with the
+  // executable permission bit set ("Executable files are forbidden on
+  // the Spark billing plan"). fs.copyFileSync carries over the source
+  // file's mode bits, and the Gradle-built APK sometimes comes out
+  // executable, so force a plain read/write mode here regardless of
+  // what the source had.
+  fs.chmodSync(DEST_FILE, 0o644);
+
   const sizeMb = (fs.statSync(DEST_FILE).size / (1024 * 1024)).toFixed(1);
   console.log(`Staged ${src}`);
   console.log(`  -> ${DEST_FILE} (${sizeMb} MB)`);
