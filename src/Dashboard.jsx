@@ -20,6 +20,8 @@ import PeriodSheet from "./components/PeriodSheet";
 import SplitBar from "./components/SplitBar";
 import SummaryCard from "./components/SummaryCard";
 import SwipeableChartCard from "./components/SwipeableChartCard";
+import OffersListSection from "./components/OffersListSection";
+import CustomersAddedSection from "./components/CustomersAddedSection";
 
 export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   const t = STRINGS[lang];
@@ -522,147 +524,22 @@ subValue={
         </div>
       </div>
 
-      {/* Offers */}
-      <div style={{ marginBottom: 20 }}>
-        <div className="flex items-center justify-between mb-2">
-          <p className="font-bold text-sm" style={{ color: TEXT }}>{t.dashOffersSection}</p>
-        </div>
-        <div
-          className="flex items-center gap-2 mb-3"
-          style={{
-            overflowX: "auto",
-            // Fades the two edges so a partially-visible tab reads as
-            // "more to scroll" instead of looking like a cut-off layout bug.
-            WebkitMaskImage: "linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%)",
-            maskImage: "linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%)",
-          }}
-        >
-          {["all", ...OFFER_STATUS_IDS].map((id) => {
-            const isActive = offerStatusFilter === id;
-            const label = id === "all" ? t.dashOfferFilterAll : t.offerStatuses[id];
-            const bg = id === "all" ? PRIMARY : offerStatusColor(id);
-            return (
-              <button
-                key={id}
-                onClick={() => setOfferStatusFilter(id)}
-                className="btn-press font-bold text-xs"
-                style={{
-                  flexShrink: 0,
-                  padding: "7px 14px",
-                  borderRadius: 999,
-                  border: `1.4px solid ${isActive ? bg : LINE}`,
-                  background: isActive ? bg : SURFACE,
-                  color: isActive ? "#fff" : MUTED,
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+      <OffersListSection
+        t={t}
+        offersList={offersList}
+        offerStatusFilter={offerStatusFilter}
+        setOfferStatusFilter={setOfferStatusFilter}
+        offersListValueTotals={offersListValueTotals}
+        visits={visits}
+        onOpenCustomer={onOpenCustomer}
+      />
 
-        {offersList.length === 0 ? (
-          <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noOffers}</p>
-        ) : (
-          <>
-            {offersList.map((o) => (
-              <button
-                key={o.id}
-                onClick={() => {
-                  const parent = visits.find((v) => v.id === o.customerId);
-                  if (parent) onOpenCustomer(parent);
-                }}
-                className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                style={{
-                  display: "block",
-                  background: SURFACE,
-                  border: `1px solid ${LINE}`,
-                  borderRadius: 14,
-                  padding: 12,
-                  marginBottom: 8,
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-sm" style={{ color: TEXT }}>{o.customerName}</span>
-                  <span
-                    className="text-xs font-bold"
-                    style={{ background: offerStatusColor(o.status), color: "#fff", borderRadius: 999, padding: "3px 9px" }}
-                  >
-                    {t.offerStatuses[o.status] || o.status}
-                  </span>
-                </div>
-                <p className="text-sm mt-1" style={{ color: MUTED, margin: "4px 0 0" }}>
-                  {o.name}{o.offerNumber ? ` — ${o.offerNumber}` : ""}
-                </p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs" style={{ color: MUTED }}>{o.offerDate}</span>
-                  <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID }}>
-                    {fmtMoney(o.amount, t.locale)} {t.currencies[o.currency] || t.currencies.EGP}
-                  </span>
-                </div>
-              </button>
-            ))}
-            <div
-              className="flex items-center justify-between"
-              style={{ padding: "10px 4px", borderTop: `1px dashed ${LINE}`, marginTop: 4 }}
-            >
-              <span className="text-xs font-bold" style={{ color: MUTED }}>
-                {t.dashOffersTotalLabel}: {offersList.length}
-              </span>
-              <span className="text-sm font-extrabold" style={{ color: TEXT }}>
-                {t.dashOffersTotalValueLabel}: {fmtOffersTotals(offersListValueTotals, t, { showAllIfEmpty: true })}
-              </span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* The individual customers behind the "Customers added" count above */}
-      <div>
-        <p className="font-bold text-sm mb-2" style={{ color: TEXT }}>{customersAddedLabel}</p>
-        {periodCustomersList.length === 0 ? (
-          <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noVisits}</p>
-        ) : (
-          periodCustomersList.map((v) => {
-            const stageId = v.stage || "";
-            return (
-              <button
-                key={v.id}
-                onClick={() => onOpenCustomer(v)}
-                className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                style={{
-                  display: "block",
-                  background: SURFACE,
-                  border: `1px solid ${LINE}`,
-                  borderRadius: 14,
-                  padding: 12,
-                  marginBottom: 8,
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-sm" style={{ color: TEXT }}>{v.companyName || t.noCompanyName}</span>
-                  {stageId && (
-                    <span
-                      className="text-xs font-bold"
-                      style={{ background: stageColor(stageId), color: "#fff", borderRadius: 999, padding: "3px 9px" }}
-                    >
-                      {t.stages[stageId]}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs font-bold" style={{ color: GOLD }}>
-                    {t.sectors[v.sector] || t.sectors.private}
-                  </span>
-                  <span className="text-xs" style={{ color: MUTED }}>
-                    {v.visitDate ? `${t.dashLastVisit} ${v.visitDate}` : t.noVisitYet}
-                  </span>
-                </div>
-              </button>
-            );
-          })
-        )}
-      </div>
+      <CustomersAddedSection
+        t={t}
+        customersAddedLabel={customersAddedLabel}
+        periodCustomersList={periodCustomersList}
+        onOpenCustomer={onOpenCustomer}
+      />
     </div>
   );
 }
