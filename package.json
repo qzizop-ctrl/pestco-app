@@ -23,6 +23,9 @@
     "android:patch": "node scripts/patch-android-storage.cjs",
     "android:setup": "npm run build && (test -d android || npx cap add android) && npm run android:patch && npx cap sync android",
     "firebase:deploy-rules": "firebase deploy --only firestore:rules",
+    "firebase:deploy-hosting": "firebase deploy --only hosting",
+    "apk:stage": "node scripts/publish-apk-hosting.cjs",
+    "apk:publish": "npm run apk:stage && npm run firebase:deploy-hosting",
     "postinstall": "node scripts/verify-xlsx-integrity.cjs",
     "xlsx:pin": "node scripts/pin-xlsx-integrity.cjs",
     "xlsx:verify": "node scripts/verify-xlsx-integrity.cjs"

@@ -5,3 +5,8 @@ release/
 .env.local
 *.log
 .DS_Store
+
+# The built APK itself is a binary artifact, not source — it's copied into
+# hosting-download/ at deploy time by scripts/publish-apk-hosting.cjs (or
+# by CI), never committed. index.html in that same folder IS tracked.
+hosting-download/*.apk

@@ -37,7 +37,10 @@ export default [
       ecmaVersion: 2022,
       sourceType: "module",
       parserOptions: { ecmaFeatures: { jsx: true } },
-      globals: { ...globals.browser },
+      // __APP_VERSION__ is injected by vite.config.js's `define` (from
+      // package.json), not a real browser/Node global — declared here so
+      // lint doesn't flag it as undefined in useAppVersionGate.js.
+      globals: { ...globals.browser, __APP_VERSION__: "readonly" },
     },
     plugins: {
       react,
@@ -102,7 +105,7 @@ export default [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
-      globals: { ...globals.node },
+      globals: { ...globals.node, __APP_VERSION__: "readonly" },
     },
   },
 
