@@ -117,6 +117,17 @@ jobs:
         run: npm run apk:stage
 
       # =========================
+      # Strip executable bit
+      # =========================
+      # Firebase Hosting's free Spark plan rejects any file with the
+      # executable permission bit set ("Executable files are forbidden
+      # on the Spark billing plan"). Force every file in the folder we
+      # deploy to be non-executable, regardless of what permissions the
+      # build tools left on it.
+      - name: Strip executable bit from hosting files
+        run: chmod -R a-x hosting-download
+
+      # =========================
       # Deploy to Firebase Hosting
       # =========================
       # Publishes hosting-download/ (just the APK + its landing page) to
