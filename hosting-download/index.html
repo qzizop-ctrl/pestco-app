@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!--
+  Not the app itself — this is a separate, tiny Firebase Hosting site
+  (see the "hosting" block in firebase.json, public: "hosting-download")
+  whose only job is to serve pest-latest.apk at a fixed, permanent URL.
+  That URL is what config/appVersion.updateUrl points to in Firestore, and
+  what UpdateRequiredScreen.jsx links to — see the README section on
+  forcing old clients to update, and scripts/publish-apk-hosting.cjs.
+
+  pest-latest.apk itself is NOT committed to git (see .gitignore) — it's
+  copied in here at deploy time, either by
+  `npm run apk:stage && npm run firebase:deploy-hosting` locally, or by
+  .github/workflows/build-apk.yml in CI. This index.html is just a human-
+  friendly fallback for anyone who opens the site root directly instead of
+  the direct /pest-latest.apk link.
+-->
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>تحميل تطبيق PEST</title>
+    <style>
+      body {
+        font-family: -apple-system, "Segoe UI", Tajawal, sans-serif;
+        background: #f7f6f2;
+        color: #22282b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+      a.btn {
+        display: inline-block;
+        margin-top: 16px;
+        background: #0f2e5e;
+        color: #fff;
+        text-decoration: none;
+        font-weight: bold;
+        padding: 12px 24px;
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>تطبيق PEST</h1>
+      <p>اضغط الزرار عشان تحمّل آخر نسخة من التطبيق</p>
+      <a class="btn" href="./pest-latest.apk">تحميل النسخة الأخيرة</a>
+    </div>
+  </body>
+</html>
