@@ -22,7 +22,10 @@
     "electron:release": "npm run build && electron-builder --win --publish always",
     "android:patch": "node scripts/patch-android-storage.cjs",
     "android:setup": "npm run build && (test -d android || npx cap add android) && npm run android:patch && npx cap sync android",
-    "firebase:deploy-rules": "firebase deploy --only firestore:rules"
+    "firebase:deploy-rules": "firebase deploy --only firestore:rules",
+    "postinstall": "node scripts/verify-xlsx-integrity.cjs",
+    "xlsx:pin": "node scripts/pin-xlsx-integrity.cjs",
+    "xlsx:verify": "node scripts/verify-xlsx-integrity.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",
