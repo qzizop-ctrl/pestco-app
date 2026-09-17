@@ -83,9 +83,23 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   }, [user]);
 
   const [members, setMembers] = useState({});
+  // Per-member Dashboard visibility, keyed by email — { [email]: true }.
+  // Owner-only concern: source of truth is access/{ownerUid}.dashboardAccess
+  // (mirrored, per-email, onto access_by_email/{email}.dashboardAccess so
+  // the grantee's own client can read it — see setMemberDashboardAccess,
+  // grantAccess, and revokeAccess below). Off by default for everyone
+  // except the owner: an email with no entry here (or `false`) does not
+  // see the Dashboard tab at all.
+  const [dashboardAccess, setDashboardAccessState] = useState({});
   const [pendingSignups, setPendingSignups] = useState([]);
   const [ownerUid, setOwnerUid] = useState(null);
   const [myRole, setMyRole] = useState(null);
+  // Whether *this* signed-in account (as editor/viewer, not owner) has been
+  // individually turned on for Dashboard access by the workspace owner —
+  // read from this account's own access_by_email doc (see the permission
+  // listener below). Irrelevant for the owner themselves; see
+  // canViewDashboard, which always allows the owner regardless of this.
+  const [myDashboardAccess, setMyDashboardAccess] = useState(false);
   const [availableOwners, setAvailableOwners] = useState([]);
   const [permissionLoading, setPermissionLoading] = useState(true);
   // Set when a signed-in account turns out to have no usable access at all
@@ -99,6 +113,9 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
   // Permission flags derived from myRole (set from the access_by_email lookup).
   const canEdit = !permissionLoading && (myRole === "owner" || myRole === "editor");
   const isOwnerAccount = !permissionLoading && myRole === "owner";
+  // The owner always sees their own Dashboard; everyone else needs to have
+  // been individually turned on for it from Settings (off by default).
+  const canViewDashboard = isOwnerAccount || myDashboardAccess === true;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -114,6 +131,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     if (!user) {
       setOwnerUid(null);
       setMyRole(null);
+      setMyDashboardAccess(false);
       setAvailableOwners([]);
       setPermissionLoading(false);
       previousResolvedOwnerRef.current = null;
@@ -159,6 +177,11 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
         }
 
         const ownersMap = snap.exists() ? snap.data().owners || {} : {};
+        // Single-owner app (see the comment in grantAccess below), so this
+        // is a flat boolean rather than keyed per-owner — matches how
+        // `owners` itself is already treated as "at most one real entry"
+        // everywhere else in this file.
+        setMyDashboardAccess(snap.exists() && snap.data().dashboardAccess === true);
         const externalOwners = Object.entries(ownersMap)
           .filter(([, role]) => role === "editor" || role === "viewer")
           .map(([uid, role]) => ({ uid, role }));
@@ -201,6 +224,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
         if (nextOwners.length === 0) {
           setOwnerUid(null);
           setMyRole(null);
+          setMyDashboardAccess(false);
           setAvailableOwners([]);
           previousResolvedOwnerRef.current = null;
           setScreen("list");
@@ -247,6 +271,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
         console.error("Permission listener failed:", error);
         setOwnerUid(null);
         setMyRole(null);
+        setMyDashboardAccess(false);
         setAvailableOwners([]);
         previousResolvedOwnerRef.current = null;
         setPermissionLoading(false);
@@ -278,6 +303,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     const ref = doc(db, "access", user.uid);
     const unsub = onSnapshot(ref, (snap) => {
       setMembers(snap.exists() ? snap.data().members || {} : {});
+      setDashboardAccessState(snap.exists() ? snap.data().dashboardAccess || {} : {});
     });
     return () => unsub();
   }, [user]);
@@ -331,6 +357,18 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permissionLoading, screen, isOwnerAccount, isReviewer]);
 
+  // Same idea as the Settings redirect above: if someone is sitting on the
+  // Dashboard screen and loses (or never had) Dashboard access — e.g. the
+  // owner just turned it off for them from Settings, on another device,
+  // while they were already looking at it — bounce them back to the
+  // customer list instead of leaving a now-unauthorized screen showing.
+  useEffect(() => {
+    if (!permissionLoading && screen === "dashboard" && !canViewDashboard) {
+      setScreen("list");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionLoading, screen, canViewDashboard]);
+
   const grantAccess = async (email, role) => {
     if (!user) return;
     if (!canGrantAccess({ isOwnerAccount, email, role })) return;
@@ -360,8 +398,22 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
 
         members[cleanEmail] = role;
 
+        // Preserve any Dashboard-access toggle this email already had
+        // (e.g. switching someone from viewer to editor shouldn't quietly
+        // reset a Dashboard permission the owner had already granted them,
+        // nor grant one they never had) — read from our own
+        // access/{ownerUid} doc, since we can't read the grantee's
+        // access_by_email doc to check it directly (see the comment above
+        // about single-directional reads). Brand-new members default to
+        // false (Dashboard access is off until the owner explicitly turns
+        // it on from Settings).
+        const existingDashboardAccess = accessSnap.exists()
+          ? (accessSnap.data().dashboardAccess || {})
+          : {};
+        const memberDashboardAccess = existingDashboardAccess[cleanEmail] === true;
+
         tx.set(accessRef, { members }, { merge: true });
-        tx.set(lookupRef, { owners: { [user.uid]: role } });
+        tx.set(lookupRef, { owners: { [user.uid]: role }, dashboardAccess: memberDashboardAccess });
       });
     } catch (e) {
       console.error("grantAccess failed:", e);
@@ -401,13 +453,58 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
 
         delete members[cleanEmail];
 
-        tx.set(accessRef, { members }, { merge: false });
+        // This write uses merge:false (full document replace), so
+        // dashboardAccess has to be re-included explicitly here — otherwise
+        // revoking any one person's access would silently wipe every other
+        // member's Dashboard-access setting too, since it'd just vanish
+        // from the document along with `members`.
+        const dashboardAccessMap = accessSnap.exists()
+          ? { ...(accessSnap.data().dashboardAccess || {}) }
+          : {};
+        delete dashboardAccessMap[cleanEmail];
+
+        tx.set(accessRef, { members, dashboardAccess: dashboardAccessMap }, { merge: false });
         // Keep the reverse-index document instead of deleting it, because
         // delete is intentionally disallowed by the security rules.
-        tx.set(lookupRef, { owners: {} }, { merge: false });
+        tx.set(lookupRef, { owners: {}, dashboardAccess: false }, { merge: false });
       });
     } catch (e) {
       console.error("revokeAccess failed:", e);
+      reportError && reportError(e);
+    }
+  };
+
+  // Owner-only: turns Dashboard visibility on/off for one already-granted
+  // member, independent of their editor/viewer role. Off by default for
+  // everyone but the owner (see canViewDashboard above) — this is the only
+  // way it ever becomes true for someone else.
+  const setMemberDashboardAccess = async (email, allowed) => {
+    if (!user || !isOwnerAccount) return;
+    if (!requireOnline()) return;
+
+    const cleanEmail = normalizeEmail(email);
+    const accessRef = doc(db, "access", user.uid);
+    const lookupRef = doc(db, "access_by_email", cleanEmail);
+
+    try {
+      await runTransaction(db, async (tx) => {
+        const accessSnap = await tx.get(accessRef);
+        const currentMembers = accessSnap.exists() ? (accessSnap.data().members || {}) : {};
+        const role = currentMembers[cleanEmail];
+        // Not an actual member (already revoked, or never granted) —
+        // nothing to toggle.
+        if (!role) return;
+
+        const dashboardAccessMap = accessSnap.exists()
+          ? { ...(accessSnap.data().dashboardAccess || {}) }
+          : {};
+        dashboardAccessMap[cleanEmail] = Boolean(allowed);
+
+        tx.set(accessRef, { dashboardAccess: dashboardAccessMap }, { merge: true });
+        tx.set(lookupRef, { owners: { [user.uid]: role }, dashboardAccess: Boolean(allowed) });
+      });
+    } catch (e) {
+      console.error("setMemberDashboardAccess failed:", e);
       reportError && reportError(e);
     }
   };
@@ -486,7 +583,10 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     permissionLoading,
     canEdit,
     isOwnerAccount,
+    canViewDashboard,
     members,
+    dashboardAccess,
+    setMemberDashboardAccess,
     pendingSignups,
     isReviewer,
     isPrimaryAdmin,
