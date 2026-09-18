@@ -3,7 +3,7 @@
 // itself), extracted from App.jsx. Presentational only.
 // ============================================================================
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search,
   SlidersHorizontal, Building2, Plus, Bell,

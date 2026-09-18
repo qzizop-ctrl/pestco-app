@@ -7,7 +7,6 @@
 // live, not how filtering works.
 // ============================================================================
 
-import React from "react";
 import { X, Tag, Package } from "lucide-react";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
 

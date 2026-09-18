@@ -4,7 +4,7 @@
 // component — no dependency on Dashboard's internal state, so it was safe
 // to pull out mechanically.
 // ============================================================================
-import React, { useState } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 import { PRIMARY, TEXT, MUTED, LINE, SURFACE } from "../theme";
 

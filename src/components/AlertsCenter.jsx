@@ -13,7 +13,7 @@
 // up space for no reason.
 // ============================================================================
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { Bell, ChevronDown, WifiOff, AlertTriangle } from "lucide-react";
 import { TEXT, MUTED, LINE, SURFACE, STATUS_COLORS } from "../theme";
 import { STALE_ACTIVITY_DAYS } from "../domain";

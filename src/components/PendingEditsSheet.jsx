@@ -5,7 +5,6 @@
 // as the approve/rollback controls themselves in CustomerDetail.jsx.
 // ============================================================================
 
-import React from "react";
 import { Bell, ChevronRight } from "lucide-react";
 import { TEXT, MUTED, LINE, SURFACE, GOLD } from "../theme";
 import { fmtActivityDate } from "../helpers";

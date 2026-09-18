@@ -8,7 +8,7 @@
 // self-contained chunk out of the single giant App.jsx file.
 // ============================================================================
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search, SlidersHorizontal, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2,
   Building2, User, Package, Tag, StickyNote, Bell,

@@ -3,7 +3,6 @@
 // Pure presentational component — no dependency on Dashboard's internal
 // state, so it was safe to pull out mechanically.
 // ============================================================================
-import React from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { SURFACE, LINE, GOLD_SOFT, MUTED, TEXT } from "../theme";
 

@@ -8,7 +8,7 @@
 // ordinary React state instead, so it works the same on every platform.
 // ============================================================================
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 import { PRIMARY_MID, TEXT, MUTED, LINE, SURFACE } from "../theme";
 

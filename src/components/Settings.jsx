@@ -7,7 +7,7 @@
 // or Excel changed; only the JSX moved.
 // ============================================================================
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { Copy, Trash2, Download, Upload, UserCheck, Eye, X, LayoutDashboard } from "lucide-react";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
 

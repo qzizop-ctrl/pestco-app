@@ -3,7 +3,7 @@
 // Pure presentational + local-state component — no dependency on
 // Dashboard's internal state, so it was safe to pull out mechanically.
 // ============================================================================
-import React, { useState, useRef } from "react";
+import { useState, useRef } from "react";
 import { SURFACE, LINE, PRIMARY, TEXT } from "../theme";
 
 // Wraps a set of charts (visits performance, offers value trend in EGP,
