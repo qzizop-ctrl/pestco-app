@@ -382,7 +382,6 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     canViewDashboard,
     members,
     dashboardAccess,
-    setMemberDashboardAccess,
     pendingSignups,
     isReviewer,
     isPrimaryAdmin,
