@@ -337,12 +337,6 @@ export const EN = {
     "July", "August", "September", "October", "November", "December",
   ],
 
-  // Location / maps (GPS at time of logging a visit)
-  openInMaps: "Open last location on map",
-  lastVisitLocationLabel: "Last visit location",
-  locationDeniedHint: "Visit logged, but location wasn't captured (permission denied or unsupported device)",
-  visitLocationPin: "Location",
-
   // Alerts center (collapsible banner group on the customer list)
   alertsCenterTitle: "Alerts",
   noAlertsHint: "No alerts right now",

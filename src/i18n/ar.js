@@ -345,12 +345,6 @@ export const AR = {
     "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
   ],
 
-  // Location / maps (GPS at time of logging a visit)
-  openInMaps: "افتح آخر موقع على الخريطة",
-  lastVisitLocationLabel: "موقع آخر زيارة",
-  locationDeniedHint: "تم تسجيل الزيارة، لكن الموقع لم يتم تحديده (الإذن غير مفعّل أو الجهاز لا يدعمه)",
-  visitLocationPin: "الموقع",
-
   // Alerts center (collapsible banner group on the customer list)
   alertsCenterTitle: "التنبيهات",
   noAlertsHint: "لا توجد تنبيهات حاليًا",
