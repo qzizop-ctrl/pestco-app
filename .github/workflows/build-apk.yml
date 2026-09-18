@@ -93,6 +93,24 @@ jobs:
         run: npx cap sync android
 
       # =========================
+      # Debug keystore (persisted across runs)
+      # =========================
+      # Without this, Gradle auto-generates a brand-new random debug
+      # keystore on every fresh runner, so each build's APK is signed
+      # with a different certificate. Android then refuses to install a
+      # new APK over an already-installed one with a different signature
+      # (silently, or with "App not installed") — the old app just stays
+      # in place, which looks exactly like "the fix never took effect"
+      # even though the build was correct. Caching the same keystore
+      # file across runs keeps every build signed identically, so
+      # updates install over the previous version normally.
+      - name: Restore/cache debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore
+
+      # =========================
       # Gradle permission
       # =========================
       - name: Grant execute permission for gradlew
