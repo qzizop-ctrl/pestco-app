@@ -13,11 +13,13 @@ import { openWhatsApp } from "../nativeWhatsApp";
 import { db } from "../firebase";
 import { doc } from "firebase/firestore";
 import { useLastChangeActions } from "../hooks/useLastChangeActions";
+import { logAudit } from "../hooks/useAuditLog";
 
 export default function CustomerDetailScreen({
   t,
   active,
   ownerUid,
+  user,
   canEdit,
   isOwnerAccount,
   togglePin,
@@ -66,6 +68,10 @@ export default function CustomerDetailScreen({
     deleteSuccessMsg: t.deleteApprovedMsg,
     restoreSuccessMsg: t.deleteRestoredMsg,
     onDeleteSuccess: () => setScreen && setScreen("list"),
+    onAudit: (action) => logAudit(ownerUid, {
+      entityType: "customer", entityId: active?.id, entityName: active?.companyName,
+      action, user, t,
+    }),
   });
 
   if (!active) return null;

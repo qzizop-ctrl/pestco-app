@@ -25,6 +25,7 @@ export default function AppHeader({
             screen === "form" && formId ? "detail" :
             screen === "detail" ? "list" :
             screen === "supplier-form" ? "suppliers" :
+            screen === "audit-log" ? "settings" :
             "list"
           )}
           className="btn-press"
@@ -55,6 +56,7 @@ export default function AppHeader({
             {screen === "suppliers" && t.suppliersTitle}
             {screen === "supplier-form" && (activeSupplierId ? t.titleEditSupplier : t.titleNewSupplier)}
             {screen === "settings" && t.settingsTitle}
+            {screen === "audit-log" && t.auditLogTitle}
           </span>
         )}
       </span>

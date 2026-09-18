@@ -8,7 +8,7 @@
 // ============================================================================
 
 import { useState } from "react";
-import { Copy, Trash2, Download, Upload, UserCheck, Eye, X, LayoutDashboard } from "lucide-react";
+import { Copy, Trash2, Download, Upload, UserCheck, Eye, X, LayoutDashboard, History, ChevronRight } from "lucide-react";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
 
 export default function SettingsScreen({
@@ -58,6 +58,7 @@ export default function SettingsScreen({
   newMemberRole,
   setNewMemberRole,
   grantAccess,
+  openAuditLog,
 }) {
   const [exportTab, setExportTab] = useState("customers");
   const [newAdminEmail, setNewAdminEmail] = useState("");
@@ -188,6 +189,23 @@ export default function SettingsScreen({
             );
           })}
         </div>
+      )}
+
+      {(isOwnerAccount || isReviewer) && (
+        <button
+          onClick={openAuditLog}
+          className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+          style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}
+        >
+          <div className="flex items-center gap-2">
+            <History size={17} color={PRIMARY} />
+            <div>
+              <p className="font-bold text-sm" style={{ color: TEXT }}>{t.auditLogBtn}</p>
+              <p className="text-xs" style={{ color: MUTED }}>{t.auditLogHint}</p>
+            </div>
+          </div>
+          <ChevronRight size={16} color={MUTED} style={{ transform: t.dir === "rtl" ? "none" : "rotate(180deg)" }} />
+        </button>
       )}
 
       {isReviewer && (
