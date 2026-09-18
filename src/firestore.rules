@@ -131,7 +131,8 @@ service cloud.firestore {
 
       allow read: if isOwner(ownerUid) || isReviewer();
 
-      allow create: if canWrite(ownerUid);
+      allow create: if canWrite(ownerUid)
+        && request.resource.data.changedById == request.auth.uid;
 
       allow update, delete: if false;
     }

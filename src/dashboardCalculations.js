@@ -206,15 +206,39 @@ export function computeRejectionReasonsReport(offersInRange, t) {
 
   const reasonCounts = {};
   rejected.forEach((o) => {
-    const id = o.rejectionReasonId || "other";
+    // Any id Firestore has that isn't (or is no longer) one of the known
+    // reasons collapses into the same "other" bucket as offers with no
+    // reasonId at all, so they show up as one row instead of one per
+    // unrecognized id that happen to share the same "other" label.
+    const rawId = o.rejectionReasonId || "other";
+    const id = t.rejectionReasons[rawId] ? rawId : "other";
     reasonCounts[id] = (reasonCounts[id] || 0) + 1;
   });
-  const byReason = Object.entries(reasonCounts)
-    .map(([id, count]) => ({
+
+  // Round each share down first, then hand the leftover percentage points
+  // (one each) to the entries with the largest fractional remainder, so
+  // the displayed percentages always add up to exactly 100.
+  const entries = Object.entries(reasonCounts).map(([id, count]) => {
+    const rawPct = total > 0 ? (count / total) * 100 : 0;
+    return { id, count, floor: Math.floor(rawPct), remainder: rawPct - Math.floor(rawPct) };
+  });
+  let leftover = total > 0 ? 100 - entries.reduce((sum, e) => sum + e.floor, 0) : 0;
+  entries
+    .slice()
+    .sort((a, b) => b.remainder - a.remainder)
+    .forEach((e) => {
+      if (leftover > 0) {
+        e.floor += 1;
+        leftover -= 1;
+      }
+    });
+
+  const byReason = entries
+    .map(({ id, count, floor }) => ({
       id,
       label: t.rejectionReasons[id] || t.rejectionReasons.other,
       count,
-      pct: total > 0 ? Math.round((count / total) * 100) : 0,
+      pct: floor,
     }))
     .sort((a, b) => b.count - a.count);
 
