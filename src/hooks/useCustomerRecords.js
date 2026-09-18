@@ -4,7 +4,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { scheduleCallReminder, cancelCallReminder } from "../notifications";
-import { getCurrentLocation } from "../geo";
 import { emptyForm } from "../domain";
 import { parseTagsCell, buildActivity, buildVisitEntry, corePhoneDigits, fmtReminder, toISODate } from "../helpers";
 
@@ -292,20 +291,10 @@ export function useCustomerRecords({
     if (!canEdit || !visit || !ownerUid) return;
     if (!requireOnline()) return;
     const today = new Date().toISOString().slice(0, 10);
-    // Best-effort GPS capture: never blocks the save. If the user denies the
-    // permission, the browser/WebView doesn't support it, or it times out,
-    // `location` just resolves to null and the visit is logged with no pin
-    // — same as before this feature existed.
-    const location = await getCurrentLocation();
     try {
       await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
         visitDate: today,
-        visitHistory: arrayUnion(buildVisitEntry(today, location)),
-        // Kept as a top-level field (in addition to living inside the
-        // visitHistory entry above) so the detail screen can show an
-        // "open on map" link for the latest visit without having to scan
-        // the whole history array.
-        lastVisitLocation: location || null,
+        visitHistory: arrayUnion(buildVisitEntry(today)),
       });
       await appendActivity(visit.id, buildActivity("visit", t.activityVisitLogged(today)));
     } catch (e) {
