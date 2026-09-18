@@ -321,7 +321,7 @@ export function buildWhatsAppLink(phone) {
 }
 
 // Normalizes a company name for duplicate-matching (trim, lowercase, collapse spaces)
-export function normalizeCompanyName(name) {
+function normalizeCompanyName(name) {
   return (name || "")
     .toString()
     .trim()
@@ -360,7 +360,7 @@ export function findDuplicateGroups(visits) {
 
 // The most recent moment of any recorded activity on a customer: a visit,
 // a scheduled call, a logged activity entry, or the record's creation.
-export function lastActivityDate(visit) {
+function lastActivityDate(visit) {
   const dates = [];
   const vd = parseVisitDate(visit.visitDate);
   if (vd) dates.push(vd);

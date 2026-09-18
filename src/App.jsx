@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
 import { Capacitor } from "@capacitor/core";
-import {
-  ChevronRight, Languages, LogOut, Settings,
-  Wifi, WifiOff, Moon, Sun,
-} from "lucide-react";
-import { BrandMark, BottomNav, SkeletonList } from "./components/Shared";
+import { BottomNav, SkeletonList } from "./components/Shared";
+import AppHeader from "./components/AppHeader";
+import UndoToast from "./components/UndoToast";
 import { SuppliersListScreen, SupplierFormScreen } from "./components/Suppliers";
 import SettingsScreen from "./components/Settings";
 import CustomerListScreen from "./components/CustomerList";
@@ -16,12 +14,11 @@ import ConfirmModal from "./components/ConfirmModal";
 // actually used from Settings, instead of top-level here — it's a sizeable
 // library that most sessions never touch, so this keeps it out of the
 // app's initial bundle/load. See useExcelExport / useExcelImport.
-import { signOut } from "firebase/auth";
-import { auth } from "./firebase";
 import { reportException } from "./sentry";
 import AuthScreen from "./AuthScreen";
 import { useAppPrefs } from "./hooks/useAppPrefs";
 import { useWorkspace } from "./hooks/useWorkspace";
+import { useAccessManagement } from "./hooks/useAccessManagement";
 import { useLiveData } from "./hooks/useLiveData";
 import { useExcelExport } from "./hooks/useExcelExport";
 import { useExcelImport } from "./hooks/useExcelImport";
@@ -38,7 +35,7 @@ import { useFilteredData } from "./hooks/useFilteredData";
 import { useDialogState } from "./hooks/useDialogState";
 import { useCustomerFilters } from "./hooks/useCustomerFilters";
 import { useSupplierFilters } from "./hooks/useSupplierFilters";
-import { PRIMARY, TEXT, MUTED, GOLD, THEME_VARS } from "./theme";
+import { TEXT, MUTED, THEME_VARS } from "./theme";
 import { STRINGS } from "./i18n";
 import { STAGE_IDS } from "./domain";
 import { parseVisitDate, fmtOffersTotals, sumOffersByCurrency } from "./helpers";
@@ -141,10 +138,18 @@ export default function App() {
 
   const {
     authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
-    canEdit, isOwnerAccount, canViewDashboard, members, dashboardAccess, setMemberDashboardAccess,
-    pendingSignups, isReviewer, isPrimaryAdmin, primaryAdminEmail, adminEmails, addAdminEmail, removeAdminEmail, reviewSignup, dismissSignup,
-    switchOwnerWorkspace, grantAccess, revokeAccess,
+    canEdit, isOwnerAccount, canViewDashboard, members, dashboardAccess,
+    pendingSignups, isReviewer, isPrimaryAdmin, primaryAdminEmail, adminEmails,
+    switchOwnerWorkspace,
   } = useWorkspace({ requireOnline, reportError: reportWorkspaceError, screen, setScreen, setActiveId });
+
+  const {
+    grantAccess, revokeAccess, setMemberDashboardAccess,
+    reviewSignup, dismissSignup, addAdminEmail, removeAdminEmail,
+  } = useAccessManagement({
+    user, isOwnerAccount, isReviewer, isPrimaryAdmin, primaryAdminEmail, adminEmails,
+    requireOnline, reportError: reportWorkspaceError,
+  });
 
   const { visits, loaded, visitsError, suppliers, suppliersLoaded } = useLiveData(user, ownerUid);
 
@@ -393,95 +398,19 @@ export default function App() {
         color: TEXT,
       }}
     >
-      <div
-        className="flex items-center gap-2 px-4 py-3"
-        style={{ background: PRIMARY, position: "sticky", top: 0, zIndex: 10 }}
-      >
-        {!isRootScreen ? (
-          <button
-            onClick={() => setScreen(
-              screen === "form" && form.id ? "detail" :
-              screen === "detail" ? "list" :
-              screen === "supplier-form" ? "suppliers" :
-              "list"
-            )}
-            className="btn-press"
-            style={{ color: "#fff" }}
-            aria-label={t.back}
-          >
-            <ChevronRight size={22} style={{ transform: t.dir === "rtl" ? "none" : "rotate(180deg)" }} />
-          </button>
-        ) : (
-          <div
-            className="flex items-center justify-center"
-            style={{ width: 34, height: 34, minWidth: 34, background: "rgba(255,255,255,0.14)", borderRadius: 10 }}
-          >
-            <BrandMark size={15} color="#fff" />
-          </div>
-        )}
-        <span className="flex-1" style={{ color: "#fff" }}>
-          {screen === "list" ? (
-            <span className="flex items-baseline" style={{ gap: 6 }}>
-              <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: 0.5 }}>PEST</span>
-              <span style={{ fontWeight: 500, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>CRM</span>
-            </span>
-          ) : (
-            <span className="font-bold text-lg">
-              {screen === "dashboard" && t.titleDashboard}
-              {screen === "form" && (form.id ? t.titleEdit : t.titleNew)}
-              {screen === "detail" && t.titleDetail}
-              {screen === "suppliers" && t.suppliersTitle}
-              {screen === "supplier-form" && (activeSupplierId ? t.titleEditSupplier : t.titleNewSupplier)}
-              {screen === "settings" && t.settingsTitle}
-            </span>
-          )}
-        </span>
-        <div
-          className="flex items-center gap-2"
-          style={{ background: "rgba(255,255,255,0.14)", borderRadius: 10, padding: "6px 10px" }}
-        >
-          {isRootScreen && (
-            <>
-              <span
-                className="flex items-center"
-                style={{ color: isOnline ? "#6FCF97" : "#fff", opacity: isOnline ? 1 : 0.7 }}
-                aria-label={isOnline ? "online" : "offline"}
-                title={isOnline ? "" : t.offlineBanner}
-              >
-                {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
-              </span>
-              <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
-            </>
-          )}
-          <button
-            onClick={() => setDarkMode((d) => !d)}
-            className="btn-press flex items-center"
-            style={{ color: "#fff" }}
-            aria-label={darkMode ? t.lightModeToggle : t.darkModeToggle}
-            title={darkMode ? t.lightModeToggle : t.darkModeToggle}
-          >
-            {darkMode ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
-          <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
-          <button
-            onClick={() => setLang(lang === "ar" ? "en" : "ar")}
-            className="btn-press flex items-center gap-1 font-bold text-xs"
-            style={{ color: "#fff" }}
-            aria-label={t.langToggle}
-          >
-            <Languages size={14} /> {t.langToggle}
-          </button>
-        </div>
-        <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.22)" }} />
-        <button
-          onClick={() => signOut(auth).catch(() => {})}
-          className="btn-press flex items-center"
-          style={{ color: "#fff" }}
-          aria-label={t.signOut}
-        >
-          <LogOut size={16} />
-        </button>
-      </div>
+      <AppHeader
+        isRootScreen={isRootScreen}
+        screen={screen}
+        formId={form.id}
+        activeSupplierId={activeSupplierId}
+        setScreen={setScreen}
+        isOnline={isOnline}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        lang={lang}
+        setLang={setLang}
+        t={t}
+      />
 
       <div key={screen} className="animate-screen-in">
       {screen === "dashboard" && canViewDashboard && (
@@ -672,57 +601,21 @@ export default function App() {
       </div>
 
       {pendingDelete && (
-        <div
-          className="flex items-center justify-between gap-3"
-          style={{
-            position: "fixed",
-            left: 16,
-            right: 16,
-            bottom: isRootScreen ? 78 : 16,
-            background: PRIMARY,
-            color: "#fff",
-            borderRadius: 14,
-            padding: "12px 16px",
-            boxShadow: "0 8px 20px rgba(0,0,0,.25)",
-            zIndex: 30,
-          }}
-        >
-          <span className="text-sm font-bold">{t.deletedUndoMsg(pendingDelete.companyName || "")}</span>
-          <button
-            onClick={undoDelete}
-            className="btn-press font-extrabold text-sm flex-shrink-0"
-            style={{ color: GOLD }}
-          >
-            {t.undoBtn}
-          </button>
-        </div>
+        <UndoToast
+          companyName={pendingDelete.companyName}
+          onUndo={undoDelete}
+          isRootScreen={isRootScreen}
+          t={t}
+        />
       )}
 
       {pendingSupplierDelete && (
-        <div
-          className="flex items-center justify-between gap-3"
-          style={{
-            position: "fixed",
-            left: 16,
-            right: 16,
-            bottom: isRootScreen ? 78 : 16,
-            background: PRIMARY,
-            color: "#fff",
-            borderRadius: 14,
-            padding: "12px 16px",
-            boxShadow: "0 8px 20px rgba(0,0,0,.25)",
-            zIndex: 30,
-          }}
-        >
-          <span className="text-sm font-bold">{t.deletedUndoMsg(pendingSupplierDelete.companyName || "")}</span>
-          <button
-            onClick={undoSupplierDelete}
-            className="btn-press font-extrabold text-sm flex-shrink-0"
-            style={{ color: GOLD }}
-          >
-            {t.undoBtn}
-          </button>
-        </div>
+        <UndoToast
+          companyName={pendingSupplierDelete.companyName}
+          onUndo={undoSupplierDelete}
+          isRootScreen={isRootScreen}
+          t={t}
+        />
       )}
 
       {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} isOwnerAccount={isOwnerAccount} isReviewer={isReviewer} canViewDashboard={canViewDashboard} />}

@@ -47,7 +47,7 @@ export const ACTIVITY_COLORS = {
   visit: "#2F9E58",
 };
 
-export const SECTOR_COLORS = {
+const SECTOR_COLORS = {
   construction: "#8C5A2C",
   education: "#2C6E8C",
   consultants: "#3D8C6C",
@@ -56,7 +56,7 @@ export const SECTOR_COLORS = {
 
 export const sectorColor = (id) => SECTOR_COLORS[id] || SECTOR_COLORS.private;
 
-export const STAGE_COLORS = {
+const STAGE_COLORS = {
   survey: "#6B7168",
   quote: "#B9832A",
   install: "#0F6E56",
@@ -65,7 +65,7 @@ export const STAGE_COLORS = {
 
 export const stageColor = (id) => STAGE_COLORS[id] || STAGE_COLORS.survey;
 
-export const OFFER_STATUS_COLORS = {
+const OFFER_STATUS_COLORS = {
   pending: "#DB9A2C",
   purchased: "#2F9E58",
   rejected: "#C4443A",

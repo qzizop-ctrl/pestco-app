@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, ChevronDown, Percent, DollarSign, FileDown, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, ChevronDown, Percent, DollarSign, FileDown } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
-import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE, SURFACE_SUBTLE } from "./theme";
+import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE } from "./theme";
 import { STRINGS } from "./i18n";
 import { SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS } from "./domain";
 import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, toJsDate } from "./helpers";
