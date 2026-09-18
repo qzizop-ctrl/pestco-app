@@ -10,6 +10,7 @@ import CustomerFormScreen from "./components/CustomerForm";
 import CustomerDetailScreen from "./components/CustomerDetail";
 import RejectionReasonModal from "./components/RejectionReasonModal";
 import ConfirmModal from "./components/ConfirmModal";
+import AuditLogScreen from "./components/AuditLog";
 // xlsx is loaded lazily (dynamic import) only when Export/Import is
 // actually used from Settings, instead of top-level here — it's a sizeable
 // library that most sessions never touch, so this keeps it out of the
@@ -168,7 +169,7 @@ export default function App() {
     supplierPickerOpen, setSupplierPickerOpen, toggleOfferSupplier,
     expandedOfferId, setExpandedOfferId,
     addOffer, updateOfferStatus, deleteOffer,
-  } = useOfferActions({ ownerUid, canEdit, requireOnline, confirmAction, setRejectionPrompt, appendActivity, reportSaveError, t });
+  } = useOfferActions({ ownerUid, user, canEdit, requireOnline, confirmAction, setRejectionPrompt, appendActivity, reportSaveError, t });
 
   const {
     form, setForm, errors, pendingDelete,
@@ -476,6 +477,7 @@ export default function App() {
           t={t}
           active={active}
           ownerUid={ownerUid}
+          user={user}
           canEdit={canEdit}
           isOwnerAccount={isOwnerAccount}
           togglePin={togglePin}
@@ -543,6 +545,7 @@ export default function App() {
           deleteSupplier={deleteSupplier}
           saving={isSaving}
           ownerUid={ownerUid}
+          user={user}
           isOwnerAccount={isOwnerAccount}
           setScreen={setScreen}
         />
@@ -596,6 +599,20 @@ export default function App() {
           newMemberRole={newMemberRole}
           setNewMemberRole={setNewMemberRole}
           grantAccess={grantAccess}
+          openAuditLog={() => setScreen("audit-log")}
+        />
+      )}
+
+      {screen === "audit-log" && (isOwnerAccount || isReviewer) && (
+        <AuditLogScreen
+          t={t}
+          ownerUid={ownerUid}
+          isOwnerAccount={isOwnerAccount}
+          isReviewer={isReviewer}
+          openDetail={openDetail}
+          openEditSupplier={openEditSupplier}
+          visits={visits}
+          suppliers={suppliers}
         />
       )}
       </div>
@@ -623,11 +640,12 @@ export default function App() {
       {rejectionPrompt && (
         <RejectionReasonModal
           t={t}
-          initialReason={rejectionPrompt.initialReason}
-          onConfirm={(reason) => {
+          initialReasonId={rejectionPrompt.initialReasonId}
+          initialReasonText={rejectionPrompt.initialReasonText}
+          onConfirm={(picked) => {
             const { onConfirm } = rejectionPrompt;
             setRejectionPrompt(null);
-            onConfirm(reason);
+            onConfirm(picked);
           }}
           onCancel={() => setRejectionPrompt(null)}
         />

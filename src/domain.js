@@ -30,6 +30,27 @@ export const OFFER_STATUS_IDS = ["pending", "purchased", "rejected", "installed"
 
 export const CURRENCY_IDS = ["EGP", "USD"];
 
+// Predefined offer-rejection reasons a rep chooses from in
+// RejectionReasonModal, instead of relying only on free text — see
+// src/dashboardCalculations.js#computeRejectionReasonsReport, which groups
+// rejected offers by this id for the Dashboard's rejection-reasons report.
+// "other" always keeps its free-text field (offer.rejectionReason) for the
+// actual detail; every other id here just stores its own localized label
+// in offer.rejectionReason so old rendering code (CustomerDetail.jsx) needs
+// no change. Offers saved before this feature existed have no
+// rejectionReasonId at all — they're treated as "other" everywhere this id
+// is grouped on, so old free-text reasons still count instead of vanishing.
+export const REJECTION_REASON_IDS = [
+  "price", "timing", "chose_other_supplier", "project_postponed",
+  "not_needed_now", "payment_terms", "other",
+];
+
+// Kinds of records the unified Audit Log can track a change on.
+export const AUDIT_ENTITY_TYPES = ["customer", "supplier"];
+
+// What kind of write an audit-log entry records.
+export const AUDIT_ACTION_IDS = ["create", "update", "delete", "restore", "approve", "rollback"];
+
 export const emptyForm = {
   id: null,
   companyName: "",

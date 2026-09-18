@@ -11,6 +11,7 @@ import { generateDashboardPdf } from "./pdfReport";
 import {
   resolvePeriod, pctChange, computeAvgDealSizeForCurrency, computeWinRate,
   computeDecidedCount, buildOfferBreakdown, buildOffersChartData, computePeriodStats,
+  computeRejectionReasonsReport,
 } from "./dashboardCalculations";
 // The four components below used to be defined inline in this file (which
 // had grown past 990 lines). They're pure presentational pieces with no
@@ -75,6 +76,11 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
 
   // Offer status breakdown used by the split bars on the Offers cards below.
   const offerBreakdown = useMemo(() => buildOfferBreakdown(stats.offersByStatus), [stats]);
+
+  // Rejection-reasons analytics — see dashboardCalculations.js. Reuses the
+  // same period/sector-filtered offersInRange as the rest of the Dashboard,
+  // so the report's date range is just the existing period picker above.
+  const rejectionReport = useMemo(() => computeRejectionReasonsReport(stats.offersInRange, t), [stats, t]);
 
   const offersCountSegments = useMemo(() => ([
     { key: "converted", label: t.dashOffersConverted, color: "#2F9E58", amount: offerBreakdown.convertedCount, display: offerBreakdown.convertedCount },
@@ -522,6 +528,54 @@ subValue={
             );
           })}
         </div>
+      </div>
+
+      {/* Rejection-reasons analytics — see computeRejectionReasonsReport in
+          dashboardCalculations.js. Only rendered when there's something to
+          show, so an empty period doesn't add a mostly-blank card. */}
+      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
+        <p className="font-bold text-sm" style={{ color: TEXT }}>{t.dashRejectionReport}</p>
+        <p className="text-xs mb-3" style={{ color: MUTED }}>{t.dashRejectionReportHint}</p>
+
+        {rejectionReport.total === 0 ? (
+          <p className="text-sm text-center py-3" style={{ color: MUTED }}>{t.dashRejectionReportEmpty}</p>
+        ) : (
+          <>
+            <div className="flex flex-col gap-2 mb-4">
+              {rejectionReport.byReason.map((r) => (
+                <div key={r.id}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold" style={{ color: TEXT }}>{r.label}</span>
+                    <span className="text-xs font-bold" style={{ color: MUTED }}>
+                      {r.count} · {t.dashRejectionReportPct(r.pct)}
+                    </span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 999, background: SURFACE_SUBTLE, overflow: "hidden" }}>
+                    <div style={{ width: `${r.pct}%`, height: "100%", background: "#C4443A", borderRadius: 999 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {rejectionReport.byRep.length > 1 && (
+              <>
+                <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>{t.dashRejectionReportByRep}</p>
+                <div className="flex flex-wrap" style={{ gap: 8 }}>
+                  {rejectionReport.byRep.map((r) => (
+                    <div
+                      key={r.name}
+                      className="flex items-center justify-between"
+                      style={{ flex: "1 1 45%", minWidth: 140, background: SURFACE_SUBTLE, borderRadius: 10, padding: "8px 10px" }}
+                    >
+                      <span className="text-xs font-bold" style={{ color: TEXT }}>{r.name}</span>
+                      <span className="text-xs font-extrabold" style={{ color: "#C4443A" }}>{r.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       <OffersListSection

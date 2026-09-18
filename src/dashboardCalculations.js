@@ -192,6 +192,44 @@ export function buildOfferBreakdown(offersByStatus) {
 // Builds a per-day (single month) or per-month (multi-month range) bucket
 // array of offer values for one currency, used to feed a value-trend
 // BarChart.
+// Rejection-reasons analytics report — groups the rejected offers already
+// in `offersInRange` (same period-filtered set the Sales Performance
+// section uses, filtered by offerDate like everything else on the
+// Dashboard) by their rejectionReasonId, plus a by-rep breakdown for
+// comparing reps. Offers rejected before this feature existed (or ones
+// where the picker somehow left reasonId unset) fall back to the "other"
+// bucket via rejectionReasonId || "other", so old data still counts
+// instead of silently disappearing from the report.
+export function computeRejectionReasonsReport(offersInRange, t) {
+  const rejected = (offersInRange || []).filter((o) => o.status === "rejected");
+  const total = rejected.length;
+
+  const reasonCounts = {};
+  rejected.forEach((o) => {
+    const id = o.rejectionReasonId || "other";
+    reasonCounts[id] = (reasonCounts[id] || 0) + 1;
+  });
+  const byReason = Object.entries(reasonCounts)
+    .map(([id, count]) => ({
+      id,
+      label: t.rejectionReasons[id] || t.rejectionReasons.other,
+      count,
+      pct: total > 0 ? Math.round((count / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const repCounts = {};
+  rejected.forEach((o) => {
+    const name = o.rejectedBy || t.unknownUser;
+    repCounts[name] = (repCounts[name] || 0) + 1;
+  });
+  const byRep = Object.entries(repCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return { total, byReason, byRep };
+}
+
 export function buildOffersChartData(offersInRange, currency, granularity, start, end, months) {
   const inCurrency = (o) => (o.currency || "EGP") === currency;
 

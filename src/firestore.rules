@@ -116,6 +116,28 @@ service cloud.firestore {
 
 
     // ============================================================
+    // USERS / AUDIT LOG
+    // ============================================================
+    // Immutable history of customer/supplier create/update/delete/restore/
+    // approve/rollback operations — written by useAuditLog.js#logAudit
+    // right after each of those succeeds. Read is owner/reviewer only
+    // (same as the Settings screen this is reached from), matching the
+    // "مركزي للأدمن" (admin-only, central) shape it was asked for as.
+    // Any editor who can write the underlying customer/supplier record can
+    // also append its audit entry — canWrite(ownerUid) already covers
+    // owner + reviewer + editor. Entries can never be edited or deleted by
+    // any client once written, so the trail can't be quietly tampered with.
+    match /users/{ownerUid}/auditLog/{entryId} {
+
+      allow read: if isOwner(ownerUid) || isReviewer();
+
+      allow create: if canWrite(ownerUid);
+
+      allow update, delete: if false;
+    }
+
+
+    // ============================================================
     // ACCESS
     // ============================================================
 
