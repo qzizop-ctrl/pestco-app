@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Star, User, Phone, MessageCircle, Mail, Calendar, Clock, History, Bell,
-  FileText, Wallet, Trash2, Pencil, MapPin, Truck,
+  FileText, Wallet, Trash2, Pencil, Truck,
 } from "lucide-react";
 import { TagChip } from "./Shared";
 import PendingChangeBanner from "./PendingChangeBanner";
@@ -10,7 +10,6 @@ import { PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE, 
 import { STAGE_IDS, CURRENCY_IDS, OFFER_STATUS_IDS } from "../domain";
 import { visitStatus, getVisitEvents, fmtCreatedAt, fmtReminder, fmtActivityDate, fmtMoney, buildWhatsAppLink } from "../helpers";
 import { openWhatsApp } from "../nativeWhatsApp";
-import { mapsUrl } from "../geo";
 import { db } from "../firebase";
 import { doc } from "firebase/firestore";
 import { useLastChangeActions } from "../hooks/useLastChangeActions";
@@ -229,47 +228,17 @@ export default function CustomerDetailScreen({
               <div className="flex items-center flex-wrap gap-1">
                 {[...getVisitEvents(active)]
                   .sort((a, b) => (a.date < b.date ? 1 : -1))
-                  .map((ev) => {
-                    const evMapsUrl = mapsUrl(ev.location);
-                    return (
-                      <span
-                        key={ev.id}
-                        className="flex items-center gap-1 text-xs font-bold"
-                        style={{ background: SURFACE_SUBTLE, color: MUTED, borderRadius: 999, padding: "4px 10px" }}
-                      >
-                        {ev.date}
-                        {evMapsUrl && (
-                          <a
-                            href={evMapsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="btn-press flex items-center justify-center"
-                            style={{ color: PRIMARY_MID }}
-                            aria-label={t.visitLocationPin}
-                            title={t.visitLocationPin}
-                          >
-                            <MapPin size={12} />
-                          </a>
-                        )}
-                      </span>
-                    );
-                  })}
+                  .map((ev) => (
+                    <span
+                      key={ev.id}
+                      className="flex items-center gap-1 text-xs font-bold"
+                      style={{ background: SURFACE_SUBTLE, color: MUTED, borderRadius: 999, padding: "4px 10px" }}
+                    >
+                      {ev.date}
+                    </span>
+                  ))}
               </div>
             </div>
-          )}
-
-          {mapsUrl(active.lastVisitLocation) && (
-            <a
-              href={mapsUrl(active.lastVisitLocation)}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-between"
-              style={{ color: PRIMARY_MID, textDecoration: "none", marginTop: 8 }}
-            >
-              <span className="flex items-center gap-2 text-sm"><MapPin size={15} /> {t.lastVisitLocationLabel}</span>
-              <span className="text-sm font-bold">{t.openInMaps}</span>
-            </a>
           )}
         </div>
 
