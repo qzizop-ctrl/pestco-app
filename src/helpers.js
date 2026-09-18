@@ -133,18 +133,11 @@ export function buildActivity(type, text) {
 // Builds a unique visit-history entry, used to track that an actual visit
 // happened on a given date (as opposed to just "the current visitDate"),
 // so the Dashboard can count real visit events per customer over time.
-//
-// `location`, when provided, is a plain { lat, lng } object captured from
-// the device's GPS at the moment the visit was logged (see src/geo.js).
-// It's optional and stored as `null` when unavailable (permission denied,
-// unsupported device, or timed out) — older entries simply don't have this
-// field at all, which every reader here already treats as "no location".
-export function buildVisitEntry(date, location) {
+export function buildVisitEntry(date) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     date: date || new Date().toISOString().slice(0, 10),
     at: new Date().toISOString(),
-    location: location || null,
   };
 }
 
