@@ -19,6 +19,21 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
   const [supplierPickerOpen, setSupplierPickerOpen] = useState(false);
   const [expandedOfferId, setExpandedOfferId] = useState(null);
 
+  // Builds the extra rejection fields stamped onto an offer at the
+  // moment it's rejected — reasonId feeds the Dashboard's rejection-
+  // reasons report (grouped by id, not free text), rejectedBy/rejectedById
+  // let that report compare reps, and rejectedAt is what the report's
+  // date-range filter (the Dashboard's existing period picker) checks
+  // instead of offerDate, since an offer can be rejected well after it
+  // was first created.
+  const rejectionFields = ({ reasonId, label }) => ({
+    rejectionReason: label,
+    rejectionReasonId: reasonId,
+    rejectedBy: user?.displayName || user?.email || t.unknownUser,
+    rejectedById: user?.uid || null,
+    rejectedAt: new Date().toISOString(),
+  });
+
   const resetNewOffer = () => {
     setNewOffer(emptyNewOffer());
     setExpandedOfferId(null);
@@ -59,21 +74,6 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
       }
     };
 
-    // Builds the extra rejection fields stamped onto an offer at the
-    // moment it's rejected — reasonId feeds the Dashboard's rejection-
-    // reasons report (grouped by id, not free text), rejectedBy/rejectedById
-    // let that report compare reps, and rejectedAt is what the report's
-    // date-range filter (the Dashboard's existing period picker) checks
-    // instead of offerDate, since an offer can be rejected well after it
-    // was first created.
-    const rejectionFields = ({ reasonId, label }) => ({
-      rejectionReason: label,
-      rejectionReasonId: reasonId,
-      rejectedBy: user?.displayName || user?.email || t.unknownUser,
-      rejectedById: user?.uid || null,
-      rejectedAt: new Date().toISOString(),
-    });
-
     if (newOffer.status === "rejected") {
       setRejectionPrompt({
         initialReasonId: "",
@@ -89,14 +89,6 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
     if (!canEdit || !visit || !ownerUid) return;
     if (!requireOnline()) return;
     if (newStatus === offer.status) return;
-
-    const rejectionFields = ({ reasonId, label }) => ({
-      rejectionReason: label,
-      rejectionReasonId: reasonId,
-      rejectedBy: user?.displayName || user?.email || t.unknownUser,
-      rejectedById: user?.uid || null,
-      rejectedAt: new Date().toISOString(),
-    });
 
     const saveStatus = async (extraFields) => {
       const updated = (visit.offers || []).map((o) =>

@@ -90,7 +90,7 @@ export function useLastChangeActions({
       try {
         await deleteDoc(docRef);
         if (deleteSuccessMsg) alert(deleteSuccessMsg);
-        onAudit && onAudit("delete");
+        onAudit && onAudit("approve");
         onDeleteSuccess && onDeleteSuccess();
       } catch (err) {
         console.error("last_change confirm-delete failed:", err);
