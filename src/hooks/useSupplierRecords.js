@@ -3,6 +3,7 @@ import { collection, doc, addDoc, updateDoc, serverTimestamp } from "firebase/fi
 import { db } from "../firebase";
 import { emptySupplierForm } from "../domain";
 import { parseTagsCell } from "../helpers";
+import { logAudit } from "./useAuditLog";
 
 // Suppliers CRUD (simple contact records — no visits/pipeline/offers).
 // Split out of App.jsx; mirrors useCustomerRecords but for the much
@@ -98,11 +99,19 @@ export function useSupplierRecords({
           ...data,
           last_change: lastChangeData,
         });
+        logAudit(ownerUid, {
+          entityType: "supplier", entityId: activeSupplierId, entityName: data.name,
+          action: "update", changes, user, t,
+        });
       } else {
-        await addDoc(collection(db, "users", ownerUid, "suppliers"), {
+        const ref = await addDoc(collection(db, "users", ownerUid, "suppliers"), {
           ...data,
           last_change: lastChangeData,
           createdAt: serverTimestamp(),
+        });
+        logAudit(ownerUid, {
+          entityType: "supplier", entityId: ref.id, entityName: data.name,
+          action: "create", user, t,
         });
       }
       setScreen("suppliers");
@@ -133,6 +142,10 @@ export function useSupplierRecords({
             updatedById: user?.uid || null,
             updatedAt: new Date().toISOString(),
           },
+        });
+        logAudit(ownerUid, {
+          entityType: "supplier", entityId: id, entityName: supplier ? supplier.name : "",
+          action: "delete", user, t,
         });
       } catch (e) {
         reportSaveError(e);

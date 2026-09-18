@@ -6,6 +6,7 @@ import { db } from "../firebase";
 import { scheduleCallReminder, cancelCallReminder } from "../notifications";
 import { emptyForm } from "../domain";
 import { parseTagsCell, buildActivity, buildVisitEntry, corePhoneDigits, fmtReminder, toISODate } from "../helpers";
+import { logAudit } from "./useAuditLog";
 
 // Everything to do with a single customer ("visit") record: the edit form,
 // opening/closing the detail screen, saving, soft-deleting, pinning,
@@ -132,6 +133,10 @@ export function useCustomerRecords({
             updatePayload.visitHistory = arrayUnion(buildVisitEntry(data.visitDate));
           }
           await updateDoc(doc(db, "users", ownerUid, "visits", id), updatePayload);
+          logAudit(ownerUid, {
+            entityType: "customer", entityId: id, entityName: data.companyName,
+            action: "update", changes, user, t,
+          });
         } else {
           const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
             ...data,
@@ -143,6 +148,10 @@ export function useCustomerRecords({
             updatedAt: new Date().toISOString()
           });
           savedId = ref.id;
+          logAudit(ownerUid, {
+            entityType: "customer", entityId: savedId, entityName: data.companyName,
+            action: "create", user, t,
+          });
         }
 
         if (!id) {
@@ -222,6 +231,10 @@ export function useCustomerRecords({
           },
         });
         await cancelCallReminder(id);
+        logAudit(ownerUid, {
+          entityType: "customer", entityId: id, entityName: visit ? visit.companyName : "",
+          action: "delete", user, t,
+        });
       } catch (e) {
         reportSaveError(e);
       }
