@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, Fragment } from "react";
 import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, ChevronDown, Percent, DollarSign, FileDown } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -443,7 +443,7 @@ subValue={
             const count = stats.pipeline[id] || 0;
             const isEmpty = count === 0;
             return (
-              <React.Fragment key={id}>
+              <Fragment key={id}>
                 <div className="flex flex-col items-center" style={{ flexShrink: 0, minWidth: 66, opacity: isEmpty ? 0.45 : 1 }}>
                   <div
                     className="flex items-center justify-center font-extrabold"
@@ -469,7 +469,7 @@ subValue={
                     style={{ flexShrink: 0, transform: t.dir === "rtl" ? "none" : "rotate(180deg)" }}
                   />
                 )}
-              </React.Fragment>
+              </Fragment>
             );
           })}
         </div>
