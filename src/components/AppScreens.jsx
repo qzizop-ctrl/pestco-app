@@ -160,7 +160,7 @@ export default function AppScreens({
     <div key={screen} className="animate-screen-in">
     {screen === "dashboard" && canViewDashboard && (
       <Suspense fallback={<div className="px-4 pt-4"><SkeletonList count={3} /></div>}>
-        <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} showAlert={showAlert} />
+        <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} showAlert={showAlert} staleOffers={staleOffers} />
       </Suspense>
     )}
 

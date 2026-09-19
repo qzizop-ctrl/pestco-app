@@ -1,22 +1,22 @@
 import { useState, Fragment } from "react";
 import { ChevronLeft, TrendingUp, TrendingDown } from "lucide-react";
-import { stageColor, offerStatusColor, PRIMARY, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
+import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
 import { STAGE_IDS, OFFER_STATUS_IDS } from "../domain";
 import { fmtOffersTotals } from "../helpers";
-import { pctChange } from "../dashboardCalculations";
+import { pctChange, computeStageConversionRates } from "../dashboardCalculations";
 
 // Merges what used to be three separate full-width cards on the Dashboard
 // (Sales Pipeline, Sales Performance, Rejection Reasons Analytics) into one
-// tabbed card. They were split apart before, but stacked vertically that
-// way meant: (a) a lot of scrolling to get past three cards' worth of
-// content to reach the Offers/Customers lists below, and (b) the
-// Rejection-Reasons card is really just a drill-down of the "rejected"
-// segment inside Sales Performance, so keeping it a full separate card
-// buried the connection between the two. Tabs (not swipe-snap like
-// SwipeableChartCard) because these panels have very different, variable
-// heights — a fixed-height swipe track doesn't fit a table that can be
-// 2 rows or 20.
-export default function SalesAnalysisCard({ t, stats, prevStats, compare, rejectionReport }) {
+// tabbed card, plus a fourth "Top Clients" tab. They were split apart
+// before, but stacked vertically that way meant: (a) a lot of scrolling to
+// get past four cards' worth of content to reach the Offers/Customers
+// lists below, and (b) the Rejection-Reasons card is really just a
+// drill-down of the "rejected" segment inside Sales Performance, so
+// keeping it a full separate card buried the connection between the two.
+// Tabs (not swipe-snap like SwipeableChartCard) because these panels have
+// very different, variable heights — a fixed-height swipe track doesn't
+// fit a table that can be 2 rows or 20.
+export default function SalesAnalysisCard({ t, stats, prevStats, compare, rejectionReport, topClients, visits, onOpenCustomer }) {
   const tabs = [
     { key: "pipeline", label: t.dashPipeline },
     { key: "performance", label: t.dashSalesPerformance },
@@ -25,8 +25,10 @@ export default function SalesAnalysisCard({ t, stats, prevStats, compare, reject
       label: t.dashRejectionReport,
       badge: rejectionReport.total > 0 ? rejectionReport.total : null,
     },
+    { key: "topClients", label: t.dashTopClients },
   ];
   const [active, setActive] = useState("pipeline");
+  const stageConversion = computeStageConversionRates(stats.pipeline);
 
   return (
     <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
@@ -82,6 +84,9 @@ export default function SalesAnalysisCard({ t, stats, prevStats, compare, reject
             const color = id === "none" ? MUTED : stageColor(id);
             const count = stats.pipeline[id] || 0;
             const isEmpty = count === 0;
+            // Drop-off vs. the previous stage's count — "none" has no
+            // place in that sequence, so it never gets a percentage.
+            const conversion = id === "none" ? null : stageConversion.find((c) => c.id === id);
             return (
               <Fragment key={id}>
                 <div className="flex flex-col items-center" style={{ flexShrink: 0, minWidth: 66, opacity: isEmpty ? 0.45 : 1 }}>
@@ -101,6 +106,11 @@ export default function SalesAnalysisCard({ t, stats, prevStats, compare, reject
                     {count}
                   </div>
                   <span className="text-xs font-bold mt-1 text-center" style={{ color: MUTED }}>{label}</span>
+                  {conversion && conversion.pct !== null && (
+                    <span className="text-xs font-bold" style={{ color: PRIMARY_MID }}>
+                      {conversion.pct.toFixed(0)}%
+                    </span>
+                  )}
                 </div>
                 {!isLast && (
                   <ChevronLeft
@@ -203,6 +213,40 @@ export default function SalesAnalysisCard({ t, stats, prevStats, compare, reject
                 </>
               )}
             </>
+          )}
+        </div>
+      )}
+
+      {active === "topClients" && (
+        <div className="flex flex-col">
+          {topClients.length === 0 ? (
+            <p className="text-sm text-center py-3" style={{ color: MUTED }}>{t.dashTopClientsEmpty}</p>
+          ) : (
+            topClients.map((c, idx) => (
+              <button
+                key={c.customerId || c.customerName}
+                onClick={() => {
+                  const parent = visits.find((v) => v.id === c.customerId);
+                  if (parent && onOpenCustomer) onOpenCustomer(parent);
+                }}
+                className={`btn-press w-full flex items-center gap-2 ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+                style={{ padding: "8px 2px", borderTop: idx > 0 ? `1px dashed ${LINE}` : "none" }}
+              >
+                <span
+                  className="flex items-center justify-center font-extrabold text-xs"
+                  style={{ width: 22, height: 22, borderRadius: "50%", background: SURFACE_SUBTLE, color: MUTED, flexShrink: 0 }}
+                >
+                  {idx + 1}
+                </span>
+                <span className="flex-1" style={{ minWidth: 0 }}>
+                  <span className="block font-bold text-sm truncate" style={{ color: TEXT }}>{c.customerName}</span>
+                  <span className="block text-xs" style={{ color: MUTED }}>{t.dashTopClientsOffersCount(c.offersCount)}</span>
+                </span>
+                <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID, flexShrink: 0 }}>
+                  {fmtOffersTotals(c.totals, t) || `0 ${t.dashCurrency}`}
+                </span>
+              </button>
+            ))
           )}
         </div>
       )}
