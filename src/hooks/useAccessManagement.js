@@ -3,6 +3,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { normalizeEmail, canRemoveAdmin, canGrantAccess, canRevokeAccess } from "../adminPermissions";
+import { reportException } from "../sentry";
 
 // Split out of useWorkspace.js: that hook resolves *who the current user is*
 // and *which workspace/role they have* (auth, admin listener, permission
@@ -62,6 +63,7 @@ export function useAccessManagement({
       });
     } catch (e) {
       console.error("grantAccess failed:", e);
+      reportException(e, { context: "grantAccess failed" });
       // This used to fail silently — the owner would see the Settings UI
       // close/complete normally with no indication anything went wrong,
       // while the invited person still couldn't get in (their lookup finds
@@ -115,6 +117,7 @@ export function useAccessManagement({
       });
     } catch (e) {
       console.error("revokeAccess failed:", e);
+      reportException(e, { context: "revokeAccess failed" });
       reportError && reportError(e);
     }
   };
@@ -150,6 +153,7 @@ export function useAccessManagement({
       });
     } catch (e) {
       console.error("setMemberDashboardAccess failed:", e);
+      reportException(e, { context: "setMemberDashboardAccess failed" });
       reportError && reportError(e);
     }
   };
@@ -166,6 +170,7 @@ export function useAccessManagement({
       await deleteDoc(doc(db, "signups", uid));
     } catch (e) {
       console.error("Failed to clear reviewed signup:", e);
+      reportException(e, { context: "Failed to clear reviewed signup" });
       reportError && reportError(e);
     }
   };
@@ -176,6 +181,7 @@ export function useAccessManagement({
       await deleteDoc(doc(db, "signups", uid));
     } catch (e) {
       console.error("Failed to dismiss signup:", e);
+      reportException(e, { context: "Failed to dismiss signup" });
       reportError && reportError(e);
     }
   };
@@ -193,6 +199,7 @@ export function useAccessManagement({
       await setDoc(doc(db, "config", "admins"), { emails: arrayUnion(cleanEmail) }, { merge: true });
     } catch (e) {
       console.error("addAdminEmail failed:", e);
+      reportException(e, { context: "addAdminEmail failed" });
       reportError && reportError(e);
     }
   };
@@ -214,6 +221,7 @@ export function useAccessManagement({
       await setDoc(doc(db, "config", "admins"), { emails: arrayRemove(cleanEmail) }, { merge: true });
     } catch (e) {
       console.error("removeAdminEmail failed:", e);
+      reportException(e, { context: "removeAdminEmail failed" });
       reportError && reportError(e);
     }
   };

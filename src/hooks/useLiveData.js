@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
+import { reportException } from "../sentry";
 
 // Real-time Firestore listeners for the current workspace's customers
 // (visits) and suppliers. Both collections load in full (no pagination) —
@@ -60,6 +61,7 @@ export function useLiveData(user, ownerUid) {
         // (check the browser console for "permission-denied" specifically)
         // and exposed so the UI can tell the difference.
         console.error("Failed to load visits (ownerUid=" + ownerUid + "):", error.code, error.message);
+        reportException(error, { context: "Failed to load visits", ownerUid });
         setVisitsError(error);
         setLoaded(true);
       }
@@ -86,6 +88,7 @@ export function useLiveData(user, ownerUid) {
       },
       (error) => {
         console.error("Failed to load suppliers (ownerUid=" + ownerUid + "):", error.code, error.message);
+        reportException(error, { context: "Failed to load suppliers", ownerUid });
         setSuppliersError(error);
         setSuppliersLoaded(true);
       }

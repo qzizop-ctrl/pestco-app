@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 import { computeRollbackFields } from "../lastChange";
+import { reportException } from "../sentry";
 
 // ============================================================================
 // Shared "owner review" actions for a pending last_change on either a
@@ -65,6 +66,7 @@ export function useLastChangeActions({
         onAudit && onAudit("approve");
       } catch (err) {
         console.error("last_change approve failed:", err);
+        reportException(err, { context: "last_change approve failed" });
         alert(t.approveErrorMsg(err.message));
       }
     });
@@ -80,6 +82,7 @@ export function useLastChangeActions({
         onAudit && onAudit("rollback");
       } catch (err) {
         console.error("last_change rollback failed:", err);
+        reportException(err, { context: "last_change rollback failed" });
         alert(t.rollbackErrorMsg(err.message));
       }
     });
@@ -94,6 +97,7 @@ export function useLastChangeActions({
         onDeleteSuccess && onDeleteSuccess();
       } catch (err) {
         console.error("last_change confirm-delete failed:", err);
+        reportException(err, { context: "last_change confirm-delete failed" });
         alert(t.deleteFinalErrorMsg(err.message));
       }
     });
@@ -107,6 +111,7 @@ export function useLastChangeActions({
         onAudit && onAudit("restore");
       } catch (err) {
         console.error("last_change restore failed:", err);
+        reportException(err, { context: "last_change restore failed" });
         alert(t.restoreErrorMsg(err.message));
       }
     });

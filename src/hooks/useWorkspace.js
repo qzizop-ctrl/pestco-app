@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { isAdminEmail, resolvePrimaryAdminEmail, isPrimaryAdminEmail } from "../adminPermissions";
+import { reportException } from "../sentry";
 
 // Handles authentication plus multi-workspace permission resolution
 // (owner / editor / viewer) — the "read side" of workspace/access. A
@@ -237,7 +238,10 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
           // signed in with no data and no way forward.
           if (!isReviewerEmail) {
             setAuthError(true);
-            signOut(auth).catch((e) => console.error("Sign-out for unauthorized account failed:", e));
+            signOut(auth).catch((e) => {
+              console.error("Sign-out for unauthorized account failed:", e);
+              reportException(e, { context: "Sign-out for unauthorized account failed" });
+            });
           }
           return;
         }
@@ -269,6 +273,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       },
       (error) => {
         console.error("Permission listener failed:", error);
+        reportException(error, { context: "Permission listener failed" });
         setOwnerUid(null);
         setMyRole(null);
         setMyDashboardAccess(false);
@@ -337,6 +342,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       setPendingSignups(rows);
     }, (error) => {
       console.error("Failed to load pending signups:", error.code, error.message);
+      reportException(error, { context: "Failed to load pending signups" });
     });
     return () => unsub();
   }, [isReviewer, members]);

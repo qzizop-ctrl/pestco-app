@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { collection, addDoc, query, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { buildAuditEntry } from "../auditLog";
+import { reportException } from "../sentry";
 
 // How many recent entries the Audit Log screen loads. The log is
 // append-only and can grow indefinitely, so this is a live query, not the
@@ -24,6 +25,7 @@ export function logAudit(ownerUid, params) {
   const entry = buildAuditEntry(params);
   addDoc(collection(db, "users", ownerUid, "auditLog"), entry).catch((e) => {
     console.error("Audit log write failed:", e.code, e.message);
+    reportException(e, { context: "Audit log write failed" });
   });
 }
 
@@ -58,6 +60,7 @@ export function useAuditLogFeed({ ownerUid, enabled }) {
       },
       (err) => {
         console.error("Failed to load audit log (ownerUid=" + ownerUid + "):", err.code, err.message);
+        reportException(err, { context: "Failed to load audit log", ownerUid });
         setError(err);
         setLoaded(true);
       }
