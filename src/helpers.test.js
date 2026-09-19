@@ -151,6 +151,17 @@ describe("findDuplicateGroups", () => {
     expect(nameGroup.customers.map((c) => c.id).sort()).toEqual(["1", "2"]);
   });
 
+  it("groups Arabic company names across alef/taa-marbuta spelling and entity-word variants", () => {
+    const visits = [
+      { id: "1", companyName: "شركة الإسكندرية" },
+      { id: "2", companyName: "الاسكندريه" },
+      { id: "3", companyName: "مؤسسة القاهرة" },
+    ];
+    const groups = findDuplicateGroups(visits);
+    const nameGroup = groups.find((g) => g.reason === "name");
+    expect(nameGroup.customers.map((c) => c.id).sort()).toEqual(["1", "2"]);
+  });
+
   it("returns no groups when nothing overlaps", () => {
     const visits = [
       { id: "1", companyName: "A", phone: "01011111111" },

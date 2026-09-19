@@ -326,13 +326,41 @@ export function buildWhatsAppLink(phone) {
   return `https://wa.me/${digits}`;
 }
 
-// Normalizes a company name for duplicate-matching (trim, lowercase, collapse spaces)
+// Generic Arabic business-entity words that don't help identify *which*
+// company a name refers to (e.g. "شركة الاسكندرية" and "الاسكندرية" are
+// almost certainly the same customer) — stripped as whole words after
+// normalization below, never as a substring, so a company genuinely named
+// just "مجموعة" isn't reduced to nothing. Written in their normalized form
+// (ة already folded to ه) since that's what they're compared against.
+const AR_ENTITY_WORDS = ["شركه", "مؤسسه", "مجموعه", "مصنع", "معرض", "مكتب"];
+
+// Normalizes a company name for duplicate-matching. Trims/collapses
+// whitespace and lowercases as before, plus Arabic-specific folding so
+// common spelling variants of the same name actually match instead of
+// silently missing the duplicate:
+// - strips tashkeel (diacritics) and the tatweel elongation mark
+// - folds every alef variant (أ إ آ ٱ) to plain ا
+// - folds taa marbuta (ة) to ه and alef maksura (ى) to ي — the two most
+//   common typing inconsistencies in Arabic business names
+// - treats -, _, . and Arabic/Latin commas as word separators
+// - drops generic entity words (شركة/مؤسسة/...) so "شركة X" and "X" match
 function normalizeCompanyName(name) {
-  return (name || "")
+  const s = (name || "")
     .toString()
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, " ");
+    .replace(/[\u064B-\u0652\u0670\u0640]/g, "")
+    .replace(/[إأآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[-_.,،]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return s
+    .split(" ")
+    .filter((w) => w && !AR_ENTITY_WORDS.includes(w))
+    .join(" ");
 }
 
 // Groups customers that share a phone number or a near-identical company
