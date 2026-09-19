@@ -9,6 +9,15 @@ export const STALE_OFFER_DAYS = 30;
 
 export const STALE_ACTIVITY_DAYS = 90;
 
+// Upper bound on how many entries a single customer's activity timeline
+// keeps. Past this, the OLDEST entry is dropped whenever a new one is
+// added (see useActivityLog.js#makeAppendActivity) — this stays a plain
+// array field on the visit document (see buildActivity/activityLog), so
+// without a cap a long-lived customer could in principle push the whole
+// document toward Firestore's 1MB-per-document limit. Comfortably above
+// what any real customer accumulates in normal use.
+export const ACTIVITY_LOG_CAP = 50;
+
 // Upper bound on rows accepted by a single Excel import (visits or
 // suppliers). Two reasons: a very large file run sequentially used to be
 // slow with no feedback, and it protects against pasting in the wrong file
