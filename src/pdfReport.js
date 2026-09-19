@@ -94,13 +94,62 @@ function chunkArray(arr, size) {
   return chunks.length > 0 ? chunks : [[]];
 }
 
+// Rejection-reasons analytics section — mirrors the on-screen "Rejection
+// Reasons Analytics" tab (see computeRejectionReasonsReport in
+// dashboardCalculations.js / SalesAnalysisCard.jsx). This used to be shown
+// on screen only and left out of the exported report entirely, even though
+// it's one of the more actionable sections for a manager reading the PDF
+// later rather than looking at the live dashboard. Bounded by
+// REJECTION_REASON_IDS (a handful of fixed reasons) plus one row per rep
+// who has a rejection in the period — small either way, so like the
+// pipeline/sales-performance tables above this is safe inside the
+// fixed-size front matter rather than needing its own chunked pages.
+function buildRejectionSectionHtml({ t, rejectionReport }) {
+  const align = t.dir === "rtl" ? "right" : "left";
+
+  if (!rejectionReport || rejectionReport.total === 0) {
+    return `
+      ${sectionTitle(t.dashRejectionReport)}
+      <div style="font-size:12px;color:${MUTED_HEX};padding:4px 0 10px;">${esc(t.dashRejectionReportEmpty)}</div>
+    `;
+  }
+
+  const reasonRows = rejectionReport.byReason.map((r) => [
+    r.label, String(r.count), t.dashRejectionReportPct(r.pct),
+  ]);
+  const reasonTable = simpleTable({
+    headers: [t.dashRejectionReport, "#", "%"],
+    rows: reasonRows,
+    align,
+  });
+
+  const repSection = rejectionReport.byRep.length > 1
+    ? `
+      <div style="font-size:12px;font-weight:700;color:${MUTED_HEX};margin:10px 0 6px;">${esc(t.dashRejectionReportByRep)}</div>
+      ${simpleTable({
+        headers: [t.dashRejectionReportByRep, "#"],
+        rows: rejectionReport.byRep.map((r) => [r.name, String(r.count)]),
+        align,
+      })}
+    `
+    : "";
+
+  return `
+    ${sectionTitle(t.dashRejectionReport)}
+    ${reasonTable}
+    ${repSection}
+  `;
+}
+
 // Front-matter HTML: header, summary cards, pipeline, sales-performance
-// table. Size of this is fixed by the app's own fixed set of stages/status
-// values — it never grows with how much data is in the selected period, so
-// it's always safe to render as a single container.
+// table, rejection-reasons breakdown. Size of this is fixed by the app's
+// own fixed set of stages/status/rejection-reason values — it never grows
+// with how much data is in the selected period, so it's always safe to
+// render as a single container.
 function buildFrontMatterHtml({
   t, stats, periodLabel, sectorLabel,
   avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
+  rejectionReport,
 }) {
   const align = t.dir === "rtl" ? "right" : "left";
   const periodLine = t.dashPdfPeriod(periodLabel);
@@ -166,6 +215,8 @@ function buildFrontMatterHtml({
 
       ${sectionTitle(t.dashSalesPerformance)}
       ${simpleTable({ headers: [t.dashOffersTotalLabel, "#", t.dashOffersTotalValueLabel], rows: offersByStatusRows, align })}
+
+      ${buildRejectionSectionHtml({ t, rejectionReport })}
     </div>
   `;
 }
