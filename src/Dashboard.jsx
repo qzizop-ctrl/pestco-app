@@ -3,7 +3,7 @@ import { Calendar, Users, FileText, Wallet, TrendingUp, ChevronDown, Percent, Do
 import { PRIMARY, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE, SUCCESS, DASH_NEGATIVE, DASH_PENDING } from "./theme";
 import { STRINGS } from "./i18n";
 import { SECTOR_IDS } from "./domain";
-import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, toJsDate } from "./helpers";
+import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, unifyOffersTotal, toJsDate } from "./helpers";
 import { generateDashboardPdf } from "./pdfReport";
 import { reportException } from "./sentry";
 import {
@@ -25,7 +25,10 @@ import StaleOffersCard from "./components/StaleOffersCard";
 import SectorBreakdownCard from "./components/SectorBreakdownCard";
 
 
-export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, staleOffers = [] }) {
+export default function Dashboard({
+  visits, lang, onOpenCustomer, showAlert, staleOffers = [],
+  exchangeRate = null, unifyCurrency = false, setUnifyCurrency = () => {},
+}) {
   const t = STRINGS[lang];
   const now = new Date();
 
@@ -262,6 +265,40 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
           </select>
         </div>
 
+        <div
+          className="flex items-center justify-between"
+          style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: "10px 12px" }}
+        >
+          <div>
+            <p className="text-xs font-bold" style={{ color: TEXT }}>{t.unifyCurrencyToggle}</p>
+            {!exchangeRate && (
+              <p className="text-xs" style={{ color: MUTED }}>{t.unifyCurrencyNeedsRate}</p>
+            )}
+          </div>
+          <button
+            onClick={() => exchangeRate && setUnifyCurrency((v) => !v)}
+            aria-label={t.unifyCurrencyToggle}
+            aria-pressed={unifyCurrency && !!exchangeRate}
+            disabled={!exchangeRate}
+            className="btn-press"
+            style={{
+              width: 40, height: 22, borderRadius: 11, position: "relative",
+              background: unifyCurrency && exchangeRate ? GOLD : LINE,
+              border: "none", opacity: exchangeRate ? 1 : 0.5,
+              cursor: exchangeRate ? "pointer" : "not-allowed",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute", top: 2,
+                left: unifyCurrency && exchangeRate ? 20 : 2,
+                width: 18, height: 18, borderRadius: "50%", background: "#fff",
+                transition: "left .15s",
+              }}
+            />
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => setCompare((c) => !c)}
@@ -372,7 +409,11 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
             <SummaryCard
               icon={Wallet}
               label={t.dashCardOffersValue}
-              value={fmtOffersTotals(stats.offersValueTotals, t, { showAllIfEmpty: true })}
+              value={
+                unifyCurrency && exchangeRate
+                  ? `${fmtMoney(unifyOffersTotal(stats.offersValueTotals, exchangeRate), `${t.locale}-u-nu-latn`)} ${t.currencies.EGP}`
+                  : fmtOffersTotals(stats.offersValueTotals, t, { showAllIfEmpty: true })
+              }
               delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
               extra={<SplitBar segments={offersValueSegments} />}
               t={t}

@@ -39,7 +39,10 @@ import { parseVisitDate, fmtOffersTotals, sumOffersByCurrency } from "./helpers"
 const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
 
 export default function App() {
-  const { lang, setLang, darkMode, setDarkMode, isOnline } = useAppPrefs();
+  const {
+    lang, setLang, darkMode, setDarkMode, isOnline,
+    exchangeRate, setExchangeRate, unifyCurrency, setUnifyCurrency,
+  } = useAppPrefs();
 
   const [screen, setScreen] = useState("list"); // dashboard | list | form | detail | settings
   const {
@@ -434,6 +437,7 @@ export default function App() {
         dueReminders={dueReminders}
         duplicateGroups={duplicateGroups}
         errors={errors}
+        exchangeRate={exchangeRate}
         expandedOfferId={expandedOfferId}
         exportAllToExcel={exportAllToExcel}
         exportFilteredToExcel={exportFilteredToExcel}
@@ -490,6 +494,7 @@ export default function App() {
         sectorCounts={sectorCounts}
         sectorFilter={sectorFilter}
         setDateAddedFilter={setDateAddedFilter}
+        setExchangeRate={setExchangeRate}
         setExpandedOfferId={setExpandedOfferId}
         setForm={setForm}
         setMemberDashboardAccess={setMemberDashboardAccess}
@@ -510,6 +515,7 @@ export default function App() {
         setSupplierQuery={setSupplierQuery}
         setSupplierTagFilter={setSupplierTagFilter}
         setTagFilter={setTagFilter}
+        setUnifyCurrency={setUnifyCurrency}
         showAlert={showAlert}
         showDuplicates={showDuplicates}
         stageFilter={stageFilter}
@@ -533,6 +539,7 @@ export default function App() {
         togglePin={togglePin}
         togglePinSupplier={togglePinSupplier}
         totalCustomers={totalCustomers}
+        unifyCurrency={unifyCurrency}
         triggerImportPicker={triggerImportPicker}
         triggerSupplierImportPicker={triggerSupplierImportPicker}
         updateOfferStatus={updateOfferStatus}

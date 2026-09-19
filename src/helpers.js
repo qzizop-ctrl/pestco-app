@@ -207,6 +207,19 @@ export function fmtOffersTotals(totals, t, { showAllIfEmpty = false } = {}) {
   return `\u2066${joined}\u2069`;
 }
 
+// Folds a per-currency totals map (from sumOffersByCurrency) into a single
+// EGP number using a USD->EGP exchange rate, for the Dashboard's "unify
+// currency" display toggle. Returns null when the rate isn't a valid
+// positive number — the caller falls back to fmtOffersTotals' normal
+// per-currency display in that case, same as if the toggle were off.
+export function unifyOffersTotal(totals, rate) {
+  const r = Number(rate);
+  if (!(r > 0)) return null;
+  const egp = totals.EGP || 0;
+  const usd = totals.USD || 0;
+  return egp + usd * r;
+}
+
 export function visitStatus(visit) {
   if (!visit.callDateTime) return "none";
   const call = new Date(visit.callDateTime);
