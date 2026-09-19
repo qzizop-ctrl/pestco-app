@@ -456,6 +456,25 @@ export const EN = {
   dashPdfColDate: "Date",
   dashPdfColSector: "Sector",
   dashPdfColStage: "Stage",
+  dashPdfPageOf: (page, total) => `Page ${page} of ${total}`,
+
+  // Top clients (Dashboard) — ranked list of the highest-value customers
+  // in the selected period, shown as a tab inside SalesAnalysisCard.
+  dashTopClients: "Top Clients",
+  dashTopClientsEmpty: "Not enough offers in this period to rank clients",
+  dashTopClientsOffersCount: (n) => `${n} offer${n === 1 ? "" : "s"}`,
+
+  // Sector breakdown (Dashboard) — side-by-side comparison of every
+  // sector's numbers, shown only when "All Sectors" is selected.
+  dashSectorBreakdown: "Sector Comparison",
+  dashSectorBreakdownHint: "Each sector's performance over the same selected period",
+  dashSectorBreakdownEmpty: "No activity in any sector during this period",
+
+  // Stale (in-progress) offers surfaced directly on the Dashboard — same
+  // definition/source as the Alerts Center on the customer list screen
+  // (see useFilteredData.js), just scoped by the Dashboard's own sector
+  // filter for consistency with everything else on the page.
+  dashStaleOffersTitle: "Offers Needing Follow-up",
 
   // Unified Admin Audit Log (owner/reviewer only) — see AuditLog.jsx and
   // src/hooks/useAuditLog.js.

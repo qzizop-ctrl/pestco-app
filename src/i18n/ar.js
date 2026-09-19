@@ -464,6 +464,25 @@ export const AR = {
   dashPdfColDate: "التاريخ",
   dashPdfColSector: "القطاع",
   dashPdfColStage: "المرحلة",
+  dashPdfPageOf: (page, total) => `صفحة ${page} من ${total}`,
+
+  // Top clients (Dashboard) — ranked list of the highest-value customers
+  // in the selected period, shown as a tab inside SalesAnalysisCard.
+  dashTopClients: "أفضل العملاء",
+  dashTopClientsEmpty: "لا توجد أوفرات كافية لعرض ترتيب العملاء في هذه الفترة",
+  dashTopClientsOffersCount: (n) => `${n} أوفر`,
+
+  // Sector breakdown (Dashboard) — side-by-side comparison of every
+  // sector's numbers, shown only when "كل القطاعات" is selected.
+  dashSectorBreakdown: "مقارنة القطاعات",
+  dashSectorBreakdownHint: "أداء كل قطاع خلال نفس الفترة المحددة فوق",
+  dashSectorBreakdownEmpty: "لا يوجد نشاط في أي قطاع خلال هذه الفترة",
+
+  // Stale (in-progress) offers surfaced directly on the Dashboard — same
+  // definition/source as the Alerts Center on the customer list screen
+  // (see useFilteredData.js), just scoped by the Dashboard's own sector
+  // filter for consistency with everything else on the page.
+  dashStaleOffersTitle: "أوفرات محتاجة متابعة",
 
   // Unified Admin Audit Log (owner/reviewer only) — see AuditLog.jsx and
   // src/hooks/useAuditLog.js.
