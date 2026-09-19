@@ -52,6 +52,10 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
   const [sector, setSector] = useState("all");
   const [compare, setCompare] = useState(false);
   const [offerStatusFilter, setOfferStatusFilter] = useState("all");
+  // Which of the three Dashboard tabs (overview / sales / customers) is
+  // currently shown below the filter bar — see the tab bar in the render
+  // below. Kept as simple local UI state, not persisted.
+  const [activeTab, setActiveTab] = useState("overview");
 
   const resolved = useMemo(() => resolvePeriod(period, now, t), [period, t]);
   const isSingleMonth = resolved.granularity === "day";
@@ -266,120 +270,162 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
         </div>
       </div>
 
-      {/* Offers open for a while with no update — same list/threshold the
-          Alerts Center uses, surfaced here too since a manager reading the
-          Dashboard shouldn't have to switch screens to see it. */}
-      <StaleOffersCard t={t} staleOffers={staleOffersFiltered} onOpenCustomer={onOpenCustomer} />
-
-      {stats.visitsCount === 0 && (
-        <div
-          className="text-center"
-          style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 18, marginBottom: 14 }}
-        >
-          <p className="text-sm font-bold" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
-        </div>
-      )}
-
-      {/* Summary cards */}
-      <div className="flex flex-wrap gap-3 mb-5">
-        <SummaryCard
-          icon={Calendar}
-          label={t.dashCardVisits}
-          value={stats.visitsCount}
-          delta={compare ? (prevStats ? pctChange(stats.visitsCount, prevStats.visitsCount) : null) : undefined}
-          t={t}
-        />
-        <SummaryCard
-          icon={Users}
-          label={customersAddedLabel}
-          value={stats.customersAddedCount}
-          delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
-          t={t}
-        />
-        <SummaryCard
-          icon={FileText}
-          label={t.dashCardOffersCount}
-          value={stats.offersCount}
-          delta={compare ? (prevStats ? pctChange(stats.offersCount, prevStats.offersCount) : null) : undefined}
-          extra={<SplitBar segments={offersCountSegments} />}
-          t={t}
-        />
-        <SummaryCard
-          icon={Wallet}
-          label={t.dashCardOffersValue}
-          value={fmtOffersTotals(stats.offersValueTotals, t, { showAllIfEmpty: true })}
-          delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
-          extra={<SplitBar segments={offersValueSegments} />}
-          t={t}
-        />
-        <SummaryCard
-          icon={DollarSign}
-          label={t.dashAvgDealSize}
-          value={
-  avgDealSize === null
-    ? t.dashNoOffersYet
-    : `${fmtMoney(avgDealSize, `${t.locale}-u-nu-latn`)} ${t.dashCurrency}`
-}
-subValue={
-  avgDealSizeUSD !== null
-    ? `${fmtMoney(avgDealSizeUSD, `${t.locale}-u-nu-latn`)} ${t.currencies.USD}`
-    : undefined
-}
-          delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
-          t={t}
-        />
-        <SummaryCard
-          icon={Percent}
-          label={t.dashWinRate}
-          value={winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}%`}
-          subValue={winRate !== null ? t.dashWinRateSample(winRateDecidedCount) : undefined}
-          delta={
-            compare
-              ? (prevStats && winRate !== null && prevWinRate !== null
-                  ? { points: winRate - prevWinRate }
-                  : null)
-              : undefined
-          }
-          t={t}
-        />
+      {/* Section tabs — the rest of the Dashboard below the filter bar is
+          split into three panes (overview / sales / customers) instead of
+          one long stack, so a manager sees one focused group at a time.
+          The filter bar above (period/sector/compare/export) stays shared
+          across all three since it drives every tab's data. */}
+      <div
+        className="flex items-center gap-1 mb-4"
+        style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: 3 }}
+      >
+        {[
+          { key: "overview", label: t.dashTabOverview },
+          { key: "sales", label: t.dashTabSales },
+          { key: "customers", label: t.dashTabCustomers },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className="btn-press flex-1 font-bold text-xs"
+            style={{
+              borderRadius: 9,
+              padding: "8px 0",
+              background: activeTab === tab.key ? PRIMARY : "transparent",
+              color: activeTab === tab.key ? "#fff" : MUTED,
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Every sector side by side for the same period — only shown when
-          "all sectors" is selected (see sectorBreakdown above). */}
-      {sectorBreakdown && (
-        <SectorBreakdownCard t={t} breakdown={sectorBreakdown} />
+      {activeTab === "overview" && (
+        <>
+          {/* Offers open for a while with no update — same list/threshold the
+              Alerts Center uses, surfaced here too since a manager reading the
+              Dashboard shouldn't have to switch screens to see it. */}
+          <StaleOffersCard t={t} staleOffers={staleOffersFiltered} onOpenCustomer={onOpenCustomer} />
+
+          {stats.visitsCount === 0 && (
+            <div
+              className="text-center"
+              style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 18, marginBottom: 14 }}
+            >
+              <p className="text-sm font-bold" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
+            </div>
+          )}
+
+          {/* Summary cards */}
+          <div className="flex flex-wrap gap-3 mb-5">
+            <SummaryCard
+              icon={Calendar}
+              label={t.dashCardVisits}
+              value={stats.visitsCount}
+              delta={compare ? (prevStats ? pctChange(stats.visitsCount, prevStats.visitsCount) : null) : undefined}
+              t={t}
+            />
+            <SummaryCard
+              icon={Users}
+              label={customersAddedLabel}
+              value={stats.customersAddedCount}
+              delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
+              t={t}
+            />
+            <SummaryCard
+              icon={FileText}
+              label={t.dashCardOffersCount}
+              value={stats.offersCount}
+              delta={compare ? (prevStats ? pctChange(stats.offersCount, prevStats.offersCount) : null) : undefined}
+              extra={<SplitBar segments={offersCountSegments} />}
+              t={t}
+            />
+            <SummaryCard
+              icon={Wallet}
+              label={t.dashCardOffersValue}
+              value={fmtOffersTotals(stats.offersValueTotals, t, { showAllIfEmpty: true })}
+              delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
+              extra={<SplitBar segments={offersValueSegments} />}
+              t={t}
+            />
+            <SummaryCard
+              icon={DollarSign}
+              label={t.dashAvgDealSize}
+              value={
+      avgDealSize === null
+        ? t.dashNoOffersYet
+        : `${fmtMoney(avgDealSize, `${t.locale}-u-nu-latn`)} ${t.dashCurrency}`
+    }
+    subValue={
+      avgDealSizeUSD !== null
+        ? `${fmtMoney(avgDealSizeUSD, `${t.locale}-u-nu-latn`)} ${t.currencies.USD}`
+        : undefined
+    }
+              delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
+              t={t}
+            />
+            <SummaryCard
+              icon={Percent}
+              label={t.dashWinRate}
+              value={winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}%`}
+              subValue={winRate !== null ? t.dashWinRateSample(winRateDecidedCount) : undefined}
+              delta={
+                compare
+                  ? (prevStats && winRate !== null && prevWinRate !== null
+                      ? { points: winRate - prevWinRate }
+                      : null)
+                  : undefined
+              }
+              t={t}
+            />
+          </div>
+        </>
       )}
 
-      {/* Pipeline + Sales Performance + Rejection Reasons, combined into one
-          tabbed card — see SalesAnalysisCard.jsx for why these three used
-          to be separate cards and no longer are. */}
-      <SalesAnalysisCard
-        t={t}
-        stats={stats}
-        prevStats={prevStats}
-        compare={compare}
-        rejectionReport={rejectionReport}
-        topClients={topClients}
-        visits={visits}
-        onOpenCustomer={onOpenCustomer}
-      />
+      {activeTab === "sales" && (
+        <>
+          {/* Every sector side by side for the same period — only shown when
+              "all sectors" is selected (see sectorBreakdown above). */}
+          {sectorBreakdown && (
+            <SectorBreakdownCard t={t} breakdown={sectorBreakdown} />
+          )}
 
-      <OffersListSection
-        t={t}
-        offersList={offersList}
-        offerStatusFilter={offerStatusFilter}
-        setOfferStatusFilter={setOfferStatusFilter}
-        offersListValueTotals={offersListValueTotals}
-        visits={visits}
-        onOpenCustomer={onOpenCustomer}
-      />
+          {/* Pipeline + Sales Performance + Rejection Reasons, combined into one
+              tabbed card — see SalesAnalysisCard.jsx for why these three used
+              to be separate cards and no longer are. */}
+          <SalesAnalysisCard
+            t={t}
+            stats={stats}
+            prevStats={prevStats}
+            compare={compare}
+            rejectionReport={rejectionReport}
+            topClients={topClients}
+            visits={visits}
+            onOpenCustomer={onOpenCustomer}
+          />
+        </>
+      )}
 
-      <CustomersAddedSection
-        t={t}
-        customersAddedLabel={customersAddedLabel}
-        periodCustomersList={periodCustomersList}
-        onOpenCustomer={onOpenCustomer}
-      />
+      {activeTab === "customers" && (
+        <>
+          <OffersListSection
+            t={t}
+            offersList={offersList}
+            offerStatusFilter={offerStatusFilter}
+            setOfferStatusFilter={setOfferStatusFilter}
+            offersListValueTotals={offersListValueTotals}
+            visits={visits}
+            onOpenCustomer={onOpenCustomer}
+          />
+
+          <CustomersAddedSection
+            t={t}
+            customersAddedLabel={customersAddedLabel}
+            periodCustomersList={periodCustomersList}
+            onOpenCustomer={onOpenCustomer}
+          />
+        </>
+      )}
     </div>
   );
 }
