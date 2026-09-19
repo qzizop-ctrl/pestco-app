@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import { initErrorReporting } from "./sentry";
+import { initErrorReporting, reportException } from "./sentry";
 
 initErrorReporting();
 
@@ -9,6 +9,7 @@ const rootEl = document.getElementById("root");
 
 function showFatalError(err) {
   console.error("Fatal startup error:", err);
+  reportException(err, { context: "Fatal startup error" });
   rootEl.innerHTML = `
     <div style="padding:24px;font-family:sans-serif;color:#c00;background:#fff">
       <h2>حصل خطأ عند تشغيل التطبيق</h2>

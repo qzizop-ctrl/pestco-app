@@ -45,9 +45,6 @@ export const REJECTION_REASON_IDS = [
   "not_needed_now", "payment_terms", "other",
 ];
 
-// Kinds of records the unified Audit Log can track a change on.
-export const AUDIT_ENTITY_TYPES = ["customer", "supplier"];
-
 // What kind of write an audit-log entry records.
 export const AUDIT_ACTION_IDS = ["create", "update", "delete", "restore", "approve", "rollback"];
 

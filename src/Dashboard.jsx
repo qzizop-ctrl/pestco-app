@@ -8,6 +8,7 @@ import { STRINGS } from "./i18n";
 import { SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS } from "./domain";
 import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, toJsDate } from "./helpers";
 import { generateDashboardPdf } from "./pdfReport";
+import { reportException } from "./sentry";
 import {
   resolvePeriod, pctChange, computeAvgDealSizeForCurrency, computeWinRate,
   computeDecidedCount, buildOfferBreakdown, buildOffersChartData, computePeriodStats,
@@ -216,6 +217,7 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
       });
     } catch (e) {
       console.error("PDF export failed:", e);
+      reportException(e, { context: "PDF export failed" });
       if (showAlert) showAlert(t.dashPdfError);
     } finally {
       setPdfBusy(false);
