@@ -4,13 +4,15 @@
 // Previously the offline banner, due-reminders banner, stale-offers banner,
 // and stale-customers banner were four separate blocks stacked directly on
 // the screen above the list, every time, whether or not there was anything
-// urgent. This folds all four into one header the user can expand — badged
+// urgent. This folds them into one header the user can expand — badged
 // with a total count and colored by the most urgent thing inside — so the
 // list itself is reachable without scrolling past a wall of banners first.
+// The stale-offers banner itself has since moved to the Dashboard (see
+// StaleOffersCard.jsx) since it's now surfaced clearly there.
 //
 // Renders nothing at all when there's genuinely nothing to show (online,
-// and all three lists empty), instead of an empty collapsed header taking
-// up space for no reason.
+// and the remaining list empty), instead of an empty collapsed header
+// taking up space for no reason.
 // ============================================================================
 
 import { useState } from "react";
@@ -20,9 +22,9 @@ import { STALE_ACTIVITY_DAYS } from "../domain";
 import { fmtReminder } from "../helpers";
 
 export default function AlertsCenter({
-  t, isOnline, dueReminders, staleOffers, staleCustomers, openDetail,
+  t, isOnline, dueReminders, staleCustomers, openDetail,
 }) {
-  const totalCount = dueReminders.length + staleOffers.length + staleCustomers.length + (isOnline ? 0 : 1);
+  const totalCount = dueReminders.length + staleCustomers.length + (isOnline ? 0 : 1);
   // Always starts collapsed by default, regardless of urgency; the user
   // taps the header to expand and see the details.
   const [expanded, setExpanded] = useState(false);
@@ -31,7 +33,7 @@ export default function AlertsCenter({
 
   const headerColor = dueReminders.length > 0
     ? STATUS_COLORS.overdue
-    : (staleOffers.length > 0 || staleCustomers.length > 0 || !isOnline)
+    : (staleCustomers.length > 0 || !isOnline)
       ? STATUS_COLORS.today
       : MUTED;
 
@@ -90,28 +92,6 @@ export default function AlertsCenter({
                 >
                   <span className="text-sm font-bold" style={{ color: TEXT }}>{v.companyName}</span>
                   <span className="text-xs" style={{ color: MUTED }}>{fmtReminder(v.callDateTime, t.locale)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {staleOffers.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle size={14} color={STATUS_COLORS.today} />
-                <span className="text-xs font-bold" style={{ color: "#8C6110" }}>
-                  {t.staleOffersBanner(staleOffers.length)}
-                </span>
-              </div>
-              {staleOffers.map((o) => (
-                <button
-                  key={o.id}
-                  onClick={() => openDetail(o.customer)}
-                  className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                  style={{ padding: "5px 0" }}
-                >
-                  <span className="text-sm font-bold" style={{ color: TEXT }}>{o.customer.companyName}</span>
-                  <span className="text-xs" style={{ color: MUTED }}>{o.name}</span>
                 </button>
               ))}
             </div>

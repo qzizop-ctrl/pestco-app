@@ -169,7 +169,6 @@ export default function AppScreens({
         t={t}
         isOnline={isOnline}
         dueReminders={dueReminders}
-        staleOffers={staleOffers}
         staleCustomers={staleCustomers}
         openDetail={openDetail}
         query={query}
