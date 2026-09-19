@@ -1,16 +1,11 @@
-import { useState, useEffect, useRef, useCallback, Suspense, lazy } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
-import { BottomNav, SkeletonList } from "./components/Shared";
+import { BottomNav } from "./components/Shared";
 import AppHeader from "./components/AppHeader";
 import UndoToast from "./components/UndoToast";
-import { SuppliersListScreen, SupplierFormScreen } from "./components/Suppliers";
-import SettingsScreen from "./components/Settings";
-import CustomerListScreen from "./components/CustomerList";
-import CustomerFormScreen from "./components/CustomerForm";
-import CustomerDetailScreen from "./components/CustomerDetail";
+import AppScreens from "./components/AppScreens";
 import RejectionReasonModal from "./components/RejectionReasonModal";
 import ConfirmModal from "./components/ConfirmModal";
-import AuditLogScreen from "./components/AuditLog";
 // xlsx is loaded lazily (dynamic import) only when Export/Import is
 // actually used from Settings, instead of top-level here — it's a sizeable
 // library that most sessions never touch, so this keeps it out of the
@@ -42,11 +37,6 @@ import { STAGE_IDS } from "./domain";
 import { parseVisitDate, fmtOffersTotals, sumOffersByCurrency } from "./helpers";
 
 const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
-
-// Loaded lazily: the app's default screen is the customer list, not the
-// Dashboard, so most sessions never need this chart-heavy screen (and its
-// recharts dependency) in the initial bundle at all.
-const Dashboard = lazy(() => import("./Dashboard"));
 
 export default function App() {
   const { lang, setLang, darkMode, setDarkMode, isOnline } = useAppPrefs();
@@ -413,209 +403,144 @@ export default function App() {
         t={t}
       />
 
-      <div key={screen} className="animate-screen-in">
-      {screen === "dashboard" && canViewDashboard && (
-        <Suspense fallback={<div className="px-4 pt-4"><SkeletonList count={3} /></div>}>
-          <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} showAlert={showAlert} />
-        </Suspense>
-      )}
-
-      {screen === "list" && (
-        <CustomerListScreen
-          t={t}
-          isOnline={isOnline}
-          dueReminders={dueReminders}
-          staleOffers={staleOffers}
-          staleCustomers={staleCustomers}
-          openDetail={openDetail}
-          query={query}
-          setQuery={setQuery}
-          totalCustomers={totalCustomers}
-          sectorCounts={sectorCounts}
-          sectorFilter={sectorFilter}
-          setSectorFilter={setSectorFilter}
-          stageFilter={stageFilter}
-          setStageFilter={setStageFilter}
-          allTags={allTags}
-          tagFilter={tagFilter}
-          setTagFilter={setTagFilter}
-          missingDataOnly={missingDataOnly}
-          setMissingDataOnly={setMissingDataOnly}
-          missingDataCount={missingDataCount}
-          noVisitsOnly={noVisitsOnly}
-          setNoVisitsOnly={setNoVisitsOnly}
-          noVisitsCount={noVisitsCount}
-          dateAddedFilter={dateAddedFilter}
-          setDateAddedFilter={setDateAddedFilter}
-          availableAddedMonths={availableAddedMonths}
-          dateAddedScopeTotal={dateAddedScopeTotal}
-          loaded={loaded}
-          filtered={filtered}
-          togglePin={togglePin}
-          canEdit={canEdit}
-          openNew={openNew}
-          isOwnerAccount={isOwnerAccount}
-          pendingEdits={pendingEdits}
-          openPendingEditItem={openPendingEditItem}
-        />
-      )}
-
-      {screen === "form" && canEdit && (
-        <CustomerFormScreen
-          t={t}
-          form={form}
-          setForm={setForm}
-          errors={errors}
-          removeTagFromForm={removeTagFromForm}
-          saveForm={saveForm}
-          saving={isSaving}
-        />
-      )}
-
-      {screen === "detail" && active && (
-        <CustomerDetailScreen
-          t={t}
-          active={active}
-          ownerUid={ownerUid}
-          user={user}
-          canEdit={canEdit}
-          isOwnerAccount={isOwnerAccount}
-          togglePin={togglePin}
-          activeStageIdx={activeStageIdx}
-          changeStage={changeStage}
-          clearCallReminder={clearCallReminder}
-          logVisitToday={logVisitToday}
-          activeOffersValueText={activeOffersValueText}
-          activeOffers={activeOffers}
-          expandedOfferId={expandedOfferId}
-          setExpandedOfferId={setExpandedOfferId}
-          updateOfferStatus={updateOfferStatus}
-          deleteOffer={deleteOffer}
-          newOffer={newOffer}
-          setNewOffer={setNewOffer}
-          addOffer={addOffer}
-          suppliers={suppliers}
-          supplierPickerOpen={supplierPickerOpen}
-          setSupplierPickerOpen={setSupplierPickerOpen}
-          toggleOfferSupplier={toggleOfferSupplier}
-          activityLog={activityLog}
-          newActivityText={newActivityText}
-          setNewActivityText={setNewActivityText}
-          submitActivity={submitActivity}
-          deleteActivity={deleteActivity}
-          openEdit={openEdit}
-          deleteVisit={deleteVisit}
-          setScreen={setScreen}
-        />
-      )}
-
-      {screen === "suppliers" && (
-        <SuppliersListScreen
-          t={t}
-          canEdit={canEdit}
-          supplierQuery={supplierQuery}
-          setSupplierQuery={setSupplierQuery}
-          totalSuppliers={visibleSuppliers.length}
-          allSupplierTags={allSupplierTags}
-          supplierTagFilter={supplierTagFilter}
-          setSupplierTagFilter={setSupplierTagFilter}
-          allSupplierCategories={allSupplierCategories}
-          supplierCategoryFilter={supplierCategoryFilter}
-          setSupplierCategoryFilter={setSupplierCategoryFilter}
-          suppliersLoaded={suppliersLoaded}
-          filteredSuppliers={filteredSuppliers}
-          togglePinSupplier={togglePinSupplier}
-          openEditSupplier={openEditSupplier}
-          openNewSupplier={openNewSupplier}
-          isOwnerAccount={isOwnerAccount}
-          pendingEdits={pendingSupplierEdits}
-          openPendingEditItem={openPendingSupplierEditItem}
-        />
-      )}
-
-      {screen === "supplier-form" && canEdit && (
-        <SupplierFormScreen
-          t={t}
-          supplierForm={supplierForm}
-          setSupplierForm={setSupplierForm}
-          supplierErrors={supplierErrors}
-          removeTagFromSupplierForm={removeTagFromSupplierForm}
-          saveSupplierForm={saveSupplierForm}
-          activeSupplierId={activeSupplierId}
-          deleteSupplier={deleteSupplier}
-          saving={isSaving}
-          ownerUid={ownerUid}
-          user={user}
-          isOwnerAccount={isOwnerAccount}
-          setScreen={setScreen}
-        />
-      )}
-
-      {screen === "settings" && (isOwnerAccount || isReviewer) && (
-        <SettingsScreen
-          t={t}
-          availableOwners={availableOwners}
-          ownerUid={ownerUid}
-          user={user}
-          switchOwnerWorkspace={switchOwnerWorkspace}
-          canEdit={canEdit}
-          showDuplicates={showDuplicates}
-          setShowDuplicates={setShowDuplicates}
-          duplicateGroups={duplicateGroups}
-          openDetail={openDetail}
-          isOwnerAccount={isOwnerAccount}
-          members={members}
-          dashboardAccess={dashboardAccess}
-          setMemberDashboardAccess={setMemberDashboardAccess}
-          revokeAccess={revokeAccess}
-          pendingSignups={pendingSignups}
-          isReviewer={isReviewer}
-          isPrimaryAdmin={isPrimaryAdmin}
-          primaryAdminEmail={primaryAdminEmail}
-          adminEmails={adminEmails}
-          addAdminEmail={addAdminEmail}
-          removeAdminEmail={removeAdminEmail}
-          reviewSignup={reviewSignup}
-          dismissSignup={dismissSignup}
-          confirmAction={confirmAction}
-          exportAllToExcel={exportAllToExcel}
-          exportFilteredToExcel={exportFilteredToExcel}
-          filteredCount={filtered.length}
-          triggerImportPicker={triggerImportPicker}
-          importing={importing}
-          importProgress={importProgress}
-          fileInputRef={fileInputRef}
-          handleImportFile={handleImportFile}
-          exportSuppliersAllToExcel={exportSuppliersAllToExcel}
-          exportSuppliersFilteredToExcel={exportSuppliersFilteredToExcel}
-          filteredSuppliersCount={filteredSuppliers.length}
-          triggerSupplierImportPicker={triggerSupplierImportPicker}
-          importingSuppliers={importingSuppliers}
-          supplierImportProgress={supplierImportProgress}
-          supplierFileInputRef={supplierFileInputRef}
-          handleImportSupplierFile={handleImportSupplierFile}
-          newMemberEmail={newMemberEmail}
-          setNewMemberEmail={setNewMemberEmail}
-          newMemberRole={newMemberRole}
-          setNewMemberRole={setNewMemberRole}
-          grantAccess={grantAccess}
-          openAuditLog={() => setScreen("audit-log")}
-        />
-      )}
-
-      {screen === "audit-log" && (isOwnerAccount || isReviewer) && (
-        <AuditLogScreen
-          t={t}
-          ownerUid={ownerUid}
-          isOwnerAccount={isOwnerAccount}
-          isReviewer={isReviewer}
-          openDetail={openDetail}
-          openEditSupplier={openEditSupplier}
-          visits={visits}
-          suppliers={suppliers}
-        />
-      )}
-      </div>
+      <AppScreens
+        active={active}
+        activeOffers={activeOffers}
+        activeOffersValueText={activeOffersValueText}
+        activeStageIdx={activeStageIdx}
+        activeSupplierId={activeSupplierId}
+        activityLog={activityLog}
+        addAdminEmail={addAdminEmail}
+        addOffer={addOffer}
+        adminEmails={adminEmails}
+        allSupplierCategories={allSupplierCategories}
+        allSupplierTags={allSupplierTags}
+        allTags={allTags}
+        availableAddedMonths={availableAddedMonths}
+        availableOwners={availableOwners}
+        canEdit={canEdit}
+        canViewDashboard={canViewDashboard}
+        changeStage={changeStage}
+        clearCallReminder={clearCallReminder}
+        confirmAction={confirmAction}
+        dashboardAccess={dashboardAccess}
+        dateAddedFilter={dateAddedFilter}
+        dateAddedScopeTotal={dateAddedScopeTotal}
+        deleteActivity={deleteActivity}
+        deleteOffer={deleteOffer}
+        deleteSupplier={deleteSupplier}
+        deleteVisit={deleteVisit}
+        dismissSignup={dismissSignup}
+        dueReminders={dueReminders}
+        duplicateGroups={duplicateGroups}
+        errors={errors}
+        expandedOfferId={expandedOfferId}
+        exportAllToExcel={exportAllToExcel}
+        exportFilteredToExcel={exportFilteredToExcel}
+        exportSuppliersAllToExcel={exportSuppliersAllToExcel}
+        exportSuppliersFilteredToExcel={exportSuppliersFilteredToExcel}
+        fileInputRef={fileInputRef}
+        filtered={filtered}
+        filteredSuppliers={filteredSuppliers}
+        form={form}
+        grantAccess={grantAccess}
+        handleImportFile={handleImportFile}
+        handleImportSupplierFile={handleImportSupplierFile}
+        importProgress={importProgress}
+        importing={importing}
+        importingSuppliers={importingSuppliers}
+        isOnline={isOnline}
+        isOwnerAccount={isOwnerAccount}
+        isPrimaryAdmin={isPrimaryAdmin}
+        isReviewer={isReviewer}
+        isSaving={isSaving}
+        lang={lang}
+        loaded={loaded}
+        logVisitToday={logVisitToday}
+        members={members}
+        missingDataCount={missingDataCount}
+        missingDataOnly={missingDataOnly}
+        newActivityText={newActivityText}
+        newMemberEmail={newMemberEmail}
+        newMemberRole={newMemberRole}
+        newOffer={newOffer}
+        noVisitsCount={noVisitsCount}
+        noVisitsOnly={noVisitsOnly}
+        openDetail={openDetail}
+        openEdit={openEdit}
+        openEditSupplier={openEditSupplier}
+        openNew={openNew}
+        openNewSupplier={openNewSupplier}
+        openPendingEditItem={openPendingEditItem}
+        openPendingSupplierEditItem={openPendingSupplierEditItem}
+        ownerUid={ownerUid}
+        pendingEdits={pendingEdits}
+        pendingSignups={pendingSignups}
+        pendingSupplierEdits={pendingSupplierEdits}
+        primaryAdminEmail={primaryAdminEmail}
+        query={query}
+        removeAdminEmail={removeAdminEmail}
+        removeTagFromForm={removeTagFromForm}
+        removeTagFromSupplierForm={removeTagFromSupplierForm}
+        reviewSignup={reviewSignup}
+        revokeAccess={revokeAccess}
+        saveForm={saveForm}
+        saveSupplierForm={saveSupplierForm}
+        screen={screen}
+        sectorCounts={sectorCounts}
+        sectorFilter={sectorFilter}
+        setDateAddedFilter={setDateAddedFilter}
+        setExpandedOfferId={setExpandedOfferId}
+        setForm={setForm}
+        setMemberDashboardAccess={setMemberDashboardAccess}
+        setMissingDataOnly={setMissingDataOnly}
+        setNewActivityText={setNewActivityText}
+        setNewMemberEmail={setNewMemberEmail}
+        setNewMemberRole={setNewMemberRole}
+        setNewOffer={setNewOffer}
+        setNoVisitsOnly={setNoVisitsOnly}
+        setQuery={setQuery}
+        setScreen={setScreen}
+        setSectorFilter={setSectorFilter}
+        setShowDuplicates={setShowDuplicates}
+        setStageFilter={setStageFilter}
+        setSupplierCategoryFilter={setSupplierCategoryFilter}
+        setSupplierForm={setSupplierForm}
+        setSupplierPickerOpen={setSupplierPickerOpen}
+        setSupplierQuery={setSupplierQuery}
+        setSupplierTagFilter={setSupplierTagFilter}
+        setTagFilter={setTagFilter}
+        showAlert={showAlert}
+        showDuplicates={showDuplicates}
+        stageFilter={stageFilter}
+        staleCustomers={staleCustomers}
+        staleOffers={staleOffers}
+        submitActivity={submitActivity}
+        supplierCategoryFilter={supplierCategoryFilter}
+        supplierErrors={supplierErrors}
+        supplierFileInputRef={supplierFileInputRef}
+        supplierForm={supplierForm}
+        supplierImportProgress={supplierImportProgress}
+        supplierPickerOpen={supplierPickerOpen}
+        supplierQuery={supplierQuery}
+        supplierTagFilter={supplierTagFilter}
+        suppliers={suppliers}
+        suppliersLoaded={suppliersLoaded}
+        switchOwnerWorkspace={switchOwnerWorkspace}
+        t={t}
+        tagFilter={tagFilter}
+        toggleOfferSupplier={toggleOfferSupplier}
+        togglePin={togglePin}
+        togglePinSupplier={togglePinSupplier}
+        totalCustomers={totalCustomers}
+        triggerImportPicker={triggerImportPicker}
+        triggerSupplierImportPicker={triggerSupplierImportPicker}
+        updateOfferStatus={updateOfferStatus}
+        user={user}
+        visibleSuppliers={visibleSuppliers}
+        visibleVisits={visibleVisits}
+        visits={visits}
+      />
 
       {pendingDelete && (
         <UndoToast
