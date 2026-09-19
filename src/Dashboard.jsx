@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronDown, Percent, DollarSign, FileDown } from "lucide-react";
+import { Calendar, Users, FileText, Wallet, TrendingUp, ChevronDown, Percent, DollarSign, FileDown } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
 } from "recharts";
@@ -12,7 +12,7 @@ import { reportException } from "./sentry";
 import {
   resolvePeriod, pctChange, computeAvgDealSizeForCurrency, computeWinRate,
   computeDecidedCount, buildOfferBreakdown, buildOffersChartData, computePeriodStats,
-  computeRejectionReasonsReport,
+  computeRejectionReasonsReport, computeTopClients, computeSectorBreakdown,
 } from "./dashboardCalculations";
 // The four components below used to be defined inline in this file (which
 // had grown past 990 lines). They're pure presentational pieces with no
@@ -25,8 +25,10 @@ import SwipeableChartCard from "./components/SwipeableChartCard";
 import OffersListSection from "./components/OffersListSection";
 import CustomersAddedSection from "./components/CustomersAddedSection";
 import SalesAnalysisCard from "./components/SalesAnalysisCard";
+import StaleOffersCard from "./components/StaleOffersCard";
+import SectorBreakdownCard from "./components/SectorBreakdownCard";
 
-export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
+export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, staleOffers = [] }) {
   const t = STRINGS[lang];
   const now = new Date();
 
@@ -83,6 +85,27 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   // same period/sector-filtered offersInRange as the rest of the Dashboard,
   // so the report's date range is just the existing period picker above.
   const rejectionReport = useMemo(() => computeRejectionReasonsReport(stats.offersInRange, t), [stats, t]);
+
+  // Top clients by offer value in the selected period — see
+  // computeTopClients in dashboardCalculations.js.
+  const topClients = useMemo(() => computeTopClients(stats.offersInRange, 5), [stats]);
+
+  // Every sector's numbers side by side, for the same period — only
+  // meaningful (and only computed) when no single sector is already
+  // selected, since with one sector picked there's nothing to compare.
+  const sectorBreakdown = useMemo(
+    () => (sector === "all" ? computeSectorBreakdown(visits, resolved.start, resolved.end, isSingleMonth) : null),
+    [visits, resolved, isSingleMonth, sector]
+  );
+
+  // Stale (in-progress) offers relevant to the Dashboard's own sector
+  // filter — `staleOffers` itself comes from useFilteredData.js at the App
+  // level (same source AlertsCenter reads), deliberately NOT re-filtered
+  // by the Dashboard's period picker (see StaleOffersCard.jsx for why).
+  const staleOffersFiltered = useMemo(
+    () => (sector === "all" ? staleOffers : staleOffers.filter((o) => o.customer.sector === sector)),
+    [staleOffers, sector]
+  );
 
   const offersCountSegments = useMemo(() => ([
     { key: "converted", label: t.dashOffersConverted, color: "#2F9E58", amount: offerBreakdown.convertedCount, display: offerBreakdown.convertedCount },
@@ -298,6 +321,11 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
         </div>
       </div>
 
+      {/* Offers open for a while with no update — same list/threshold the
+          Alerts Center uses, surfaced here too since a manager reading the
+          Dashboard shouldn't have to switch screens to see it. */}
+      <StaleOffersCard t={t} staleOffers={staleOffersFiltered} onOpenCustomer={onOpenCustomer} />
+
       {stats.visitsCount === 0 && (
         <div
           className="text-center"
@@ -370,6 +398,12 @@ subValue={
           t={t}
         />
       </div>
+
+      {/* Every sector side by side for the same period — only shown when
+          "all sectors" is selected (see sectorBreakdown above). */}
+      {sectorBreakdown && (
+        <SectorBreakdownCard t={t} breakdown={sectorBreakdown} />
+      )}
 
       {/* Visits performance + offers value trend(s), swiped between in one
           card instead of stacked as separate cards — see
@@ -451,6 +485,9 @@ subValue={
         prevStats={prevStats}
         compare={compare}
         rejectionReport={rejectionReport}
+        topClients={topClients}
+        visits={visits}
+        onOpenCustomer={onOpenCustomer}
       />
 
       <OffersListSection

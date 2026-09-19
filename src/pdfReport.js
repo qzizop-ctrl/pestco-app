@@ -378,6 +378,12 @@ export async function generateDashboardPdf(opts) {
     // 4) Footer note, on its own small final page.
     await renderHtmlChunk(buildFooterHtml({ t }));
 
+    // 5) Page numbers, stamped onto every page now that the final page
+    // count is known — has to happen after all content is in, since
+    // chunks upstream (offers/customers) don't know the eventual total
+    // while they're being rendered.
+    await addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight });
+
     const dateSuffix = new Date().toISOString().slice(0, 10);
     const fileName = `pestco_report_${dateSuffix}.pdf`;
 
@@ -392,6 +398,54 @@ export async function generateDashboardPdf(opts) {
     // Surface generation/save failures to the caller instead of letting
     // them disappear silently — see the Dashboard button's try/catch.
     throw err;
+  }
+}
+
+// Stamps "Page X of Y" (localized — see t.dashPdfPageOf) onto every page of
+// the finished PDF, small and centered at the bottom. Same html2canvas
+// render-as-image approach as everything else in this file (Arabic needs
+// the browser's own text engine, not jsPDF's built-in fonts — see the
+// file-level comment at the top), but as a transparent PNG overlay rather
+// than a full opaque page image, since this has to sit on top of content
+// that's already on each page rather than replacing it. Run once at the
+// end, after every content chunk above has already been added, because
+// the total page count isn't known until then.
+async function addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight }) {
+  const totalPages = pdf.internal.getNumberOfPages();
+  if (totalPages === 0) return;
+
+  for (let page = 1; page <= totalPages; page++) {
+    const container = document.createElement("div");
+    container.setAttribute("dir", t.dir);
+    container.style.position = "fixed";
+    container.style.top = "0";
+    container.style.left = "-10000px";
+    container.style.width = "260px";
+    container.style.zIndex = "-1";
+    container.style.fontFamily = "Tahoma, Arial, sans-serif";
+    container.style.fontSize = "11px";
+    container.style.fontWeight = "700";
+    container.style.color = MUTED_HEX;
+    container.style.textAlign = "center";
+    container.style.padding = "2px 0";
+    container.textContent = t.dashPdfPageOf(page, totalPages);
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, {
+        scale: RENDER_SCALE,
+        backgroundColor: null,
+        useCORS: true,
+      });
+      const imgWidth = 120;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const imgData = canvas.toDataURL("image/png");
+
+      pdf.setPage(page);
+      pdf.addImage(imgData, "PNG", (pageWidth - imgWidth) / 2, pageHeight - imgHeight - 16, imgWidth, imgHeight);
+    } finally {
+      document.body.removeChild(container);
+    }
   }
 }
 

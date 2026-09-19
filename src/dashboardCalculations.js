@@ -1,4 +1,4 @@
-import { STAGE_IDS, OFFER_STATUS_IDS, CURRENCY_IDS } from "./domain";
+import { STAGE_IDS, OFFER_STATUS_IDS, CURRENCY_IDS, SECTOR_IDS } from "./domain";
 import { parseVisitDate, sumOffersByCurrency, getVisitEvents, toJsDate } from "./helpers";
 
 // Pure calculation logic for the Dashboard screen — period resolution
@@ -377,4 +377,83 @@ export function computePeriodStats(visits, start, end, sector, isSingleMonth) {
     offersByStatus,
     pipeline,
   };
+}
+
+// Top clients in the selected period, ranked by offer value. Ranked by EGP
+// total first (EGP is this app's default/dominant reporting currency —
+// dashCurrency, avgDealSize, etc. all default to it), then USD total, then
+// offer count, as tiebreakers — never by a combined EGP+USD number, since
+// mixing currencies into one sortable amount would be exactly the kind of
+// misleading total avgDealSize/buildOfferBreakdown above deliberately
+// avoid. `limit` caps how many rows come back (the Dashboard only wants a
+// short "top N" list, not the full customer roster).
+export function computeTopClients(offersInRange, limit = 5) {
+  const byCustomer = new Map();
+  (offersInRange || []).forEach((o) => {
+    const key = o.customerId || o.customerName;
+    if (!key) return;
+    if (!byCustomer.has(key)) {
+      byCustomer.set(key, {
+        customerId: o.customerId,
+        customerName: o.customerName || "",
+        sector: o.sector,
+        offers: [],
+      });
+    }
+    byCustomer.get(key).offers.push(o);
+  });
+
+  return Array.from(byCustomer.values())
+    .map((c) => ({
+      customerId: c.customerId,
+      customerName: c.customerName,
+      sector: c.sector,
+      offersCount: c.offers.length,
+      totals: sumOffersByCurrency(c.offers),
+    }))
+    .sort((a, b) => {
+      if (b.totals.EGP !== a.totals.EGP) return b.totals.EGP - a.totals.EGP;
+      if (b.totals.USD !== a.totals.USD) return b.totals.USD - a.totals.USD;
+      return b.offersCount - a.offersCount;
+    })
+    .slice(0, limit);
+}
+
+// Per-sector breakdown for the selected period — lets the Dashboard show
+// every sector's numbers side by side instead of making the person flip
+// the sector dropdown one value at a time to compare them. Reuses
+// computePeriodStats itself (one call per sector) rather than duplicating
+// its filtering logic, so this can never drift from what the "all
+// sectors" / single-sector views already compute.
+export function computeSectorBreakdown(visits, start, end, isSingleMonth) {
+  return SECTOR_IDS.map((id) => {
+    const sectorStats = computePeriodStats(visits, start, end, id, isSingleMonth);
+    return {
+      id,
+      visitsCount: sectorStats.visitsCount,
+      offersCount: sectorStats.offersCount,
+      offersValueTotals: sectorStats.offersValueTotals,
+      winRate: computeWinRate(sectorStats.offersByStatus),
+    };
+  });
+}
+
+// Stage-to-stage drop-off, computed from the *current* pipeline snapshot
+// (how many customers sit at each stage right now), not from historical
+// stage-change tracking — activityLog only stores a localized sentence per
+// stage change ("تم تغيير المرحلة إلى..."), not a structured from/to pair,
+// so a true historical cohort funnel isn't available without a data-model
+// change. This still answers the useful question "of everyone who reached
+// the previous stage, what fraction is now at this one" for the current
+// snapshot, which is the standard reading of a sales funnel chart. The
+// first stage in STAGE_IDS is always the 100% baseline; a stage with no
+// predecessor volume (previous count is 0) has no meaningful percentage
+// and is reported as null rather than a divide-by-zero artifact.
+export function computeStageConversionRates(pipeline) {
+  return STAGE_IDS.map((id, idx) => {
+    const count = pipeline[id] || 0;
+    if (idx === 0) return { id, count, pct: null };
+    const prevCount = pipeline[STAGE_IDS[idx - 1]] || 0;
+    return { id, count, pct: prevCount > 0 ? (count / prevCount) * 100 : null };
+  });
 }
