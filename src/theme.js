@@ -26,6 +26,14 @@ export const GOLD_SOFT = "#F3E6D0";
 
 export const LINE = "var(--line)";
 
+// Shared "negative"/"pending" accent colors used across the Dashboard
+// (offer breakdown bars, delta arrows, rejection stats) — pulled out here
+// so the same hex isn't repeated across Dashboard.jsx, SummaryCard.jsx and
+// SalesAnalysisCard.jsx. Deliberately distinct from DANGER/GOLD above,
+// which are used for other (non-dashboard) UI elements.
+export const DASH_NEGATIVE = "#C4443A";
+export const DASH_PENDING = "#C7A24A";
+
 export const THEME_VARS = {
   light: { "--bg": "#E4E0D5", "--surface": "#FFFFFF", "--surface-subtle": "#F8F6F0", "--text": "#1B241F", "--muted": "#6B7168", "--line": "#E7E2D6" },
   dark: { "--bg": "#0F1720", "--surface": "#182430", "--surface-subtle": "#1F2E3B", "--text": "#ECEAE2", "--muted": "#93A0AC", "--line": "#2C3B48" },

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Calendar, Users, FileText, Wallet, TrendingUp, ChevronDown, Percent, DollarSign, FileDown } from "lucide-react";
-import { PRIMARY, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE } from "./theme";
+import { PRIMARY, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE, SUCCESS, DASH_NEGATIVE, DASH_PENDING } from "./theme";
 import { STRINGS } from "./i18n";
 import { SECTOR_IDS } from "./domain";
 import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, toJsDate } from "./helpers";
@@ -56,6 +56,10 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
   // currently shown below the filter bar — see the tab bar in the render
   // below. Kept as simple local UI state, not persisted.
   const [activeTab, setActiveTab] = useState("overview");
+  // Within the "customers" tab, a second-level toggle between the offers
+  // list and the customers-added list — both used to be stacked one after
+  // the other, which made that tab long to scroll on an active month.
+  const [customersSubTab, setCustomersSubTab] = useState("offers");
 
   const resolved = useMemo(() => resolvePeriod(period, now, t), [period, t]);
   const isSingleMonth = resolved.granularity === "day";
@@ -92,9 +96,14 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
   // Every sector's numbers side by side, for the same period — only
   // meaningful (and only computed) when no single sector is already
   // selected, since with one sector picked there's nothing to compare.
+  // Also skipped entirely until the "sales" tab has actually been opened
+  // at least once — this is the priciest of the Dashboard's derived stats
+  // on a large visits list, and most sessions land on "overview" and
+  // never open "sales" at all.
+  const [salesTabVisited, setSalesTabVisited] = useState(false);
   const sectorBreakdown = useMemo(
-    () => (sector === "all" ? computeSectorBreakdown(visits, resolved.start, resolved.end, isSingleMonth) : null),
-    [visits, resolved, isSingleMonth, sector]
+    () => (sector === "all" && salesTabVisited ? computeSectorBreakdown(visits, resolved.start, resolved.end, isSingleMonth) : null),
+    [visits, resolved, isSingleMonth, sector, salesTabVisited]
   );
 
   // Stale (in-progress) offers relevant to the Dashboard's own sector
@@ -107,24 +116,24 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
   );
 
   const offersCountSegments = useMemo(() => ([
-    { key: "converted", label: t.dashOffersConverted, color: "#2F9E58", amount: offerBreakdown.convertedCount, display: offerBreakdown.convertedCount },
-    { key: "pending", label: t.offerStatuses.pending, color: "#C7A24A", amount: offerBreakdown.pendingCount, display: offerBreakdown.pendingCount },
-    { key: "rejected", label: t.offerStatuses.rejected, color: "#C4443A", amount: offerBreakdown.rejectedCount, display: offerBreakdown.rejectedCount },
+    { key: "converted", label: t.dashOffersConverted, color: SUCCESS, amount: offerBreakdown.convertedCount, display: offerBreakdown.convertedCount },
+    { key: "pending", label: t.offerStatuses.pending, color: DASH_PENDING, amount: offerBreakdown.pendingCount, display: offerBreakdown.pendingCount },
+    { key: "rejected", label: t.offerStatuses.rejected, color: DASH_NEGATIVE, amount: offerBreakdown.rejectedCount, display: offerBreakdown.rejectedCount },
   ]), [offerBreakdown, t]);
 
   const offersValueSegments = useMemo(() => ([
     {
-      key: "converted", label: t.dashOffersConverted, color: "#2F9E58",
+      key: "converted", label: t.dashOffersConverted, color: SUCCESS,
       amount: offerBreakdown.convertedCount,
       display: fmtOffersTotals(offerBreakdown.convertedTotals, t) || `0 ${t.dashCurrency}`,
     },
     {
-      key: "pending", label: t.offerStatuses.pending, color: "#C7A24A",
+      key: "pending", label: t.offerStatuses.pending, color: DASH_PENDING,
       amount: offerBreakdown.pendingCount,
       display: fmtOffersTotals(offerBreakdown.pendingTotals, t) || `0 ${t.dashCurrency}`,
     },
     {
-      key: "rejected", label: t.offerStatuses.rejected, color: "#C4443A",
+      key: "rejected", label: t.offerStatuses.rejected, color: DASH_NEGATIVE,
       amount: offerBreakdown.rejectedCount,
       display: fmtOffersTotals(offerBreakdown.rejectedTotals, t) || `0 ${t.dashCurrency}`,
     },
@@ -286,7 +295,10 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => {
+              setActiveTab(tab.key);
+              if (tab.key === "sales") setSalesTabVisited(true);
+            }}
             className="btn-press flex-1 font-bold text-xs"
             style={{
               borderRadius: 9,
@@ -408,22 +420,61 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
 
       {activeTab === "customers" && (
         <>
-          <OffersListSection
-            t={t}
-            offersList={offersList}
-            offerStatusFilter={offerStatusFilter}
-            setOfferStatusFilter={setOfferStatusFilter}
-            offersListValueTotals={offersListValueTotals}
-            visits={visits}
-            onOpenCustomer={onOpenCustomer}
-          />
+          {/* Second-level toggle — this tab used to show the offers list
+              and the customers-added list stacked one after another,
+              which meant a lot of scrolling once either list had more
+              than a handful of rows. */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => setCustomersSubTab("offers")}
+              className="btn-press font-bold text-xs"
+              style={{
+                flex: 1,
+                borderRadius: 10,
+                padding: "7px 0",
+                border: `1.4px solid ${customersSubTab === "offers" ? PRIMARY : LINE}`,
+                background: customersSubTab === "offers" ? PRIMARY : SURFACE,
+                color: customersSubTab === "offers" ? "#fff" : MUTED,
+              }}
+            >
+              {t.dashOffersSection}
+            </button>
+            <button
+              onClick={() => setCustomersSubTab("customers")}
+              className="btn-press font-bold text-xs"
+              style={{
+                flex: 1,
+                borderRadius: 10,
+                padding: "7px 0",
+                border: `1.4px solid ${customersSubTab === "customers" ? PRIMARY : LINE}`,
+                background: customersSubTab === "customers" ? PRIMARY : SURFACE,
+                color: customersSubTab === "customers" ? "#fff" : MUTED,
+              }}
+            >
+              {t.navCustomers}
+            </button>
+          </div>
 
-          <CustomersAddedSection
-            t={t}
-            customersAddedLabel={customersAddedLabel}
-            periodCustomersList={periodCustomersList}
-            onOpenCustomer={onOpenCustomer}
-          />
+          {customersSubTab === "offers" && (
+            <OffersListSection
+              t={t}
+              offersList={offersList}
+              offerStatusFilter={offerStatusFilter}
+              setOfferStatusFilter={setOfferStatusFilter}
+              offersListValueTotals={offersListValueTotals}
+              visits={visits}
+              onOpenCustomer={onOpenCustomer}
+            />
+          )}
+
+          {customersSubTab === "customers" && (
+            <CustomersAddedSection
+              t={t}
+              customersAddedLabel={customersAddedLabel}
+              periodCustomersList={periodCustomersList}
+              onOpenCustomer={onOpenCustomer}
+            />
+          )}
         </>
       )}
     </div>
