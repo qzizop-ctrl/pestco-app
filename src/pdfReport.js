@@ -242,26 +242,6 @@ function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk }) {
   `;
 }
 
-// One chunk of the customers list, same idea as offers above.
-function buildCustomersChunkHtml({ t, rows, isFirstChunk }) {
-  const align = t.dir === "rtl" ? "right" : "left";
-  const title = isFirstChunk ? t.dashPdfCustomersSection : `${t.dashPdfCustomersSection} (${t.dashPdfContinued || "تابع"})`;
-  const body = rows.length > 0
-    ? simpleTable({
-        headers: [t.dashPdfColCompany, t.dashPdfColSector, t.dashPdfColStage, t.visitDateRow],
-        rows,
-        align,
-      })
-    : `<div style="font-size:12px;color:${MUTED_HEX};padding:10px 0;">${esc(t.dashPdfNoCustomers)}</div>`;
-
-  return `
-    <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;color:${TEXT_HEX};">
-      ${sectionTitle(title)}
-      ${body}
-    </div>
-  `;
-}
-
 function buildFooterHtml({ t }) {
   return `
     <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;">
@@ -277,7 +257,7 @@ function buildFooterHtml({ t }) {
 // so this never re-derives its own numbers — the report always matches
 // exactly what's on screen for the selected year/month/sector.
 export async function generateDashboardPdf(opts) {
-  const { t, offersList = [], customersList = [] } = opts;
+  const { t, offersList = [] } = opts;
 
   const [{ default: html2canvas }, jspdfModule] = await Promise.all([
     import("html2canvas"),
@@ -361,27 +341,13 @@ export async function generateDashboardPdf(opts) {
       }));
     }
 
-    // 3) Customers list, same batching.
-    const customerRows = customersList.map((v) => [
-      v.companyName || t.noCompanyName,
-      t.sectors[v.sector] || t.sectors.private,
-      v.stage ? (t.stages[v.stage] || "") : t.stageNone,
-      v.visitDate || t.noVisitYet,
-    ]);
-    const customerChunks = chunkArray(customerRows, ROWS_PER_CHUNK);
-    for (let i = 0; i < customerChunks.length; i++) {
-      await renderHtmlChunk(buildCustomersChunkHtml({
-        t, rows: customerChunks[i], isFirstChunk: i === 0,
-      }));
-    }
-
-    // 4) Footer note, on its own small final page.
+    // 3) Footer note, on its own small final page.
     await renderHtmlChunk(buildFooterHtml({ t }));
 
-    // 5) Page numbers, stamped onto every page now that the final page
+    // 4) Page numbers, stamped onto every page now that the final page
     // count is known — has to happen after all content is in, since
-    // chunks upstream (offers/customers) don't know the eventual total
-    // while they're being rendered.
+    // chunks upstream (offers) don't know the eventual total while
+    // they're being rendered.
     await addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight });
 
     const dateSuffix = new Date().toISOString().slice(0, 10);

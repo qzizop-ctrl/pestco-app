@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react";
 import { Calendar, Users, FileText, Wallet, TrendingUp, ChevronDown, Percent, DollarSign, FileDown } from "lucide-react";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-} from "recharts";
-import { PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE } from "./theme";
+import { PRIMARY, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE } from "./theme";
 import { STRINGS } from "./i18n";
 import { SECTOR_IDS } from "./domain";
 import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, toJsDate } from "./helpers";
@@ -11,7 +8,7 @@ import { generateDashboardPdf } from "./pdfReport";
 import { reportException } from "./sentry";
 import {
   resolvePeriod, pctChange, computeAvgDealSizeForCurrency, computeWinRate,
-  computeDecidedCount, buildOfferBreakdown, buildOffersChartData, computePeriodStats,
+  computeDecidedCount, buildOfferBreakdown, computePeriodStats,
   computeRejectionReasonsReport, computeTopClients, computeSectorBreakdown,
 } from "./dashboardCalculations";
 // The four components below used to be defined inline in this file (which
@@ -21,12 +18,12 @@ import {
 import PeriodSheet from "./components/PeriodSheet";
 import SplitBar from "./components/SplitBar";
 import SummaryCard from "./components/SummaryCard";
-import SwipeableChartCard from "./components/SwipeableChartCard";
 import OffersListSection from "./components/OffersListSection";
 import CustomersAddedSection from "./components/CustomersAddedSection";
 import SalesAnalysisCard from "./components/SalesAnalysisCard";
 import StaleOffersCard from "./components/StaleOffersCard";
 import SectorBreakdownCard from "./components/SectorBreakdownCard";
+
 
 export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, staleOffers = [] }) {
   const t = STRINGS[lang];
@@ -72,8 +69,6 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
   const avgDealSize = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "EGP"), [stats]);
   const prevAvgDealSize = useMemo(() => (prevStats ? computeAvgDealSizeForCurrency(prevStats.offersInRange, "EGP") : null), [prevStats]);
   const avgDealSizeUSD = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "USD"), [stats]);
-  const hasEGPOffers = useMemo(() => stats.offersInRange.some((o) => (o.currency || "EGP") === "EGP"), [stats]);
-  const hasUSDOffers = useMemo(() => stats.offersInRange.some((o) => o.currency === "USD"), [stats]);
   const winRate = useMemo(() => computeWinRate(stats.offersByStatus), [stats]);
   const winRateDecidedCount = useMemo(() => computeDecidedCount(stats.offersByStatus), [stats]);
   const prevWinRate = useMemo(() => (prevStats ? computeWinRate(prevStats.offersByStatus) : null), [prevStats]);
@@ -136,52 +131,6 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
     [t, resolved]
   );
 
-  const chartData = useMemo(() => {
-    if (resolved.granularity === "month") {
-      const spansMultipleYears = resolved.start.getFullYear() !== resolved.end.getFullYear();
-      const buckets = [];
-      let cursor = new Date(resolved.start.getFullYear(), resolved.start.getMonth(), 1);
-      const endCursor = new Date(resolved.end.getFullYear(), resolved.end.getMonth(), 1);
-      while (cursor <= endCursor) {
-        buckets.push({
-          year: cursor.getFullYear(),
-          month: cursor.getMonth(),
-          label: spansMultipleYears
-            ? `${t.months[cursor.getMonth()].slice(0, 3)} ${String(cursor.getFullYear()).slice(2)}`
-            : t.months[cursor.getMonth()].slice(0, 3),
-          count: 0,
-        });
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-      }
-      stats.visitEventsInRange.forEach((e) => {
-        const d = parseVisitDate(e.date);
-        if (!d) return;
-        const bucket = buckets.find((b) => b.year === d.getFullYear() && b.month === d.getMonth());
-        if (bucket) bucket.count += 1;
-      });
-      return buckets;
-    }
-    const daysInMonth = new Date(resolved.start.getFullYear(), resolved.start.getMonth() + 1, 0).getDate();
-    const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), count: 0 }));
-    stats.visitEventsInRange.forEach((e) => {
-      const d = parseVisitDate(e.date);
-      if (d) buckets[d.getDate() - 1].count += 1;
-    });
-    return buckets;
-  }, [stats, resolved, t]);
-
-  // Offers value trend, one chart per currency (mixing currencies into one
-  // bar height would be misleading). The USD chart only renders below if
-  // there's actually USD data in the selected period.
-  const offersChartData = useMemo(
-    () => buildOffersChartData(stats.offersInRange, "EGP", resolved.granularity, resolved.start, resolved.end, t.months),
-    [stats, resolved, t]
-  );
-  const offersChartDataUSD = useMemo(
-    () => buildOffersChartData(stats.offersInRange, "USD", resolved.granularity, resolved.start, resolved.end, t.months),
-    [stats, resolved, t]
-  );
-
   // Customers behind the "Customers added" card above: the exact same set
   // (createdAt-based, matching the card's count) rather than a separately
   // computed visitDate-based list, so this list and that number always
@@ -211,9 +160,6 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
   }, [stats, offerStatusFilter]);
 
   const offersListValueTotals = sumOffersByCurrency(offersList);
-  const maxChartCount = Math.max(1, ...chartData.map((b) => b.count));
-  const maxOffersChartValue = Math.max(1, ...offersChartData.map((b) => b.value));
-  const maxOffersChartValueUSD = Math.max(1, ...offersChartDataUSD.map((b) => b.value));
 
   // ---- PDF report export ----
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -237,7 +183,6 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
         sectorLabel: sector === "all" ? null : t.sectors[sector],
         avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
         offersList: allOffersInPeriod,
-        customersList: periodCustomersList,
         rejectionReport,
       });
     } catch (e) {
@@ -404,77 +349,6 @@ subValue={
       {sectorBreakdown && (
         <SectorBreakdownCard t={t} breakdown={sectorBreakdown} />
       )}
-
-      {/* Visits performance + offers value trend(s), swiped between in one
-          card instead of stacked as separate cards — see
-          SwipeableChartCard above. Only pages with actual data are
-          included, so this still collapses to a single non-swipeable
-          chart when there are no offers in the selected period. */}
-      <SwipeableChartCard
-        pages={[
-          {
-            title: t.dashVisitsPerformance,
-            node: (
-              <div style={{ width: "100%", height: 180 }}>
-                <ResponsiveContainer>
-                  <BarChart data={chartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxChartCount]} />
-                    <Tooltip
-                      formatter={(v) => [v, t.dashCardVisits]}
-                      contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-                    />
-                    <Bar dataKey="count" fill={GOLD} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ),
-          },
-          ...(hasEGPOffers
-            ? [{
-                title: t.dashOffersValueTrend,
-                node: (
-                  <div style={{ width: "100%", height: 180 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={offersChartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValue]} />
-                        <Tooltip
-                          formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.dashCurrency}`, t.dashCardOffersValue]}
-                          contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-                        />
-                        <Bar dataKey="value" fill={PRIMARY_MID} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ),
-              }]
-            : []),
-          ...(hasUSDOffers
-            ? [{
-                title: t.dashOffersValueTrendUSD,
-                node: (
-                  <div style={{ width: "100%", height: 180 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={offersChartDataUSD} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValueUSD]} />
-                        <Tooltip
-                          formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.currencies.USD}`, t.dashCardOffersValue]}
-                          contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-                        />
-                        <Bar dataKey="value" fill={GOLD} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ),
-              }]
-            : []),
-        ]}
-      />
 
       {/* Pipeline + Sales Performance + Rejection Reasons, combined into one
           tabbed card — see SalesAnalysisCard.jsx for why these three used
