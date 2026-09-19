@@ -59,6 +59,8 @@ export default function SettingsScreen({
   setNewMemberRole,
   grantAccess,
   openAuditLog,
+  exchangeRate,
+  setExchangeRate,
 }) {
   const [exportTab, setExportTab] = useState("customers");
   const [newAdminEmail, setNewAdminEmail] = useState("");
@@ -81,6 +83,29 @@ export default function SettingsScreen({
           </select>
         </div>
       )}
+
+      <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+        <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.currencySettingsTitle}</p>
+        <p className="text-xs mb-3" style={{ color: MUTED }}>{t.currencySettingsHint}</p>
+        <div
+          className="flex items-center justify-between"
+          style={{ background: SURFACE_SUBTLE, border: `1px solid ${LINE}`, borderRadius: 12, padding: "10px 12px" }}
+        >
+          <span className="text-sm font-bold" style={{ color: TEXT }}>{t.exchangeRateLabel}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm" style={{ color: MUTED }}>1$ =</span>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={exchangeRate ?? ""}
+              onChange={(e) => setExchangeRate(e.target.value ? Number(e.target.value) : null)}
+              style={{ width: 76, padding: "6px 8px", borderRadius: 8, border: `1px solid ${LINE}`, background: SURFACE, color: TEXT, textAlign: "center" }}
+            />
+            <span className="text-sm" style={{ color: MUTED }}>{t.currencies.EGP}</span>
+          </div>
+        </div>
+      </div>
 
       {canEdit && (
         <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>

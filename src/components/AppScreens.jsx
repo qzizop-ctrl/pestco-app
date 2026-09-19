@@ -49,6 +49,7 @@ export default function AppScreens({
   dueReminders,
   duplicateGroups,
   errors,
+  exchangeRate,
   expandedOfferId,
   exportAllToExcel,
   exportFilteredToExcel,
@@ -105,6 +106,7 @@ export default function AppScreens({
   sectorCounts,
   sectorFilter,
   setDateAddedFilter,
+  setExchangeRate,
   setExpandedOfferId,
   setForm,
   setMemberDashboardAccess,
@@ -125,6 +127,7 @@ export default function AppScreens({
   setSupplierQuery,
   setSupplierTagFilter,
   setTagFilter,
+  setUnifyCurrency,
   showAlert,
   showDuplicates,
   stageFilter,
@@ -148,6 +151,7 @@ export default function AppScreens({
   togglePin,
   togglePinSupplier,
   totalCustomers,
+  unifyCurrency,
   triggerImportPicker,
   triggerSupplierImportPicker,
   updateOfferStatus,
@@ -160,7 +164,16 @@ export default function AppScreens({
     <div key={screen} className="animate-screen-in">
     {screen === "dashboard" && canViewDashboard && (
       <Suspense fallback={<div className="px-4 pt-4"><SkeletonList count={3} /></div>}>
-        <Dashboard visits={visibleVisits} lang={lang} onOpenCustomer={openDetail} showAlert={showAlert} staleOffers={staleOffers} />
+        <Dashboard
+          visits={visibleVisits}
+          lang={lang}
+          onOpenCustomer={openDetail}
+          showAlert={showAlert}
+          staleOffers={staleOffers}
+          exchangeRate={exchangeRate}
+          unifyCurrency={unifyCurrency}
+          setUnifyCurrency={setUnifyCurrency}
+        />
       </Suspense>
     )}
 
@@ -343,6 +356,8 @@ export default function AppScreens({
         setNewMemberRole={setNewMemberRole}
         grantAccess={grantAccess}
         openAuditLog={() => setScreen("audit-log")}
+        exchangeRate={exchangeRate}
+        setExchangeRate={setExchangeRate}
       />
     )}
 
