@@ -1,6 +1,6 @@
 import { useState, Fragment } from "react";
 import { ChevronLeft, TrendingUp, TrendingDown } from "lucide-react";
-import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
+import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE, SUCCESS, DASH_NEGATIVE } from "../theme";
 import { STAGE_IDS, OFFER_STATUS_IDS } from "../domain";
 import { fmtOffersTotals } from "../helpers";
 import { pctChange, computeStageConversionRates } from "../dashboardCalculations";
@@ -61,7 +61,7 @@ export default function SalesAnalysisCard({ t, stats, prevStats, compare, reject
                 <span
                   className="text-xs font-extrabold"
                   style={{
-                    background: isActive ? "rgba(255,255,255,.28)" : "#C4443A",
+                    background: isActive ? "rgba(255,255,255,.28)" : DASH_NEGATIVE,
                     color: "#fff",
                     borderRadius: 999,
                     padding: "1px 6px",
@@ -158,7 +158,7 @@ export default function SalesAnalysisCard({ t, stats, prevStats, compare, reject
                     ) : (
                       <span
                         className="flex items-center gap-1 text-xs font-bold"
-                        style={{ color: delta >= 0 ? "#2F9E58" : "#C4443A" }}
+                        style={{ color: delta >= 0 ? SUCCESS : DASH_NEGATIVE }}
                       >
                         {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                         {Math.abs(delta).toFixed(0)}%
@@ -189,7 +189,7 @@ export default function SalesAnalysisCard({ t, stats, prevStats, compare, reject
                       </span>
                     </div>
                     <div style={{ height: 8, borderRadius: 999, background: SURFACE_SUBTLE, overflow: "hidden" }}>
-                      <div style={{ width: `${r.pct}%`, height: "100%", background: "#C4443A", borderRadius: 999 }} />
+                      <div style={{ width: `${r.pct}%`, height: "100%", background: DASH_NEGATIVE, borderRadius: 999 }} />
                     </div>
                   </div>
                 ))}
@@ -206,7 +206,7 @@ export default function SalesAnalysisCard({ t, stats, prevStats, compare, reject
                         style={{ flex: "1 1 45%", minWidth: 140, background: SURFACE_SUBTLE, borderRadius: 10, padding: "8px 10px" }}
                       >
                         <span className="text-xs font-bold" style={{ color: TEXT }}>{r.name}</span>
-                        <span className="text-xs font-extrabold" style={{ color: "#C4443A" }}>{r.count}</span>
+                        <span className="text-xs font-extrabold" style={{ color: DASH_NEGATIVE }}>{r.count}</span>
                       </div>
                     ))}
                   </div>
