@@ -223,7 +223,7 @@ function buildFrontMatterHtml({
 
 // One chunk of the offers list (ROWS_PER_CHUNK rows or fewer), as its own
 // small, self-contained container.
-function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk }) {
+function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk, trailingHtml = "" }) {
   const align = t.dir === "rtl" ? "right" : "left";
   const title = isFirstChunk ? t.dashPdfOffersListSection : `${t.dashPdfOffersListSection} (${t.dashPdfContinued || "تابع"})`;
   const body = rows.length > 0
@@ -238,18 +238,18 @@ function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk }) {
     <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;color:${TEXT_HEX};">
       ${sectionTitle(title)}
       ${body}
+      ${trailingHtml}
     </div>
   `;
 }
 
-function buildFooterHtml({ t }) {
-  return `
-    <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;">
-      <div style="padding-top:12px;border-top:1px solid ${LINE_HEX};font-size:10px;color:${MUTED_HEX};text-align:center;">
-        ${esc(t.dashPdfFooterNote)}
-      </div>
-    </div>
-  `;
+// Small footer fragment — appended to the bottom of whichever chunk turns
+// out to be the actual last page of content (see generateDashboardPdf),
+// rather than rendered as its own container. Giving it a dedicated
+// renderHtmlChunk call used to mean a whole extra A4 page whose only
+// content was this one short line — i.e. a page that looked blank.
+function footerFragmentHtml(t) {
+  return `<div style="padding-top:12px;margin-top:20px;border-top:1px solid ${LINE_HEX};font-size:10px;color:${MUTED_HEX};text-align:center;">${esc(t.dashPdfFooterNote)}</div>`;
 }
 
 // Builds and downloads the PDF. `opts` mirrors what the Dashboard already
@@ -323,10 +323,10 @@ export async function generateDashboardPdf(opts) {
   }
 
   try {
-    // 1) Fixed-size front matter — always safe as a single container.
-    await renderHtmlChunk(buildFrontMatterHtml(opts));
-
-    // 2) Offers list, split into fixed-size row batches.
+    // 1) Offers list, split into fixed-size row batches. chunkArray always
+    // returns at least one chunk (an empty one, rendered as the "no
+    // offers" placeholder, when offersList is empty) — so there's always
+    // exactly one true last chunk to attach the footer to below.
     const offerRows = offersList.map((o) => [
       o.customerName || t.noCompanyName,
       o.name || "",
@@ -335,14 +335,21 @@ export async function generateDashboardPdf(opts) {
       o.offerDate || "",
     ]);
     const offerChunks = chunkArray(offerRows, ROWS_PER_CHUNK);
+    const footerHtml = footerFragmentHtml(t);
+
+    // 2) Fixed-size front matter — always safe as a single container.
+    await renderHtmlChunk(buildFrontMatterHtml(opts));
+
+    // 3) Offers list. The footer note is attached to the bottom of the
+    // last batch here — not rendered as its own page — so the report
+    // never ends on a near-blank page holding only that one line.
     for (let i = 0; i < offerChunks.length; i++) {
+      const isLastChunk = i === offerChunks.length - 1;
       await renderHtmlChunk(buildOffersChunkHtml({
-        t, rows: offerChunks[i], isFirstChunk: i === 0, isLastChunk: i === offerChunks.length - 1,
+        t, rows: offerChunks[i], isFirstChunk: i === 0, isLastChunk,
+        trailingHtml: isLastChunk ? footerHtml : "",
       }));
     }
-
-    // 3) Footer note, on its own small final page.
-    await renderHtmlChunk(buildFooterHtml({ t }));
 
     // 4) Page numbers, stamped onto every page now that the final page
     // count is known — has to happen after all content is in, since
