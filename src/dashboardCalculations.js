@@ -189,9 +189,6 @@ export function buildOfferBreakdown(offersByStatus) {
   };
 }
 
-// Builds a per-day (single month) or per-month (multi-month range) bucket
-// array of offer values for one currency, used to feed a value-trend
-// BarChart.
 // Rejection-reasons analytics report — groups the rejected offers already
 // in `offersInRange` (same period-filtered set the Sales Performance
 // section uses, filtered by offerDate like everything else on the

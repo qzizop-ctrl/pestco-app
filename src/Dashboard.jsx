@@ -89,9 +89,26 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
   // so the report's date range is just the existing period picker above.
   const rejectionReport = useMemo(() => computeRejectionReasonsReport(stats.offersInRange, t), [stats, t]);
 
+  // Same report for the previous period, used only to drive the "compare
+  // to previous month" deltas on the Rejection Reasons tab — null whenever
+  // compare is off, same convention as prevStats above.
+  const prevRejectionReport = useMemo(
+    () => (compare && prevStats ? computeRejectionReasonsReport(prevStats.offersInRange, t) : null),
+    [compare, prevStats, t]
+  );
+
   // Top clients by offer value in the selected period — see
   // computeTopClients in dashboardCalculations.js.
   const topClients = useMemo(() => computeTopClients(stats.offersInRange, 5), [stats]);
+
+  // Every client (not just the current period's top 5) from the previous
+  // period, so a client who's in this period's top 5 can be compared even
+  // if they weren't themselves in last period's top 5 — SalesAnalysisCard
+  // looks each one up by customerId/customerName.
+  const prevTopClients = useMemo(
+    () => (compare && prevStats ? computeTopClients(prevStats.offersInRange, Infinity) : null),
+    [compare, prevStats]
+  );
 
   // Every sector's numbers side by side, for the same period — only
   // meaningful (and only computed) when no single sector is already
@@ -411,7 +428,9 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert, sta
             prevStats={prevStats}
             compare={compare}
             rejectionReport={rejectionReport}
+            prevRejectionReport={prevRejectionReport}
             topClients={topClients}
+            prevTopClients={prevTopClients}
             visits={visits}
             onOpenCustomer={onOpenCustomer}
           />
