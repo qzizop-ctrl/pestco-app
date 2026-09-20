@@ -3,7 +3,7 @@ import { Calendar, Users, FileText, Wallet, TrendingUp, ChevronDown, Percent, Do
 import { PRIMARY, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE, SUCCESS, DASH_NEGATIVE, DASH_PENDING } from "./theme";
 import { STRINGS } from "./i18n";
 import { SECTOR_IDS } from "./domain";
-import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, unifyOffersTotal, toJsDate } from "./helpers";
+import { parseVisitDate, fmtMoney, fmtUnifiedOrSplit, sumOffersByCurrency, toJsDate } from "./helpers";
 import { generateDashboardPdf } from "./pdfReport";
 import { reportException } from "./sentry";
 import {
@@ -145,19 +145,19 @@ export default function Dashboard({
     {
       key: "converted", label: t.dashOffersConverted, color: SUCCESS,
       amount: offerBreakdown.convertedCount,
-      display: fmtOffersTotals(offerBreakdown.convertedTotals, t) || `0 ${t.dashCurrency}`,
+      display: fmtUnifiedOrSplit(offerBreakdown.convertedTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`,
     },
     {
       key: "pending", label: t.offerStatuses.pending, color: DASH_PENDING,
       amount: offerBreakdown.pendingCount,
-      display: fmtOffersTotals(offerBreakdown.pendingTotals, t) || `0 ${t.dashCurrency}`,
+      display: fmtUnifiedOrSplit(offerBreakdown.pendingTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`,
     },
     {
       key: "rejected", label: t.offerStatuses.rejected, color: DASH_NEGATIVE,
       amount: offerBreakdown.rejectedCount,
-      display: fmtOffersTotals(offerBreakdown.rejectedTotals, t) || `0 ${t.dashCurrency}`,
+      display: fmtUnifiedOrSplit(offerBreakdown.rejectedTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`,
     },
-  ]), [offerBreakdown, t]);
+  ]), [offerBreakdown, t, exchangeRate, unifyCurrency]);
 
   const customersAddedLabel = useMemo(
     () => t.dashCustomersAddedLabel(resolved.rangeLabel),
@@ -217,6 +217,7 @@ export default function Dashboard({
         avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
         offersList: allOffersInPeriod,
         rejectionReport,
+        exchangeRate, unifyCurrency,
       });
     } catch (e) {
       console.error("PDF export failed:", e);
@@ -409,11 +410,7 @@ export default function Dashboard({
             <SummaryCard
               icon={Wallet}
               label={t.dashCardOffersValue}
-              value={
-                unifyCurrency && exchangeRate
-                  ? `${fmtMoney(unifyOffersTotal(stats.offersValueTotals, exchangeRate), `${t.locale}-u-nu-latn`)} ${t.currencies.EGP}`
-                  : fmtOffersTotals(stats.offersValueTotals, t, { showAllIfEmpty: true })
-              }
+              value={fmtUnifiedOrSplit(stats.offersValueTotals, t, exchangeRate, unifyCurrency, { showAllIfEmpty: true })}
               delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
               extra={<SplitBar segments={offersValueSegments} />}
               t={t}
@@ -457,7 +454,7 @@ export default function Dashboard({
           {/* Every sector side by side for the same period — only shown when
               "all sectors" is selected (see sectorBreakdown above). */}
           {sectorBreakdown && (
-            <SectorBreakdownCard t={t} breakdown={sectorBreakdown} />
+            <SectorBreakdownCard t={t} breakdown={sectorBreakdown} exchangeRate={exchangeRate} unifyCurrency={unifyCurrency} />
           )}
 
           {/* Pipeline + Sales Performance + Rejection Reasons, combined into one
@@ -474,6 +471,8 @@ export default function Dashboard({
             prevTopClients={prevTopClients}
             visits={visits}
             onOpenCustomer={onOpenCustomer}
+            exchangeRate={exchangeRate}
+            unifyCurrency={unifyCurrency}
           />
         </>
       )}
@@ -524,6 +523,8 @@ export default function Dashboard({
               offersListValueTotals={offersListValueTotals}
               visits={visits}
               onOpenCustomer={onOpenCustomer}
+              exchangeRate={exchangeRate}
+              unifyCurrency={unifyCurrency}
             />
           )}
 

@@ -220,6 +220,20 @@ export function unifyOffersTotal(totals, rate) {
   return egp + usd * r;
 }
 
+// Every place that shows an aggregated offers total (Dashboard cards, the
+// PDF export, per-sector/per-member breakdowns, a customer's offers list)
+// goes through this single function so "unify currency" behaves exactly
+// the same everywhere instead of each call site re-implementing the same
+// on/off/fallback logic. Falls back to the normal per-currency display
+// (fmtOffersTotals) whenever unifying is off or the rate isn't set.
+export function fmtUnifiedOrSplit(totals, t, exchangeRate, unifyCurrency, opts) {
+  if (unifyCurrency) {
+    const unified = unifyOffersTotal(totals, exchangeRate);
+    if (unified !== null) return `${fmtMoney(unified, t.locale)} ${t.currencies.EGP}`;
+  }
+  return fmtOffersTotals(totals, t, opts);
+}
+
 export function visitStatus(visit) {
   if (!visit.callDateTime) return "none";
   const call = new Date(visit.callDateTime);

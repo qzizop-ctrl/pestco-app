@@ -44,7 +44,7 @@
 import { Capacitor } from "@capacitor/core";
 import { stageColor, PRIMARY } from "./theme";
 import { STAGE_IDS, OFFER_STATUS_IDS } from "./domain";
-import { fmtMoney, fmtOffersTotals } from "./helpers";
+import { fmtMoney, fmtUnifiedOrSplit } from "./helpers";
 
 // The report always renders on a plain white/light background regardless of
 // the app's current theme (dark mode) — a report meant for printing/sharing
@@ -149,7 +149,7 @@ function buildRejectionSectionHtml({ t, rejectionReport }) {
 function buildFrontMatterHtml({
   t, stats, periodLabel, sectorLabel,
   avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
-  rejectionReport,
+  rejectionReport, exchangeRate, unifyCurrency,
 }) {
   const align = t.dir === "rtl" ? "right" : "left";
   const periodLine = t.dashPdfPeriod(periodLabel);
@@ -161,7 +161,7 @@ function buildFrontMatterHtml({
     [t.dashCardVisits, String(stats.visitsCount)],
     [t.dashPeriodCustomersLabel, String(stats.customersCount)],
     [t.dashCardOffersCount, String(stats.offersCount)],
-    [t.dashCardOffersValue, fmtOffersTotals(stats.offersValueTotals, t) || `0 ${t.dashCurrency}`],
+    [t.dashCardOffersValue, fmtUnifiedOrSplit(stats.offersValueTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`],
     [t.dashAvgDealSize, avgDealSize === null
       ? t.dashNoOffersYet
       : `${fmtMoney(avgDealSize)} ${t.dashCurrency}${avgDealSizeUSD !== null ? ` / ${fmtMoney(avgDealSizeUSD)} ${t.currencies.USD}` : ""}`],
@@ -189,7 +189,7 @@ function buildFrontMatterHtml({
 
   const offersByStatusRows = OFFER_STATUS_IDS.map((id) => {
     const info = stats.offersByStatus[id] || { count: 0, totals: {} };
-    const valueText = fmtOffersTotals(info.totals, t) || "—";
+    const valueText = fmtUnifiedOrSplit(info.totals, t, exchangeRate, unifyCurrency) || "—";
     return [t.offerStatuses[id], String(info.count), valueText];
   });
 

@@ -35,7 +35,7 @@ import { useTagManagement } from "./hooks/useTagManagement";
 import { TEXT, MUTED, THEME_VARS } from "./theme";
 import { STRINGS } from "./i18n";
 import { STAGE_IDS } from "./domain";
-import { parseVisitDate, fmtOffersTotals, sumOffersByCurrency } from "./helpers";
+import { parseVisitDate, fmtUnifiedOrSplit, sumOffersByCurrency } from "./helpers";
 
 const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
 
@@ -352,7 +352,7 @@ export default function App() {
     return db - da;
   }) : [];
   const activeOffersTotals = sumOffersByCurrency(activeOffers);
-  const activeOffersValueText = fmtOffersTotals(activeOffersTotals, t);
+  const activeOffersValueText = fmtUnifiedOrSplit(activeOffersTotals, t, exchangeRate, unifyCurrency);
 
   const themeVars = darkMode ? THEME_VARS.dark : THEME_VARS.light;
 
