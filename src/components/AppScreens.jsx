@@ -177,6 +177,7 @@ export default function AppScreens({
           showAlert={showAlert}
           staleOffers={staleOffers}
           exchangeRate={exchangeRate}
+          setExchangeRate={setExchangeRate}
           unifyCurrency={unifyCurrency}
           setUnifyCurrency={setUnifyCurrency}
         />
@@ -362,8 +363,6 @@ export default function AppScreens({
         setNewMemberRole={setNewMemberRole}
         grantAccess={grantAccess}
         openAuditLog={() => setScreen("audit-log")}
-        exchangeRate={exchangeRate}
-        setExchangeRate={setExchangeRate}
         allTags={allTags}
         tagCounts={tagCounts}
         renameTag={renameTag}
