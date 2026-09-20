@@ -98,6 +98,7 @@ export default function AppScreens({
   removeAdminEmail,
   removeTagFromForm,
   removeTagFromSupplierForm,
+  renameSupplierTag,
   renameTag,
   reviewSignup,
   revokeAccess,
@@ -146,6 +147,8 @@ export default function AppScreens({
   suppliers,
   suppliersLoaded,
   switchOwnerWorkspace,
+  supplierTagCounts,
+  supplierTagBusy,
   t,
   tagBusy,
   tagCounts,
@@ -365,6 +368,10 @@ export default function AppScreens({
         tagCounts={tagCounts}
         renameTag={renameTag}
         tagBusy={tagBusy}
+        allSupplierTags={allSupplierTags}
+        supplierTagCounts={supplierTagCounts}
+        renameSupplierTag={renameSupplierTag}
+        supplierTagBusy={supplierTagBusy}
       />
     )}
 
