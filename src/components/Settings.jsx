@@ -61,7 +61,13 @@ export default function SettingsScreen({
   openAuditLog,
   exchangeRate,
   setExchangeRate,
+  allTags,
+  tagCounts,
+  renameTag,
+  tagBusy,
 }) {
+  const [editingTag, setEditingTag] = useState(null);
+  const [tagDraft, setTagDraft] = useState("");
   const [exportTab, setExportTab] = useState("customers");
   const [newAdminEmail, setNewAdminEmail] = useState("");
   return (
@@ -106,6 +112,70 @@ export default function SettingsScreen({
           </div>
         </div>
       </div>
+
+      {canEdit && (
+        <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+          <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.tagManagementTitle}</p>
+          <p className="text-xs mb-3" style={{ color: MUTED }}>{t.tagManagementHint}</p>
+
+          {allTags.length === 0 ? (
+            <p className="text-xs" style={{ color: MUTED }}>{t.tagsEmpty}</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {allTags.map((tag) => (
+                <div
+                  key={tag}
+                  style={{ background: SURFACE_SUBTLE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 10px" }}
+                >
+                  {editingTag === tag ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        autoFocus
+                        value={tagDraft}
+                        onChange={(e) => setTagDraft(e.target.value)}
+                        style={{ flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 8, border: `1px solid ${LINE}`, background: SURFACE, color: TEXT }}
+                      />
+                      <button
+                        disabled={tagBusy || !tagDraft.trim()}
+                        onClick={() => {
+                          renameTag(tag, tagDraft);
+                          setEditingTag(null);
+                          setTagDraft("");
+                        }}
+                        className="text-xs font-bold px-3 py-1.5 rounded-lg btn-press"
+                        style={{ background: GOLD, color: "#fff", opacity: tagBusy || !tagDraft.trim() ? 0.6 : 1, whiteSpace: "nowrap" }}
+                      >
+                        {t.tagRenameBtn}
+                      </button>
+                      <button
+                        onClick={() => { setEditingTag(null); setTagDraft(""); }}
+                        aria-label={t.cancelBtn}
+                        style={{ color: MUTED, padding: 4 }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold" style={{ color: TEXT }}>
+                        {tag} <span style={{ color: MUTED, fontWeight: 400 }}>({tagCounts[tag] || 0})</span>
+                      </span>
+                      <button
+                        disabled={tagBusy}
+                        onClick={() => { setEditingTag(tag); setTagDraft(tag); }}
+                        className="text-xs font-bold"
+                        style={{ color: GOLD, opacity: tagBusy ? 0.5 : 1 }}
+                      >
+                        {t.edit}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {canEdit && (
         <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>

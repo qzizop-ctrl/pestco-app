@@ -98,6 +98,7 @@ export default function AppScreens({
   removeAdminEmail,
   removeTagFromForm,
   removeTagFromSupplierForm,
+  renameTag,
   reviewSignup,
   revokeAccess,
   saveForm,
@@ -146,6 +147,8 @@ export default function AppScreens({
   suppliersLoaded,
   switchOwnerWorkspace,
   t,
+  tagBusy,
+  tagCounts,
   tagFilter,
   toggleOfferSupplier,
   togglePin,
@@ -358,6 +361,10 @@ export default function AppScreens({
         openAuditLog={() => setScreen("audit-log")}
         exchangeRate={exchangeRate}
         setExchangeRate={setExchangeRate}
+        allTags={allTags}
+        tagCounts={tagCounts}
+        renameTag={renameTag}
+        tagBusy={tagBusy}
       />
     )}
 
