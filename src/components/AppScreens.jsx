@@ -39,9 +39,6 @@ export default function AppScreens({
   clearCallReminder,
   confirmAction,
   dashboardAccess,
-  dashboardCustomersSubTab,
-  dashboardSalesTabVisited,
-  dashboardTab,
   dateAddedFilter,
   dateAddedScopeTotal,
   deleteActivity,
@@ -110,9 +107,6 @@ export default function AppScreens({
   screen,
   sectorCounts,
   sectorFilter,
-  setDashboardCustomersSubTab,
-  setDashboardSalesTabVisited,
-  setDashboardTab,
   setDateAddedFilter,
   setExchangeRate,
   setExpandedOfferId,
@@ -186,12 +180,6 @@ export default function AppScreens({
           setExchangeRate={setExchangeRate}
           unifyCurrency={unifyCurrency}
           setUnifyCurrency={setUnifyCurrency}
-          activeTab={dashboardTab}
-          setActiveTab={setDashboardTab}
-          customersSubTab={dashboardCustomersSubTab}
-          setCustomersSubTab={setDashboardCustomersSubTab}
-          salesTabVisited={dashboardSalesTabVisited}
-          setSalesTabVisited={setDashboardSalesTabVisited}
         />
       </Suspense>
     )}
