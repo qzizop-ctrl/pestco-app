@@ -13,11 +13,26 @@ const emptyNewOffer = () => ({
 // pattern as activityLog, so a customer's offers always stay attached to
 // their own record. Split out of App.jsx; `appendActivity` is passed in
 // (from useActivityLog) rather than duplicated here.
-export function useOfferActions({ ownerUid, canEdit, requireOnline, confirmAction, setRejectionPrompt, appendActivity, reportSaveError, t }) {
+export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confirmAction, setRejectionPrompt, appendActivity, reportSaveError, t }) {
   const [newOffer, setNewOffer] = useState(emptyNewOffer());
   // Drives the "select suppliers" bottom sheet on the new-offer form.
   const [supplierPickerOpen, setSupplierPickerOpen] = useState(false);
   const [expandedOfferId, setExpandedOfferId] = useState(null);
+
+  // Builds the extra rejection fields stamped onto an offer at the
+  // moment it's rejected — reasonId feeds the Dashboard's rejection-
+  // reasons report (grouped by id, not free text), rejectedBy/rejectedById
+  // let that report compare reps, and rejectedAt is what the report's
+  // date-range filter (the Dashboard's existing period picker) checks
+  // instead of offerDate, since an offer can be rejected well after it
+  // was first created.
+  const rejectionFields = ({ reasonId, label }) => ({
+    rejectionReason: label,
+    rejectionReasonId: reasonId,
+    rejectedBy: user?.displayName || user?.email || t.unknownUser,
+    rejectedById: user?.uid || null,
+    rejectedAt: new Date().toISOString(),
+  });
 
   const resetNewOffer = () => {
     setNewOffer(emptyNewOffer());
@@ -61,8 +76,9 @@ export function useOfferActions({ ownerUid, canEdit, requireOnline, confirmActio
 
     if (newOffer.status === "rejected") {
       setRejectionPrompt({
-        initialReason: "",
-        onConfirm: (reason) => saveOffer({ ...newOffer, rejectionReason: reason }),
+        initialReasonId: "",
+        initialReasonText: "",
+        onConfirm: (picked) => saveOffer({ ...newOffer, ...rejectionFields(picked) }),
       });
       return;
     }
@@ -74,9 +90,17 @@ export function useOfferActions({ ownerUid, canEdit, requireOnline, confirmActio
     if (!requireOnline()) return;
     if (newStatus === offer.status) return;
 
-    const saveStatus = async (rejectionReason) => {
+    const saveStatus = async (extraFields) => {
       const updated = (visit.offers || []).map((o) =>
-        o.id === offer.id ? { ...o, status: newStatus, rejectionReason: newStatus === "rejected" ? rejectionReason : "" } : o
+        o.id === offer.id
+          ? {
+              ...o,
+              status: newStatus,
+              ...(newStatus === "rejected"
+                ? extraFields
+                : { rejectionReason: "", rejectionReasonId: "", rejectedBy: "", rejectedById: null, rejectedAt: "" }),
+            }
+          : o
       );
       try {
         await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { offers: updated });
@@ -87,13 +111,19 @@ export function useOfferActions({ ownerUid, canEdit, requireOnline, confirmActio
     };
 
     if (newStatus === "rejected") {
+      // Legacy offers (rejected before this feature existed) only have
+      // free-text rejectionReason and no reasonId — re-opening the modal
+      // on one of those pre-fills the "other" text field with that old
+      // text instead of losing it, but still requires picking a reasonId
+      // (defaults to "other" in the modal) going forward.
       setRejectionPrompt({
-        initialReason: offer.rejectionReason || "",
-        onConfirm: (reason) => saveStatus(reason),
+        initialReasonId: offer.rejectionReasonId || (offer.rejectionReason ? "other" : ""),
+        initialReasonText: !offer.rejectionReasonId || offer.rejectionReasonId === "other" ? (offer.rejectionReason || "") : "",
+        onConfirm: (picked) => saveStatus(rejectionFields(picked)),
       });
       return;
     }
-    await saveStatus("");
+    await saveStatus({});
   };
 
   const deleteOffer = (visit, offer) => {

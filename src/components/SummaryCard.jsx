@@ -3,9 +3,8 @@
 // Pure presentational component — no dependency on Dashboard's internal
 // state, so it was safe to pull out mechanically.
 // ============================================================================
-import React from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
-import { SURFACE, LINE, GOLD_SOFT, MUTED, TEXT } from "../theme";
+import { SURFACE, LINE, GOLD_SOFT, MUTED, TEXT, SUCCESS, DASH_NEGATIVE } from "../theme";
 
 export default function SummaryCard({ icon: Icon, label, value, delta, subValue, extra, t }) {
   // Longer combined values (e.g. two currencies: "12,000 EG + 500 $")
@@ -48,7 +47,7 @@ export default function SummaryCard({ icon: Icon, label, value, delta, subValue,
           ) : typeof delta === "object" ? (
             <span
               className="flex items-center gap-1 text-xs font-bold"
-              style={{ color: delta.points >= 0 ? "#2F9E58" : "#C4443A" }}
+              style={{ color: delta.points >= 0 ? SUCCESS : DASH_NEGATIVE }}
             >
               {delta.points >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
               {delta.points >= 0 ? "+" : ""}{delta.points.toFixed(0)} {t.dashPointsSuffix}
@@ -56,7 +55,7 @@ export default function SummaryCard({ icon: Icon, label, value, delta, subValue,
           ) : (
             <span
               className="flex items-center gap-1 text-xs font-bold"
-              style={{ color: delta >= 0 ? "#2F9E58" : "#C4443A" }}
+              style={{ color: delta >= 0 ? SUCCESS : DASH_NEGATIVE }}
             >
               {delta >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
               {Math.abs(delta).toFixed(0)}%

@@ -8,7 +8,7 @@
 // self-contained chunk out of the single giant App.jsx file.
 // ============================================================================
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search, SlidersHorizontal, Truck, Star, Mail, Phone, MessageCircle, Plus, Trash2,
   Building2, User, Package, Tag, StickyNote, Bell,
@@ -23,6 +23,7 @@ import { openWhatsApp } from "../nativeWhatsApp";
 import { db } from "../firebase";
 import { doc } from "firebase/firestore";
 import { useLastChangeActions } from "../hooks/useLastChangeActions";
+import { logAudit } from "../hooks/useAuditLog";
 import PendingChangeBanner from "./PendingChangeBanner";
 
 export function SuppliersListScreen({
@@ -326,6 +327,7 @@ export function SupplierFormScreen({
   deleteSupplier,
   saving,
   ownerUid,
+  user,
   isOwnerAccount,
   setScreen,
 }) {
@@ -345,6 +347,10 @@ export function SupplierFormScreen({
     deleteSuccessMsg: t.deleteApprovedMsgSupplier,
     restoreSuccessMsg: t.deleteRestoredMsgSupplier,
     onFinally: () => setScreen && setScreen("suppliers"),
+    onAudit: (action) => logAudit(ownerUid, {
+      entityType: "supplier", entityId: activeSupplierId, entityName: supplierForm?.name,
+      action, user, t,
+    }),
   });
 
   return (

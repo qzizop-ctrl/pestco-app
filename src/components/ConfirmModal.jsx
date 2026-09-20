@@ -14,7 +14,6 @@
 //     to call window.alert(message).
 // ============================================================================
 
-import React from "react";
 import { AlertTriangle } from "lucide-react";
 import { PRIMARY_MID, DANGER, TEXT, MUTED, LINE, SURFACE } from "../theme";
 

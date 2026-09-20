@@ -136,6 +136,25 @@ export const AR = {
   statusUpcoming: "قادمة",
   statusNone: "بدون تذكير",
   whatsapp: "واتساب",
+  tagManagementTitle: "إدارة التاجز",
+  tagManagementHint: "عدّل اسم أي تاج عشان يتغيّر في كل اللي بيحمله دفعة واحدة. لو كتبت اسم تاج موجود بالفعل، الاتنين هيندمجوا في واحد.",
+  tagTabCustomers: "العملاء",
+  tagTabSuppliers: "الموردين",
+  tagsEmpty: "مفيش تاجز مضافة لحد دلوقتي",
+  tagSearchPlaceholder: "دوّر على تاج...",
+  noTagSearchResults: "مفيش تاج بالاسم ده",
+  tagRenameBtn: "حفظ",
+  cancelBtn: "إلغاء",
+  tagRenameConfirm: (oldTag, newTag, count, entityType) => {
+    const nouns =
+      entityType === "supplier"
+        ? { one: "مورد واحد", two: "موردين", many: (n) => `${n} موردين` }
+        : { one: "عميل واحد", two: "عميلين", many: (n) => `${n} عملاء` };
+    const who = count === 1 ? nouns.one : count === 2 ? nouns.two : nouns.many(count);
+    return `هيتغيّر التاج "${oldTag}" إلى "${newTag}" في ${who}. تأكيد؟`;
+  },
+  exchangeRateLabel: "دولار إلى جنيه",
+  unifyCurrencyToggle: "توحيد العملة في الداشبورد",
   excelTitle: "استيراد / تصدير إكسيل",
   exportBtn: "تصدير كل الزيارات (إكسيل)",
   importBtn: "استيراد من ملف إكسيل",
@@ -228,8 +247,21 @@ export const AR = {
   offerRejectionReasonPrompt: "اكتب سبب رفض الأوفر (اختياري):",
   rejectionModalTitle: "سبب الرفض",
   rejectionModalPlaceholder: "اكتب السبب هنا (اختياري)...",
+  rejectionModalReasonLabel: "سبب الرفض",
+  rejectionModalReasonPlaceholder: "اختر السبب",
+  rejectionModalOtherLabel: "اكتب السبب بالتفصيل",
   rejectionModalConfirm: "تأكيد الرفض",
   rejectionModalCancel: "إلغاء",
+  // Predefined rejection reasons — see domain.js#REJECTION_REASON_IDS.
+  rejectionReasons: {
+    price: "السعر أعلى من المنافس",
+    timing: "التوقيت غير مناسب",
+    chose_other_supplier: "العميل اختار مورد آخر",
+    project_postponed: "تأجيل المشروع",
+    not_needed_now: "عدم الحاجة حاليًا",
+    payment_terms: "شروط الدفع",
+    other: "سبب آخر",
+  },
   confirmModalConfirm: "تأكيد",
   confirmModalCancel: "إلغاء",
   confirmModalOk: "حسنًا",
@@ -315,21 +347,27 @@ export const AR = {
   dashPeriodTo: "إلى",
   dashSector: "القطاع",
   dashAllSectors: "كل القطاعات",
+  dashTabOverview: "نظرة عامة",
+  dashTabSales: "المبيعات",
+  dashTabCustomers: "العملاء والأوفرات",
   dashCardVisits: "إجمالي الزيارات",
   dashCardOffersCount: "عدد الأوفرات",
   dashCardOffersValue: "إجمالي قيمة الأوفرات",
   dashOffersConverted: "اتحول لبيع",
-  dashVisitsPerformance: "أداء الزيارات",
   dashOffersSection: "الأوفرات",
   dashOffersTotalLabel: "عدد الأوفرات",
   dashOffersTotalValueLabel: "إجمالي قيمة الأوفرات",
   dashPipeline: "مسار المبيعات (Pipeline)",
   dashSalesPerformance: "أداء المبيعات",
+  // Rejection-reasons analytics report (Dashboard)
+  dashRejectionReport: "تحليل أسباب رفض العروض",
+  dashRejectionReportHint: "أكثر أسباب رفض العروض تكرارًا خلال الفترة المحددة",
+  dashRejectionReportEmpty: "لا يوجد عروض مرفوضة في هذه الفترة",
+  dashRejectionReportByRep: "مقارنة أسباب الرفض بين المندوبين",
+  dashRejectionReportPct: (n) => `${n}% من إجمالي المرفوض`,
   dashAvgDealSize: "متوسط قيمة الصفقة",
   dashWinRate: "نسبة الفوز",
   dashWinRateSample: (n) => `من ${n} صفقة محسومة`,
-  dashOffersValueTrend: "اتجاه قيمة الأوفرات (EG)",
-  dashOffersValueTrendUSD: "اتجاه قيمة الأوفرات ($)",
   dashPointsSuffix: "نقطة",
   dashNoOffersYet: "لا توجد أوفرات كافية للحساب",
   dashCompareToggle: "مقارنة بالشهر السابق",
@@ -344,12 +382,6 @@ export const AR = {
     "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
     "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
   ],
-
-  // Location / maps (GPS at time of logging a visit)
-  openInMaps: "افتح آخر موقع على الخريطة",
-  lastVisitLocationLabel: "موقع آخر زيارة",
-  locationDeniedHint: "تم تسجيل الزيارة، لكن الموقع لم يتم تحديده (الإذن غير مفعّل أو الجهاز لا يدعمه)",
-  visitLocationPin: "الموقع",
 
   // Alerts center (collapsible banner group on the customer list)
   alertsCenterTitle: "التنبيهات",
@@ -451,4 +483,51 @@ export const AR = {
   dashPdfColDate: "التاريخ",
   dashPdfColSector: "القطاع",
   dashPdfColStage: "المرحلة",
+  dashPdfPageOf: (page, total) => `صفحة ${page} من ${total}`,
+
+  // Top clients (Dashboard) — ranked list of the highest-value customers
+  // in the selected period, shown as a tab inside SalesAnalysisCard.
+  dashTopClients: "أفضل العملاء",
+  dashTopClientsEmpty: "لا توجد أوفرات كافية لعرض ترتيب العملاء في هذه الفترة",
+  dashTopClientsOffersCount: (n) => `${n} أوفر`,
+
+  // Sector breakdown (Dashboard) — side-by-side comparison of every
+  // sector's numbers, shown only when "كل القطاعات" is selected.
+  dashSectorBreakdown: "مقارنة القطاعات",
+  dashSectorBreakdownHint: "أداء كل قطاع خلال نفس الفترة المحددة فوق",
+  dashSectorBreakdownEmpty: "لا يوجد نشاط في أي قطاع خلال هذه الفترة",
+
+  // Stale (in-progress) offers surfaced directly on the Dashboard — same
+  // definition/source as the Alerts Center on the customer list screen
+  // (see useFilteredData.js), just scoped by the Dashboard's own sector
+  // filter for consistency with everything else on the page.
+  dashStaleOffersTitle: "أوفرات محتاجة متابعة",
+
+  // Unified Admin Audit Log (owner/reviewer only) — see AuditLog.jsx and
+  // src/hooks/useAuditLog.js.
+  auditLogTitle: "سجل النشاط",
+  auditLogBtn: "سجل النشاط",
+  auditLogHint: "كل التعديلات على بيانات العملاء والموردين في مكان واحد",
+  auditLogEmpty: "لا يوجد نشاط مسجل بعد",
+  auditLogLoadError: "حصل خطأ أثناء تحميل سجل النشاط",
+  auditLogFilterUser: "المستخدم",
+  auditLogFilterAction: "نوع العملية",
+  auditLogFilterEntity: "النوع",
+  auditLogFilterFrom: "من تاريخ",
+  auditLogFilterTo: "إلى تاريخ",
+  auditLogFilterAll: "الكل",
+  auditLogClearFilters: "مسح الفلاتر",
+  auditLogEntityCustomer: "عميل",
+  auditLogEntitySupplier: "مورد",
+  auditLogActions: {
+    create: "إنشاء",
+    update: "تعديل",
+    delete: "حذف",
+    restore: "استرجاع",
+    approve: "اعتماد تعديل",
+    rollback: "تراجع عن تعديل",
+  },
+  auditLogOldValue: "قديم",
+  auditLogNewValue: "جديد",
+  auditLogNoDetails: "بدون تفاصيل قيم",
 };

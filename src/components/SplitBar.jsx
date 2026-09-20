@@ -3,7 +3,6 @@
 // Pure presentational component — no dependency on Dashboard's internal
 // state, so it was safe to pull out mechanically.
 // ============================================================================
-import React from "react";
 import { MUTED, SURFACE_SUBTLE } from "../theme";
 
 // A thin horizontal bar split into colored segments by proportion, plus a

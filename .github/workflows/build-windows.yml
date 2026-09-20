@@ -26,12 +26,32 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "npm"
 
       # =========================
       # Install dependencies
       # =========================
+      # electron's postinstall step downloads a large prebuilt binary
+      # straight from GitHub releases (outside npm's own registry, so
+      # npm's registry-level retry logic doesn't cover it), which is what
+      # actually failed here (ECONNRESET) rather than anything about this
+      # repo's code — a transient runner network blip mid-download, not a
+      # reproducible error. npm_config_fetch_retries covers registry
+      # installs; wrapping the whole step in a retry action is what
+      # actually covers the electron binary download, since that request
+      # is unaffected by the npm config. Three attempts, a fixed pause
+      # between them so a same-minute network hiccup doesn't repeat.
       - name: Install dependencies
-        run: npm install
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: npm install
+        env:
+          npm_config_fetch_retries: 5
+          npm_config_fetch_retry_mintimeout: 20000
+          npm_config_fetch_retry_maxtimeout: 120000
 
       # =========================
       # Run tests
@@ -59,8 +79,23 @@ jobs:
       # =========================
       # Package Windows App
       # =========================
+      # --publish always is what electron.js's initAutoUpdate() needs:
+      # electron-builder itself creates/updates a GitHub Release (tagged
+      # v<package.json version>, standard behavior for the "github" publish
+      # provider already configured in package.json's "build" block) AND
+      # uploads latest.yml alongside the installer — that file is what
+      # autoUpdater.checkForUpdatesAndNotify() actually reads to know a
+      # newer version exists. With --publish never, the installer builds
+      # but latest.yml is never produced, so every already-installed
+      # Windows client's update check silently fails (caught by the
+      # .on('error') handler, logged to console, never shown to the user).
+      # GH_TOKEN is electron-builder's expected env var name for this
+      # (falls back to GITHUB_TOKEN too); the default Actions token already
+      # has the "contents: write" permission this workflow declares above.
       - name: Package Windows App (Electron Builder)
-        run: npx electron-builder --win --publish never
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # =========================
       # GitHub Release for Windows

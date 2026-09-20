@@ -136,6 +136,21 @@ export const EN = {
   statusUpcoming: "Upcoming",
   statusNone: "No call set",
   whatsapp: "WhatsApp",
+  tagManagementTitle: "Manage Tags",
+  tagManagementHint: "Rename a tag to update it everywhere it's used at once. Typing an existing tag's name merges the two into one.",
+  tagTabCustomers: "Customers",
+  tagTabSuppliers: "Suppliers",
+  tagsEmpty: "No tags added yet",
+  tagSearchPlaceholder: "Search tags...",
+  noTagSearchResults: "No tag matches that name",
+  tagRenameBtn: "Save",
+  cancelBtn: "Cancel",
+  tagRenameConfirm: (oldTag, newTag, count, entityType) => {
+    const noun = entityType === "supplier" ? "supplier" : "customer";
+    return `"${oldTag}" will become "${newTag}" on ${count} ${noun}${count === 1 ? "" : "s"}. Continue?`;
+  },
+  exchangeRateLabel: "USD to EGP",
+  unifyCurrencyToggle: "Unify currency on Dashboard",
   excelTitle: "Excel Import / Export",
   exportBtn: "Export all visits (Excel)",
   importBtn: "Import from Excel file",
@@ -220,8 +235,21 @@ export const EN = {
   offerRejectionReasonPrompt: "Enter the reason the offer was rejected (optional):",
   rejectionModalTitle: "Rejection Reason",
   rejectionModalPlaceholder: "Type the reason here (optional)...",
+  rejectionModalReasonLabel: "Rejection reason",
+  rejectionModalReasonPlaceholder: "Choose a reason",
+  rejectionModalOtherLabel: "Describe the reason",
   rejectionModalConfirm: "Confirm Rejection",
   rejectionModalCancel: "Cancel",
+  // Predefined rejection reasons — see domain.js#REJECTION_REASON_IDS.
+  rejectionReasons: {
+    price: "Price higher than a competitor",
+    timing: "Bad timing",
+    chose_other_supplier: "Customer chose another supplier",
+    project_postponed: "Project postponed",
+    not_needed_now: "Not needed right now",
+    payment_terms: "Payment terms",
+    other: "Other reason",
+  },
   confirmModalConfirm: "Confirm",
   confirmModalCancel: "Cancel",
   confirmModalOk: "OK",
@@ -307,21 +335,27 @@ export const EN = {
   dashPeriodTo: "to",
   dashSector: "Sector",
   dashAllSectors: "All Sectors",
+  dashTabOverview: "Overview",
+  dashTabSales: "Sales",
+  dashTabCustomers: "Customers & offers",
   dashCardVisits: "Total Visits",
   dashCardOffersCount: "Offers",
   dashCardOffersValue: "Total Offers Value",
   dashOffersConverted: "Converted",
-  dashVisitsPerformance: "Visits Performance",
   dashOffersSection: "Offers",
   dashOffersTotalLabel: "Offers",
   dashOffersTotalValueLabel: "Total Offers Value",
   dashPipeline: "Sales Pipeline",
   dashSalesPerformance: "Sales Performance",
+  // Rejection-reasons analytics report (Dashboard)
+  dashRejectionReport: "Rejection Reasons Analytics",
+  dashRejectionReportHint: "Most common rejection reasons in the selected period",
+  dashRejectionReportEmpty: "No rejected offers in this period",
+  dashRejectionReportByRep: "Rejection reasons by rep",
+  dashRejectionReportPct: (n) => `${n}% of total rejected`,
   dashAvgDealSize: "Average Deal Size",
   dashWinRate: "Win Rate",
   dashWinRateSample: (n) => `of ${n} decided deals`,
-  dashOffersValueTrend: "Offers Value Trend (EG)",
-  dashOffersValueTrendUSD: "Offers Value Trend ($)",
   dashPointsSuffix: "pts",
   dashNoOffersYet: "Not enough offers to calculate",
   dashCompareToggle: "Compare to previous month",
@@ -336,12 +370,6 @@ export const EN = {
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
   ],
-
-  // Location / maps (GPS at time of logging a visit)
-  openInMaps: "Open last location on map",
-  lastVisitLocationLabel: "Last visit location",
-  locationDeniedHint: "Visit logged, but location wasn't captured (permission denied or unsupported device)",
-  visitLocationPin: "Location",
 
   // Alerts center (collapsible banner group on the customer list)
   alertsCenterTitle: "Alerts",
@@ -443,4 +471,51 @@ export const EN = {
   dashPdfColDate: "Date",
   dashPdfColSector: "Sector",
   dashPdfColStage: "Stage",
+  dashPdfPageOf: (page, total) => `Page ${page} of ${total}`,
+
+  // Top clients (Dashboard) — ranked list of the highest-value customers
+  // in the selected period, shown as a tab inside SalesAnalysisCard.
+  dashTopClients: "Top Clients",
+  dashTopClientsEmpty: "Not enough offers in this period to rank clients",
+  dashTopClientsOffersCount: (n) => `${n} offer${n === 1 ? "" : "s"}`,
+
+  // Sector breakdown (Dashboard) — side-by-side comparison of every
+  // sector's numbers, shown only when "All Sectors" is selected.
+  dashSectorBreakdown: "Sector Comparison",
+  dashSectorBreakdownHint: "Each sector's performance over the same selected period",
+  dashSectorBreakdownEmpty: "No activity in any sector during this period",
+
+  // Stale (in-progress) offers surfaced directly on the Dashboard — same
+  // definition/source as the Alerts Center on the customer list screen
+  // (see useFilteredData.js), just scoped by the Dashboard's own sector
+  // filter for consistency with everything else on the page.
+  dashStaleOffersTitle: "Offers Needing Follow-up",
+
+  // Unified Admin Audit Log (owner/reviewer only) — see AuditLog.jsx and
+  // src/hooks/useAuditLog.js.
+  auditLogTitle: "Audit Log",
+  auditLogBtn: "Audit Log",
+  auditLogHint: "Every customer and supplier change, in one place",
+  auditLogEmpty: "No activity logged yet",
+  auditLogLoadError: "Failed to load the audit log",
+  auditLogFilterUser: "User",
+  auditLogFilterAction: "Action",
+  auditLogFilterEntity: "Type",
+  auditLogFilterFrom: "From",
+  auditLogFilterTo: "To",
+  auditLogFilterAll: "All",
+  auditLogClearFilters: "Clear filters",
+  auditLogEntityCustomer: "Customer",
+  auditLogEntitySupplier: "Supplier",
+  auditLogActions: {
+    create: "Created",
+    update: "Updated",
+    delete: "Deleted",
+    restore: "Restored",
+    approve: "Edit approved",
+    rollback: "Edit rolled back",
+  },
+  auditLogOldValue: "Old",
+  auditLogNewValue: "New",
+  auditLogNoDetails: "No field details",
 };

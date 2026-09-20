@@ -1,4 +1,3 @@
-import React from "react";
 import { Trash2, AlertTriangle, Check, RotateCcw } from "lucide-react";
 import { DANGER, SUCCESS, TEXT, MUTED, LINE, SURFACE } from "../theme";
 

@@ -1,4 +1,4 @@
-import { STAGE_IDS, OFFER_STATUS_IDS, CURRENCY_IDS } from "./domain";
+import { STAGE_IDS, OFFER_STATUS_IDS, CURRENCY_IDS, SECTOR_IDS } from "./domain";
 import { parseVisitDate, sumOffersByCurrency, getVisitEvents, toJsDate } from "./helpers";
 
 // Pure calculation logic for the Dashboard screen — period resolution
@@ -189,9 +189,68 @@ export function buildOfferBreakdown(offersByStatus) {
   };
 }
 
-// Builds a per-day (single month) or per-month (multi-month range) bucket
-// array of offer values for one currency, used to feed a value-trend
-// BarChart.
+// Rejection-reasons analytics report — groups the rejected offers already
+// in `offersInRange` (same period-filtered set the Sales Performance
+// section uses, filtered by offerDate like everything else on the
+// Dashboard) by their rejectionReasonId, plus a by-rep breakdown for
+// comparing reps. Offers rejected before this feature existed (or ones
+// where the picker somehow left reasonId unset) fall back to the "other"
+// bucket via rejectionReasonId || "other", so old data still counts
+// instead of silently disappearing from the report.
+export function computeRejectionReasonsReport(offersInRange, t) {
+  const rejected = (offersInRange || []).filter((o) => o.status === "rejected");
+  const total = rejected.length;
+
+  const reasonCounts = {};
+  rejected.forEach((o) => {
+    // Any id Firestore has that isn't (or is no longer) one of the known
+    // reasons collapses into the same "other" bucket as offers with no
+    // reasonId at all, so they show up as one row instead of one per
+    // unrecognized id that happen to share the same "other" label.
+    const rawId = o.rejectionReasonId || "other";
+    const id = t.rejectionReasons[rawId] ? rawId : "other";
+    reasonCounts[id] = (reasonCounts[id] || 0) + 1;
+  });
+
+  // Round each share down first, then hand the leftover percentage points
+  // (one each) to the entries with the largest fractional remainder, so
+  // the displayed percentages always add up to exactly 100.
+  const entries = Object.entries(reasonCounts).map(([id, count]) => {
+    const rawPct = total > 0 ? (count / total) * 100 : 0;
+    return { id, count, floor: Math.floor(rawPct), remainder: rawPct - Math.floor(rawPct) };
+  });
+  let leftover = total > 0 ? 100 - entries.reduce((sum, e) => sum + e.floor, 0) : 0;
+  entries
+    .slice()
+    .sort((a, b) => b.remainder - a.remainder)
+    .forEach((e) => {
+      if (leftover > 0) {
+        e.floor += 1;
+        leftover -= 1;
+      }
+    });
+
+  const byReason = entries
+    .map(({ id, count, floor }) => ({
+      id,
+      label: t.rejectionReasons[id] || t.rejectionReasons.other,
+      count,
+      pct: floor,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const repCounts = {};
+  rejected.forEach((o) => {
+    const name = o.rejectedBy || t.unknownUser;
+    repCounts[name] = (repCounts[name] || 0) + 1;
+  });
+  const byRep = Object.entries(repCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return { total, byReason, byRep };
+}
+
 export function buildOffersChartData(offersInRange, currency, granularity, start, end, months) {
   const inCurrency = (o) => (o.currency || "EGP") === currency;
 
@@ -315,4 +374,83 @@ export function computePeriodStats(visits, start, end, sector, isSingleMonth) {
     offersByStatus,
     pipeline,
   };
+}
+
+// Top clients in the selected period, ranked by offer value. Ranked by EGP
+// total first (EGP is this app's default/dominant reporting currency —
+// dashCurrency, avgDealSize, etc. all default to it), then USD total, then
+// offer count, as tiebreakers — never by a combined EGP+USD number, since
+// mixing currencies into one sortable amount would be exactly the kind of
+// misleading total avgDealSize/buildOfferBreakdown above deliberately
+// avoid. `limit` caps how many rows come back (the Dashboard only wants a
+// short "top N" list, not the full customer roster).
+export function computeTopClients(offersInRange, limit = 5) {
+  const byCustomer = new Map();
+  (offersInRange || []).forEach((o) => {
+    const key = o.customerId || o.customerName;
+    if (!key) return;
+    if (!byCustomer.has(key)) {
+      byCustomer.set(key, {
+        customerId: o.customerId,
+        customerName: o.customerName || "",
+        sector: o.sector,
+        offers: [],
+      });
+    }
+    byCustomer.get(key).offers.push(o);
+  });
+
+  return Array.from(byCustomer.values())
+    .map((c) => ({
+      customerId: c.customerId,
+      customerName: c.customerName,
+      sector: c.sector,
+      offersCount: c.offers.length,
+      totals: sumOffersByCurrency(c.offers),
+    }))
+    .sort((a, b) => {
+      if (b.totals.EGP !== a.totals.EGP) return b.totals.EGP - a.totals.EGP;
+      if (b.totals.USD !== a.totals.USD) return b.totals.USD - a.totals.USD;
+      return b.offersCount - a.offersCount;
+    })
+    .slice(0, limit);
+}
+
+// Per-sector breakdown for the selected period — lets the Dashboard show
+// every sector's numbers side by side instead of making the person flip
+// the sector dropdown one value at a time to compare them. Reuses
+// computePeriodStats itself (one call per sector) rather than duplicating
+// its filtering logic, so this can never drift from what the "all
+// sectors" / single-sector views already compute.
+export function computeSectorBreakdown(visits, start, end, isSingleMonth) {
+  return SECTOR_IDS.map((id) => {
+    const sectorStats = computePeriodStats(visits, start, end, id, isSingleMonth);
+    return {
+      id,
+      visitsCount: sectorStats.visitsCount,
+      offersCount: sectorStats.offersCount,
+      offersValueTotals: sectorStats.offersValueTotals,
+      winRate: computeWinRate(sectorStats.offersByStatus),
+    };
+  });
+}
+
+// Stage-to-stage drop-off, computed from the *current* pipeline snapshot
+// (how many customers sit at each stage right now), not from historical
+// stage-change tracking — activityLog only stores a localized sentence per
+// stage change ("تم تغيير المرحلة إلى..."), not a structured from/to pair,
+// so a true historical cohort funnel isn't available without a data-model
+// change. This still answers the useful question "of everyone who reached
+// the previous stage, what fraction is now at this one" for the current
+// snapshot, which is the standard reading of a sales funnel chart. The
+// first stage in STAGE_IDS is always the 100% baseline; a stage with no
+// predecessor volume (previous count is 0) has no meaningful percentage
+// and is reported as null rather than a divide-by-zero artifact.
+export function computeStageConversionRates(pipeline) {
+  return STAGE_IDS.map((id, idx) => {
+    const count = pipeline[id] || 0;
+    if (idx === 0) return { id, count, pct: null };
+    const prevCount = pipeline[STAGE_IDS[idx - 1]] || 0;
+    return { id, count, pct: prevCount > 0 ? (count / prevCount) * 100 : null };
+  });
 }

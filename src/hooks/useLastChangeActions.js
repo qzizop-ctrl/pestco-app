@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { updateDoc, deleteDoc, deleteField } from "firebase/firestore";
 import { computeRollbackFields } from "../lastChange";
+import { reportException } from "../sentry";
 
 // ============================================================================
 // Shared "owner review" actions for a pending last_change on either a
@@ -28,9 +29,16 @@ import { computeRollbackFields } from "../lastChange";
 //   ("Customer permanently deleted." vs "Supplier permanently deleted."),
 //   since that wording differs between customers and suppliers.
 // ============================================================================
+// onAudit (optional): (action) => void — called after a successful
+// approve/rollback/confirmDelete/restore so the caller can write a
+// matching entry to the unified Audit Log (see useAuditLog.js). Kept as a
+// single callback rather than importing logAudit here directly, since this
+// hook is deliberately entity-agnostic (customer vs supplier) and has no
+// entityType/entityName/ownerUid of its own — the caller (CustomerDetail.jsx
+// / SupplierFormScreen) already has all of that.
 export function useLastChangeActions({
   getDocRef, isOwnerAccount, lastChange, t, onFinally, onDeleteSuccess,
-  deleteSuccessMsg, restoreSuccessMsg,
+  deleteSuccessMsg, restoreSuccessMsg, onAudit,
 }) {
   const [loadingAction, setLoadingAction] = useState(false);
 
@@ -55,8 +63,10 @@ export function useLastChangeActions({
       try {
         await updateDoc(docRef, { last_change: deleteField() });
         alert(t.approveSuccessMsg);
+        onAudit && onAudit("approve");
       } catch (err) {
         console.error("last_change approve failed:", err);
+        reportException(err, { context: "last_change approve failed" });
         alert(t.approveErrorMsg(err.message));
       }
     });
@@ -69,8 +79,10 @@ export function useLastChangeActions({
         rollbackPayload.last_change = deleteField();
         await updateDoc(docRef, rollbackPayload);
         alert(t.rollbackSuccessMsg);
+        onAudit && onAudit("rollback");
       } catch (err) {
         console.error("last_change rollback failed:", err);
+        reportException(err, { context: "last_change rollback failed" });
         alert(t.rollbackErrorMsg(err.message));
       }
     });
@@ -81,9 +93,11 @@ export function useLastChangeActions({
       try {
         await deleteDoc(docRef);
         if (deleteSuccessMsg) alert(deleteSuccessMsg);
+        onAudit && onAudit("approve");
         onDeleteSuccess && onDeleteSuccess();
       } catch (err) {
         console.error("last_change confirm-delete failed:", err);
+        reportException(err, { context: "last_change confirm-delete failed" });
         alert(t.deleteFinalErrorMsg(err.message));
       }
     });
@@ -94,8 +108,10 @@ export function useLastChangeActions({
       try {
         await updateDoc(docRef, { deleted: deleteField(), last_change: deleteField() });
         if (restoreSuccessMsg) alert(restoreSuccessMsg);
+        onAudit && onAudit("restore");
       } catch (err) {
         console.error("last_change restore failed:", err);
+        reportException(err, { context: "last_change restore failed" });
         alert(t.restoreErrorMsg(err.message));
       }
     });

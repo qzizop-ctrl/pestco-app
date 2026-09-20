@@ -44,7 +44,7 @@
 import { Capacitor } from "@capacitor/core";
 import { stageColor, PRIMARY } from "./theme";
 import { STAGE_IDS, OFFER_STATUS_IDS } from "./domain";
-import { fmtMoney, fmtOffersTotals } from "./helpers";
+import { fmtMoney, fmtUnifiedOrSplit } from "./helpers";
 
 // The report always renders on a plain white/light background regardless of
 // the app's current theme (dark mode) — a report meant for printing/sharing
@@ -94,13 +94,62 @@ function chunkArray(arr, size) {
   return chunks.length > 0 ? chunks : [[]];
 }
 
+// Rejection-reasons analytics section — mirrors the on-screen "Rejection
+// Reasons Analytics" tab (see computeRejectionReasonsReport in
+// dashboardCalculations.js / SalesAnalysisCard.jsx). This used to be shown
+// on screen only and left out of the exported report entirely, even though
+// it's one of the more actionable sections for a manager reading the PDF
+// later rather than looking at the live dashboard. Bounded by
+// REJECTION_REASON_IDS (a handful of fixed reasons) plus one row per rep
+// who has a rejection in the period — small either way, so like the
+// pipeline/sales-performance tables above this is safe inside the
+// fixed-size front matter rather than needing its own chunked pages.
+function buildRejectionSectionHtml({ t, rejectionReport }) {
+  const align = t.dir === "rtl" ? "right" : "left";
+
+  if (!rejectionReport || rejectionReport.total === 0) {
+    return `
+      ${sectionTitle(t.dashRejectionReport)}
+      <div style="font-size:12px;color:${MUTED_HEX};padding:4px 0 10px;">${esc(t.dashRejectionReportEmpty)}</div>
+    `;
+  }
+
+  const reasonRows = rejectionReport.byReason.map((r) => [
+    r.label, String(r.count), t.dashRejectionReportPct(r.pct),
+  ]);
+  const reasonTable = simpleTable({
+    headers: [t.dashRejectionReport, "#", "%"],
+    rows: reasonRows,
+    align,
+  });
+
+  const repSection = rejectionReport.byRep.length > 1
+    ? `
+      <div style="font-size:12px;font-weight:700;color:${MUTED_HEX};margin:10px 0 6px;">${esc(t.dashRejectionReportByRep)}</div>
+      ${simpleTable({
+        headers: [t.dashRejectionReportByRep, "#"],
+        rows: rejectionReport.byRep.map((r) => [r.name, String(r.count)]),
+        align,
+      })}
+    `
+    : "";
+
+  return `
+    ${sectionTitle(t.dashRejectionReport)}
+    ${reasonTable}
+    ${repSection}
+  `;
+}
+
 // Front-matter HTML: header, summary cards, pipeline, sales-performance
-// table. Size of this is fixed by the app's own fixed set of stages/status
-// values — it never grows with how much data is in the selected period, so
-// it's always safe to render as a single container.
+// table, rejection-reasons breakdown. Size of this is fixed by the app's
+// own fixed set of stages/status/rejection-reason values — it never grows
+// with how much data is in the selected period, so it's always safe to
+// render as a single container.
 function buildFrontMatterHtml({
   t, stats, periodLabel, sectorLabel,
   avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
+  rejectionReport, exchangeRate, unifyCurrency,
 }) {
   const align = t.dir === "rtl" ? "right" : "left";
   const periodLine = t.dashPdfPeriod(periodLabel);
@@ -112,7 +161,7 @@ function buildFrontMatterHtml({
     [t.dashCardVisits, String(stats.visitsCount)],
     [t.dashPeriodCustomersLabel, String(stats.customersCount)],
     [t.dashCardOffersCount, String(stats.offersCount)],
-    [t.dashCardOffersValue, fmtOffersTotals(stats.offersValueTotals, t) || `0 ${t.dashCurrency}`],
+    [t.dashCardOffersValue, fmtUnifiedOrSplit(stats.offersValueTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`],
     [t.dashAvgDealSize, avgDealSize === null
       ? t.dashNoOffersYet
       : `${fmtMoney(avgDealSize)} ${t.dashCurrency}${avgDealSizeUSD !== null ? ` / ${fmtMoney(avgDealSizeUSD)} ${t.currencies.USD}` : ""}`],
@@ -140,7 +189,7 @@ function buildFrontMatterHtml({
 
   const offersByStatusRows = OFFER_STATUS_IDS.map((id) => {
     const info = stats.offersByStatus[id] || { count: 0, totals: {} };
-    const valueText = fmtOffersTotals(info.totals, t) || "—";
+    const valueText = fmtUnifiedOrSplit(info.totals, t, exchangeRate, unifyCurrency) || "—";
     return [t.offerStatuses[id], String(info.count), valueText];
   });
 
@@ -166,13 +215,15 @@ function buildFrontMatterHtml({
 
       ${sectionTitle(t.dashSalesPerformance)}
       ${simpleTable({ headers: [t.dashOffersTotalLabel, "#", t.dashOffersTotalValueLabel], rows: offersByStatusRows, align })}
+
+      ${buildRejectionSectionHtml({ t, rejectionReport })}
     </div>
   `;
 }
 
 // One chunk of the offers list (ROWS_PER_CHUNK rows or fewer), as its own
 // small, self-contained container.
-function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk }) {
+function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk, trailingHtml = "" }) {
   const align = t.dir === "rtl" ? "right" : "left";
   const title = isFirstChunk ? t.dashPdfOffersListSection : `${t.dashPdfOffersListSection} (${t.dashPdfContinued || "تابع"})`;
   const body = rows.length > 0
@@ -187,38 +238,18 @@ function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk }) {
     <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;color:${TEXT_HEX};">
       ${sectionTitle(title)}
       ${body}
+      ${trailingHtml}
     </div>
   `;
 }
 
-// One chunk of the customers list, same idea as offers above.
-function buildCustomersChunkHtml({ t, rows, isFirstChunk }) {
-  const align = t.dir === "rtl" ? "right" : "left";
-  const title = isFirstChunk ? t.dashPdfCustomersSection : `${t.dashPdfCustomersSection} (${t.dashPdfContinued || "تابع"})`;
-  const body = rows.length > 0
-    ? simpleTable({
-        headers: [t.dashPdfColCompany, t.dashPdfColSector, t.dashPdfColStage, t.visitDateRow],
-        rows,
-        align,
-      })
-    : `<div style="font-size:12px;color:${MUTED_HEX};padding:10px 0;">${esc(t.dashPdfNoCustomers)}</div>`;
-
-  return `
-    <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;color:${TEXT_HEX};">
-      ${sectionTitle(title)}
-      ${body}
-    </div>
-  `;
-}
-
-function buildFooterHtml({ t }) {
-  return `
-    <div style="width:100%;box-sizing:border-box;padding:28px;background:#FFFFFF;font-family:Tahoma,Arial,sans-serif;">
-      <div style="padding-top:12px;border-top:1px solid ${LINE_HEX};font-size:10px;color:${MUTED_HEX};text-align:center;">
-        ${esc(t.dashPdfFooterNote)}
-      </div>
-    </div>
-  `;
+// Small footer fragment — appended to the bottom of whichever chunk turns
+// out to be the actual last page of content (see generateDashboardPdf),
+// rather than rendered as its own container. Giving it a dedicated
+// renderHtmlChunk call used to mean a whole extra A4 page whose only
+// content was this one short line — i.e. a page that looked blank.
+function footerFragmentHtml(t) {
+  return `<div style="padding-top:12px;margin-top:20px;border-top:1px solid ${LINE_HEX};font-size:10px;color:${MUTED_HEX};text-align:center;">${esc(t.dashPdfFooterNote)}</div>`;
 }
 
 // Builds and downloads the PDF. `opts` mirrors what the Dashboard already
@@ -226,7 +257,7 @@ function buildFooterHtml({ t }) {
 // so this never re-derives its own numbers — the report always matches
 // exactly what's on screen for the selected year/month/sector.
 export async function generateDashboardPdf(opts) {
-  const { t, offersList = [], customersList = [] } = opts;
+  const { t, offersList = [] } = opts;
 
   const [{ default: html2canvas }, jspdfModule] = await Promise.all([
     import("html2canvas"),
@@ -292,10 +323,10 @@ export async function generateDashboardPdf(opts) {
   }
 
   try {
-    // 1) Fixed-size front matter — always safe as a single container.
-    await renderHtmlChunk(buildFrontMatterHtml(opts));
-
-    // 2) Offers list, split into fixed-size row batches.
+    // 1) Offers list, split into fixed-size row batches. chunkArray always
+    // returns at least one chunk (an empty one, rendered as the "no
+    // offers" placeholder, when offersList is empty) — so there's always
+    // exactly one true last chunk to attach the footer to below.
     const offerRows = offersList.map((o) => [
       o.customerName || t.noCompanyName,
       o.name || "",
@@ -304,28 +335,27 @@ export async function generateDashboardPdf(opts) {
       o.offerDate || "",
     ]);
     const offerChunks = chunkArray(offerRows, ROWS_PER_CHUNK);
+    const footerHtml = footerFragmentHtml(t);
+
+    // 2) Fixed-size front matter — always safe as a single container.
+    await renderHtmlChunk(buildFrontMatterHtml(opts));
+
+    // 3) Offers list. The footer note is attached to the bottom of the
+    // last batch here — not rendered as its own page — so the report
+    // never ends on a near-blank page holding only that one line.
     for (let i = 0; i < offerChunks.length; i++) {
+      const isLastChunk = i === offerChunks.length - 1;
       await renderHtmlChunk(buildOffersChunkHtml({
-        t, rows: offerChunks[i], isFirstChunk: i === 0, isLastChunk: i === offerChunks.length - 1,
+        t, rows: offerChunks[i], isFirstChunk: i === 0, isLastChunk,
+        trailingHtml: isLastChunk ? footerHtml : "",
       }));
     }
 
-    // 3) Customers list, same batching.
-    const customerRows = customersList.map((v) => [
-      v.companyName || t.noCompanyName,
-      t.sectors[v.sector] || t.sectors.private,
-      v.stage ? (t.stages[v.stage] || "") : t.stageNone,
-      v.visitDate || t.noVisitYet,
-    ]);
-    const customerChunks = chunkArray(customerRows, ROWS_PER_CHUNK);
-    for (let i = 0; i < customerChunks.length; i++) {
-      await renderHtmlChunk(buildCustomersChunkHtml({
-        t, rows: customerChunks[i], isFirstChunk: i === 0,
-      }));
-    }
-
-    // 4) Footer note, on its own small final page.
-    await renderHtmlChunk(buildFooterHtml({ t }));
+    // 4) Page numbers, stamped onto every page now that the final page
+    // count is known — has to happen after all content is in, since
+    // chunks upstream (offers) don't know the eventual total while
+    // they're being rendered.
+    await addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight });
 
     const dateSuffix = new Date().toISOString().slice(0, 10);
     const fileName = `pestco_report_${dateSuffix}.pdf`;
@@ -341,6 +371,54 @@ export async function generateDashboardPdf(opts) {
     // Surface generation/save failures to the caller instead of letting
     // them disappear silently — see the Dashboard button's try/catch.
     throw err;
+  }
+}
+
+// Stamps "Page X of Y" (localized — see t.dashPdfPageOf) onto every page of
+// the finished PDF, small and centered at the bottom. Same html2canvas
+// render-as-image approach as everything else in this file (Arabic needs
+// the browser's own text engine, not jsPDF's built-in fonts — see the
+// file-level comment at the top), but as a transparent PNG overlay rather
+// than a full opaque page image, since this has to sit on top of content
+// that's already on each page rather than replacing it. Run once at the
+// end, after every content chunk above has already been added, because
+// the total page count isn't known until then.
+async function addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight }) {
+  const totalPages = pdf.internal.getNumberOfPages();
+  if (totalPages === 0) return;
+
+  for (let page = 1; page <= totalPages; page++) {
+    const container = document.createElement("div");
+    container.setAttribute("dir", t.dir);
+    container.style.position = "fixed";
+    container.style.top = "0";
+    container.style.left = "-10000px";
+    container.style.width = "260px";
+    container.style.zIndex = "-1";
+    container.style.fontFamily = "Tahoma, Arial, sans-serif";
+    container.style.fontSize = "11px";
+    container.style.fontWeight = "700";
+    container.style.color = MUTED_HEX;
+    container.style.textAlign = "center";
+    container.style.padding = "2px 0";
+    container.textContent = t.dashPdfPageOf(page, totalPages);
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, {
+        scale: RENDER_SCALE,
+        backgroundColor: null,
+        useCORS: true,
+      });
+      const imgWidth = 120;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const imgData = canvas.toDataURL("image/png");
+
+      pdf.setPage(page);
+      pdf.addImage(imgData, "PNG", (pageWidth - imgWidth) / 2, pageHeight - imgHeight - 16, imgWidth, imgHeight);
+    } finally {
+      document.body.removeChild(container);
+    }
   }
 }
 

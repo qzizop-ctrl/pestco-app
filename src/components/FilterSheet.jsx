@@ -8,7 +8,6 @@
 // closes the sheet; "Clear all" resets every filter at once.
 // ============================================================================
 
-import React from "react";
 import {
   X, Tag, ListFilter, Clock, CalendarDays,
   Building2, GitBranch, SlidersHorizontal,

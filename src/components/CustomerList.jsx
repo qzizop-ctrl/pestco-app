@@ -3,7 +3,7 @@
 // itself), extracted from App.jsx. Presentational only.
 // ============================================================================
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Search,
   SlidersHorizontal, Building2, Plus, Bell,
@@ -19,7 +19,6 @@ export default function CustomerListScreen({
   t,
   isOnline,
   dueReminders,
-  staleOffers,
   staleCustomers,
   openDetail,
   query,
@@ -70,7 +69,6 @@ export default function CustomerListScreen({
         t={t}
         isOnline={isOnline}
         dueReminders={dueReminders}
-        staleOffers={staleOffers}
         staleCustomers={staleCustomers}
         openDetail={openDetail}
       />

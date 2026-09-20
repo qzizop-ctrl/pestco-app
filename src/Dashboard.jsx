@@ -1,16 +1,15 @@
-import React, { useMemo, useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, TrendingDown, ChevronLeft, ChevronDown, Percent, DollarSign, FileDown, X } from "lucide-react";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-} from "recharts";
-import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, GOLD, GOLD_SOFT, SURFACE, SURFACE_SUBTLE } from "./theme";
+import { useMemo, useState } from "react";
+import { Calendar, Users, FileText, Wallet, TrendingUp, ChevronDown, Percent, DollarSign, FileDown } from "lucide-react";
+import { PRIMARY, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE, SUCCESS, DASH_NEGATIVE, DASH_PENDING } from "./theme";
 import { STRINGS } from "./i18n";
-import { SECTOR_IDS, STAGE_IDS, OFFER_STATUS_IDS } from "./domain";
-import { parseVisitDate, fmtMoney, fmtOffersTotals, sumOffersByCurrency, toJsDate } from "./helpers";
+import { SECTOR_IDS } from "./domain";
+import { parseVisitDate, fmtMoney, fmtUnifiedOrSplit, sumOffersByCurrency, toJsDate } from "./helpers";
 import { generateDashboardPdf } from "./pdfReport";
+import { reportException } from "./sentry";
 import {
   resolvePeriod, pctChange, computeAvgDealSizeForCurrency, computeWinRate,
-  computeDecidedCount, buildOfferBreakdown, buildOffersChartData, computePeriodStats,
+  computeDecidedCount, buildOfferBreakdown, computePeriodStats,
+  computeRejectionReasonsReport, computeTopClients, computeSectorBreakdown,
 } from "./dashboardCalculations";
 // The four components below used to be defined inline in this file (which
 // had grown past 990 lines). They're pure presentational pieces with no
@@ -19,11 +18,17 @@ import {
 import PeriodSheet from "./components/PeriodSheet";
 import SplitBar from "./components/SplitBar";
 import SummaryCard from "./components/SummaryCard";
-import SwipeableChartCard from "./components/SwipeableChartCard";
 import OffersListSection from "./components/OffersListSection";
 import CustomersAddedSection from "./components/CustomersAddedSection";
+import SalesAnalysisCard from "./components/SalesAnalysisCard";
+import StaleOffersCard from "./components/StaleOffersCard";
+import SectorBreakdownCard from "./components/SectorBreakdownCard";
 
-export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
+
+export default function Dashboard({
+  visits, lang, onOpenCustomer, showAlert, staleOffers = [],
+  exchangeRate = null, setExchangeRate = () => {}, unifyCurrency = false, setUnifyCurrency = () => {},
+}) {
   const t = STRINGS[lang];
   const now = new Date();
 
@@ -50,6 +55,14 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   const [sector, setSector] = useState("all");
   const [compare, setCompare] = useState(false);
   const [offerStatusFilter, setOfferStatusFilter] = useState("all");
+  // Which of the three Dashboard tabs (overview / sales / customers) is
+  // currently shown below the filter bar — see the tab bar in the render
+  // below. Kept as simple local UI state, not persisted.
+  const [activeTab, setActiveTab] = useState("overview");
+  // Within the "customers" tab, a second-level toggle between the offers
+  // list and the customers-added list — both used to be stacked one after
+  // the other, which made that tab long to scroll on an active month.
+  const [customersSubTab, setCustomersSubTab] = useState("offers");
 
   const resolved = useMemo(() => resolvePeriod(period, now, t), [period, t]);
   const isSingleMonth = resolved.granularity === "day";
@@ -67,8 +80,6 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   const avgDealSize = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "EGP"), [stats]);
   const prevAvgDealSize = useMemo(() => (prevStats ? computeAvgDealSizeForCurrency(prevStats.offersInRange, "EGP") : null), [prevStats]);
   const avgDealSizeUSD = useMemo(() => computeAvgDealSizeForCurrency(stats.offersInRange, "USD"), [stats]);
-  const hasEGPOffers = useMemo(() => stats.offersInRange.some((o) => (o.currency || "EGP") === "EGP"), [stats]);
-  const hasUSDOffers = useMemo(() => stats.offersInRange.some((o) => o.currency === "USD"), [stats]);
   const winRate = useMemo(() => computeWinRate(stats.offersByStatus), [stats]);
   const winRateDecidedCount = useMemo(() => computeDecidedCount(stats.offersByStatus), [stats]);
   const prevWinRate = useMemo(() => (prevStats ? computeWinRate(prevStats.offersByStatus) : null), [prevStats]);
@@ -76,79 +87,81 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   // Offer status breakdown used by the split bars on the Offers cards below.
   const offerBreakdown = useMemo(() => buildOfferBreakdown(stats.offersByStatus), [stats]);
 
+  // Rejection-reasons analytics — see dashboardCalculations.js. Reuses the
+  // same period/sector-filtered offersInRange as the rest of the Dashboard,
+  // so the report's date range is just the existing period picker above.
+  const rejectionReport = useMemo(() => computeRejectionReasonsReport(stats.offersInRange, t), [stats, t]);
+
+  // Same report for the previous period, used only to drive the "compare
+  // to previous month" deltas on the Rejection Reasons tab — null whenever
+  // compare is off, same convention as prevStats above.
+  const prevRejectionReport = useMemo(
+    () => (compare && prevStats ? computeRejectionReasonsReport(prevStats.offersInRange, t) : null),
+    [compare, prevStats, t]
+  );
+
+  // Top clients by offer value in the selected period — see
+  // computeTopClients in dashboardCalculations.js.
+  const topClients = useMemo(() => computeTopClients(stats.offersInRange, 5), [stats]);
+
+  // Every client (not just the current period's top 5) from the previous
+  // period, so a client who's in this period's top 5 can be compared even
+  // if they weren't themselves in last period's top 5 — SalesAnalysisCard
+  // looks each one up by customerId/customerName.
+  const prevTopClients = useMemo(
+    () => (compare && prevStats ? computeTopClients(prevStats.offersInRange, Infinity) : null),
+    [compare, prevStats]
+  );
+
+  // Every sector's numbers side by side, for the same period — only
+  // meaningful (and only computed) when no single sector is already
+  // selected, since with one sector picked there's nothing to compare.
+  // Also skipped entirely until the "sales" tab has actually been opened
+  // at least once — this is the priciest of the Dashboard's derived stats
+  // on a large visits list, and most sessions land on "overview" and
+  // never open "sales" at all.
+  const [salesTabVisited, setSalesTabVisited] = useState(false);
+  const sectorBreakdown = useMemo(
+    () => (sector === "all" && salesTabVisited ? computeSectorBreakdown(visits, resolved.start, resolved.end, isSingleMonth) : null),
+    [visits, resolved, isSingleMonth, sector, salesTabVisited]
+  );
+
+  // Stale (in-progress) offers relevant to the Dashboard's own sector
+  // filter — `staleOffers` itself comes from useFilteredData.js at the App
+  // level (same source AlertsCenter reads), deliberately NOT re-filtered
+  // by the Dashboard's period picker (see StaleOffersCard.jsx for why).
+  const staleOffersFiltered = useMemo(
+    () => (sector === "all" ? staleOffers : staleOffers.filter((o) => o.customer.sector === sector)),
+    [staleOffers, sector]
+  );
+
   const offersCountSegments = useMemo(() => ([
-    { key: "converted", label: t.dashOffersConverted, color: "#2F9E58", amount: offerBreakdown.convertedCount, display: offerBreakdown.convertedCount },
-    { key: "pending", label: t.offerStatuses.pending, color: "#C7A24A", amount: offerBreakdown.pendingCount, display: offerBreakdown.pendingCount },
-    { key: "rejected", label: t.offerStatuses.rejected, color: "#C4443A", amount: offerBreakdown.rejectedCount, display: offerBreakdown.rejectedCount },
+    { key: "converted", label: t.dashOffersConverted, color: SUCCESS, amount: offerBreakdown.convertedCount, display: offerBreakdown.convertedCount },
+    { key: "pending", label: t.offerStatuses.pending, color: DASH_PENDING, amount: offerBreakdown.pendingCount, display: offerBreakdown.pendingCount },
+    { key: "rejected", label: t.offerStatuses.rejected, color: DASH_NEGATIVE, amount: offerBreakdown.rejectedCount, display: offerBreakdown.rejectedCount },
   ]), [offerBreakdown, t]);
 
   const offersValueSegments = useMemo(() => ([
     {
-      key: "converted", label: t.dashOffersConverted, color: "#2F9E58",
+      key: "converted", label: t.dashOffersConverted, color: SUCCESS,
       amount: offerBreakdown.convertedCount,
-      display: fmtOffersTotals(offerBreakdown.convertedTotals, t) || `0 ${t.dashCurrency}`,
+      display: fmtUnifiedOrSplit(offerBreakdown.convertedTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`,
     },
     {
-      key: "pending", label: t.offerStatuses.pending, color: "#C7A24A",
+      key: "pending", label: t.offerStatuses.pending, color: DASH_PENDING,
       amount: offerBreakdown.pendingCount,
-      display: fmtOffersTotals(offerBreakdown.pendingTotals, t) || `0 ${t.dashCurrency}`,
+      display: fmtUnifiedOrSplit(offerBreakdown.pendingTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`,
     },
     {
-      key: "rejected", label: t.offerStatuses.rejected, color: "#C4443A",
+      key: "rejected", label: t.offerStatuses.rejected, color: DASH_NEGATIVE,
       amount: offerBreakdown.rejectedCount,
-      display: fmtOffersTotals(offerBreakdown.rejectedTotals, t) || `0 ${t.dashCurrency}`,
+      display: fmtUnifiedOrSplit(offerBreakdown.rejectedTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`,
     },
-  ]), [offerBreakdown, t]);
+  ]), [offerBreakdown, t, exchangeRate, unifyCurrency]);
 
   const customersAddedLabel = useMemo(
     () => t.dashCustomersAddedLabel(resolved.rangeLabel),
     [t, resolved]
-  );
-
-  const chartData = useMemo(() => {
-    if (resolved.granularity === "month") {
-      const spansMultipleYears = resolved.start.getFullYear() !== resolved.end.getFullYear();
-      const buckets = [];
-      let cursor = new Date(resolved.start.getFullYear(), resolved.start.getMonth(), 1);
-      const endCursor = new Date(resolved.end.getFullYear(), resolved.end.getMonth(), 1);
-      while (cursor <= endCursor) {
-        buckets.push({
-          year: cursor.getFullYear(),
-          month: cursor.getMonth(),
-          label: spansMultipleYears
-            ? `${t.months[cursor.getMonth()].slice(0, 3)} ${String(cursor.getFullYear()).slice(2)}`
-            : t.months[cursor.getMonth()].slice(0, 3),
-          count: 0,
-        });
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-      }
-      stats.visitEventsInRange.forEach((e) => {
-        const d = parseVisitDate(e.date);
-        if (!d) return;
-        const bucket = buckets.find((b) => b.year === d.getFullYear() && b.month === d.getMonth());
-        if (bucket) bucket.count += 1;
-      });
-      return buckets;
-    }
-    const daysInMonth = new Date(resolved.start.getFullYear(), resolved.start.getMonth() + 1, 0).getDate();
-    const buckets = Array.from({ length: daysInMonth }, (_, i) => ({ label: String(i + 1), count: 0 }));
-    stats.visitEventsInRange.forEach((e) => {
-      const d = parseVisitDate(e.date);
-      if (d) buckets[d.getDate() - 1].count += 1;
-    });
-    return buckets;
-  }, [stats, resolved, t]);
-
-  // Offers value trend, one chart per currency (mixing currencies into one
-  // bar height would be misleading). The USD chart only renders below if
-  // there's actually USD data in the selected period.
-  const offersChartData = useMemo(
-    () => buildOffersChartData(stats.offersInRange, "EGP", resolved.granularity, resolved.start, resolved.end, t.months),
-    [stats, resolved, t]
-  );
-  const offersChartDataUSD = useMemo(
-    () => buildOffersChartData(stats.offersInRange, "USD", resolved.granularity, resolved.start, resolved.end, t.months),
-    [stats, resolved, t]
   );
 
   // Customers behind the "Customers added" card above: the exact same set
@@ -180,9 +193,6 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
   }, [stats, offerStatusFilter]);
 
   const offersListValueTotals = sumOffersByCurrency(offersList);
-  const maxChartCount = Math.max(1, ...chartData.map((b) => b.count));
-  const maxOffersChartValue = Math.max(1, ...offersChartData.map((b) => b.value));
-  const maxOffersChartValueUSD = Math.max(1, ...offersChartDataUSD.map((b) => b.value));
 
   // ---- PDF report export ----
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -206,10 +216,12 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
         sectorLabel: sector === "all" ? null : t.sectors[sector],
         avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
         offersList: allOffersInPeriod,
-        customersList: periodCustomersList,
+        rejectionReport,
+        exchangeRate, unifyCurrency,
       });
     } catch (e) {
       console.error("PDF export failed:", e);
+      reportException(e, { context: "PDF export failed" });
       if (showAlert) showAlert(t.dashPdfError);
     } finally {
       setPdfBusy(false);
@@ -254,6 +266,56 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
           </select>
         </div>
 
+        <div
+          style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: "10px 12px" }}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold" style={{ color: TEXT }}>{t.unifyCurrencyToggle}</p>
+            <button
+              onClick={() => exchangeRate && setUnifyCurrency((v) => !v)}
+              aria-label={t.unifyCurrencyToggle}
+              aria-pressed={unifyCurrency && !!exchangeRate}
+              disabled={!exchangeRate}
+              className="btn-press"
+              style={{
+                width: 40, height: 22, borderRadius: 11, position: "relative",
+                background: unifyCurrency && exchangeRate ? GOLD : LINE,
+                border: "none", opacity: exchangeRate ? 1 : 0.5,
+                cursor: exchangeRate ? "pointer" : "not-allowed",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute", top: 2,
+                  left: unifyCurrency && exchangeRate ? 20 : 2,
+                  width: 18, height: 18, borderRadius: "50%", background: "#fff",
+                  transition: "left .15s",
+                }}
+              />
+            </button>
+          </div>
+
+          {/* The rate itself is entered right here, not in Settings — Settings
+              is owner/admin-only, but anyone who can see the Dashboard (any
+              member granted dashboard access) needs to be able to set their
+              own rate to actually use the toggle above. */}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs" style={{ color: MUTED }}>{t.exchangeRateLabel}:</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs" style={{ color: MUTED }}>1$ =</span>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={exchangeRate ?? ""}
+                onChange={(e) => setExchangeRate(e.target.value ? Number(e.target.value) : null)}
+                style={{ width: 68, padding: "4px 6px", borderRadius: 8, border: `1px solid ${LINE}`, background: SURFACE_SUBTLE, color: TEXT, textAlign: "center", fontSize: 12 }}
+              />
+              <span className="text-xs" style={{ color: MUTED }}>{t.currencies.EGP}</span>
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => setCompare((c) => !c)}
@@ -288,258 +350,210 @@ export default function Dashboard({ visits, lang, onOpenCustomer, showAlert }) {
         </div>
       </div>
 
-      {stats.visitsCount === 0 && (
-        <div
-          className="text-center"
-          style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 18, marginBottom: 14 }}
-        >
-          <p className="text-sm font-bold" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
-        </div>
+      {/* Section tabs — the rest of the Dashboard below the filter bar is
+          split into three panes (overview / sales / customers) instead of
+          one long stack, so a manager sees one focused group at a time.
+          The filter bar above (period/sector/compare/export) stays shared
+          across all three since it drives every tab's data. */}
+      <div
+        className="flex items-center gap-1 mb-4"
+        style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: 3 }}
+      >
+        {[
+          { key: "overview", label: t.dashTabOverview },
+          { key: "sales", label: t.dashTabSales },
+          { key: "customers", label: t.dashTabCustomers },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => {
+              setActiveTab(tab.key);
+              if (tab.key === "sales") setSalesTabVisited(true);
+            }}
+            className="btn-press flex-1 font-bold text-xs"
+            style={{
+              borderRadius: 9,
+              padding: "8px 0",
+              background: activeTab === tab.key ? PRIMARY : "transparent",
+              color: activeTab === tab.key ? "#fff" : MUTED,
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "overview" && (
+        <>
+          {/* Offers open for a while with no update — same list/threshold the
+              Alerts Center uses, surfaced here too since a manager reading the
+              Dashboard shouldn't have to switch screens to see it. */}
+          <StaleOffersCard t={t} staleOffers={staleOffersFiltered} onOpenCustomer={onOpenCustomer} />
+
+          {stats.visitsCount === 0 && (
+            <div
+              className="text-center"
+              style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 18, marginBottom: 14 }}
+            >
+              <p className="text-sm font-bold" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
+            </div>
+          )}
+
+          {/* Summary cards */}
+          <div className="flex flex-wrap gap-3 mb-5">
+            <SummaryCard
+              icon={Calendar}
+              label={t.dashCardVisits}
+              value={stats.visitsCount}
+              delta={compare ? (prevStats ? pctChange(stats.visitsCount, prevStats.visitsCount) : null) : undefined}
+              t={t}
+            />
+            <SummaryCard
+              icon={Users}
+              label={customersAddedLabel}
+              value={stats.customersAddedCount}
+              delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
+              t={t}
+            />
+            <SummaryCard
+              icon={FileText}
+              label={t.dashCardOffersCount}
+              value={stats.offersCount}
+              delta={compare ? (prevStats ? pctChange(stats.offersCount, prevStats.offersCount) : null) : undefined}
+              extra={<SplitBar segments={offersCountSegments} />}
+              t={t}
+            />
+            <SummaryCard
+              icon={Wallet}
+              label={t.dashCardOffersValue}
+              value={fmtUnifiedOrSplit(stats.offersValueTotals, t, exchangeRate, unifyCurrency, { showAllIfEmpty: true })}
+              delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
+              extra={<SplitBar segments={offersValueSegments} />}
+              t={t}
+            />
+            <SummaryCard
+              icon={DollarSign}
+              label={t.dashAvgDealSize}
+              value={
+      avgDealSize === null
+        ? t.dashNoOffersYet
+        : `${fmtMoney(avgDealSize, `${t.locale}-u-nu-latn`)} ${t.dashCurrency}`
+    }
+    subValue={
+      avgDealSizeUSD !== null
+        ? `${fmtMoney(avgDealSizeUSD, `${t.locale}-u-nu-latn`)} ${t.currencies.USD}`
+        : undefined
+    }
+              delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
+              t={t}
+            />
+            <SummaryCard
+              icon={Percent}
+              label={t.dashWinRate}
+              value={winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}%`}
+              subValue={winRate !== null ? t.dashWinRateSample(winRateDecidedCount) : undefined}
+              delta={
+                compare
+                  ? (prevStats && winRate !== null && prevWinRate !== null
+                      ? { points: winRate - prevWinRate }
+                      : null)
+                  : undefined
+              }
+              t={t}
+            />
+          </div>
+        </>
       )}
 
-      {/* Summary cards */}
-      <div className="flex flex-wrap gap-3 mb-5">
-        <SummaryCard
-          icon={Calendar}
-          label={t.dashCardVisits}
-          value={stats.visitsCount}
-          delta={compare ? (prevStats ? pctChange(stats.visitsCount, prevStats.visitsCount) : null) : undefined}
-          t={t}
-        />
-        <SummaryCard
-          icon={Users}
-          label={customersAddedLabel}
-          value={stats.customersAddedCount}
-          delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
-          t={t}
-        />
-        <SummaryCard
-          icon={FileText}
-          label={t.dashCardOffersCount}
-          value={stats.offersCount}
-          delta={compare ? (prevStats ? pctChange(stats.offersCount, prevStats.offersCount) : null) : undefined}
-          extra={<SplitBar segments={offersCountSegments} />}
-          t={t}
-        />
-        <SummaryCard
-          icon={Wallet}
-          label={t.dashCardOffersValue}
-          value={fmtOffersTotals(stats.offersValueTotals, t, { showAllIfEmpty: true })}
-          delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
-          extra={<SplitBar segments={offersValueSegments} />}
-          t={t}
-        />
-        <SummaryCard
-          icon={DollarSign}
-          label={t.dashAvgDealSize}
-          value={
-  avgDealSize === null
-    ? t.dashNoOffersYet
-    : `${fmtMoney(avgDealSize, `${t.locale}-u-nu-latn`)} ${t.dashCurrency}`
-}
-subValue={
-  avgDealSizeUSD !== null
-    ? `${fmtMoney(avgDealSizeUSD, `${t.locale}-u-nu-latn`)} ${t.currencies.USD}`
-    : undefined
-}
-          delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
-          t={t}
-        />
-        <SummaryCard
-          icon={Percent}
-          label={t.dashWinRate}
-          value={winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}%`}
-          subValue={winRate !== null ? t.dashWinRateSample(winRateDecidedCount) : undefined}
-          delta={
-            compare
-              ? (prevStats && winRate !== null && prevWinRate !== null
-                  ? { points: winRate - prevWinRate }
-                  : null)
-              : undefined
-          }
-          t={t}
-        />
-      </div>
+      {activeTab === "sales" && (
+        <>
+          {/* Every sector side by side for the same period — only shown when
+              "all sectors" is selected (see sectorBreakdown above). */}
+          {sectorBreakdown && (
+            <SectorBreakdownCard t={t} breakdown={sectorBreakdown} exchangeRate={exchangeRate} unifyCurrency={unifyCurrency} />
+          )}
 
-      {/* Visits performance + offers value trend(s), swiped between in one
-          card instead of stacked as separate cards — see
-          SwipeableChartCard above. Only pages with actual data are
-          included, so this still collapses to a single non-swipeable
-          chart when there are no offers in the selected period. */}
-      <SwipeableChartCard
-        pages={[
-          {
-            title: t.dashVisitsPerformance,
-            node: (
-              <div style={{ width: "100%", height: 180 }}>
-                <ResponsiveContainer>
-                  <BarChart data={chartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxChartCount]} />
-                    <Tooltip
-                      formatter={(v) => [v, t.dashCardVisits]}
-                      contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-                    />
-                    <Bar dataKey="count" fill={GOLD} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ),
-          },
-          ...(hasEGPOffers
-            ? [{
-                title: t.dashOffersValueTrend,
-                node: (
-                  <div style={{ width: "100%", height: 180 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={offersChartData} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValue]} />
-                        <Tooltip
-                          formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.dashCurrency}`, t.dashCardOffersValue]}
-                          contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-                        />
-                        <Bar dataKey="value" fill={PRIMARY_MID} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ),
-              }]
-            : []),
-          ...(hasUSDOffers
-            ? [{
-                title: t.dashOffersValueTrendUSD,
-                node: (
-                  <div style={{ width: "100%", height: 180 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={offersChartDataUSD} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={LINE} vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: MUTED }} interval={resolved.granularity === "month" ? 0 : "preserveStartEnd"} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: MUTED }} domain={[0, maxOffersChartValueUSD]} />
-                        <Tooltip
-                          formatter={(v) => [`${fmtMoney(v, t.locale)} ${t.currencies.USD}`, t.dashCardOffersValue]}
-                          contentStyle={{ direction: t.dir, borderRadius: 10, border: `1px solid ${LINE}`, fontSize: 12 }}
-                        />
-                        <Bar dataKey="value" fill={GOLD} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ),
-              }]
-            : []),
-        ]}
-      />
+          {/* Pipeline + Sales Performance + Rejection Reasons, combined into one
+              tabbed card — see SalesAnalysisCard.jsx for why these three used
+              to be separate cards and no longer are. */}
+          <SalesAnalysisCard
+            t={t}
+            stats={stats}
+            prevStats={prevStats}
+            compare={compare}
+            rejectionReport={rejectionReport}
+            prevRejectionReport={prevRejectionReport}
+            topClients={topClients}
+            prevTopClients={prevTopClients}
+            visits={visits}
+            onOpenCustomer={onOpenCustomer}
+            exchangeRate={exchangeRate}
+            unifyCurrency={unifyCurrency}
+          />
+        </>
+      )}
 
-      {/* Sales pipeline */}
-      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
-        <p className="font-bold text-sm mb-3" style={{ color: TEXT }}>{t.dashPipeline}</p>
-        <div className="flex items-center" style={{ gap: 4, overflowX: "auto" }}>
-          {[...STAGE_IDS, "none"].map((id, idx, arr) => {
-            const isLast = idx === arr.length - 1;
-            const label = id === "none" ? t.stageNone : t.stages[id];
-            const color = id === "none" ? MUTED : stageColor(id);
-            const count = stats.pipeline[id] || 0;
-            const isEmpty = count === 0;
-            return (
-              <React.Fragment key={id}>
-                <div className="flex flex-col items-center" style={{ flexShrink: 0, minWidth: 66, opacity: isEmpty ? 0.45 : 1 }}>
-                  <div
-                    className="flex items-center justify-center font-extrabold"
-                    style={{
-                      width: isEmpty ? 36 : 44,
-                      height: isEmpty ? 36 : 44,
-                      borderRadius: "50%",
-                      background: isEmpty ? SURFACE_SUBTLE : color,
-                      color: isEmpty ? MUTED : "#fff",
-                      border: isEmpty ? `1.4px solid ${LINE}` : "none",
-                      fontSize: isEmpty ? 13 : 15,
-                      transition: "width .15s, height .15s",
-                    }}
-                  >
-                    {count}
-                  </div>
-                  <span className="text-xs font-bold mt-1 text-center" style={{ color: MUTED }}>{label}</span>
-                </div>
-                {!isLast && (
-                  <ChevronLeft
-                    size={16}
-                    color={LINE}
-                    style={{ flexShrink: 0, transform: t.dir === "rtl" ? "none" : "rotate(180deg)" }}
-                  />
-                )}
-              </React.Fragment>
-            );
-          })}
-        </div>
-      </div>
+      {activeTab === "customers" && (
+        <>
+          {/* Second-level toggle — this tab used to show the offers list
+              and the customers-added list stacked one after another,
+              which meant a lot of scrolling once either list had more
+              than a handful of rows. */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => setCustomersSubTab("offers")}
+              className="btn-press font-bold text-xs"
+              style={{
+                flex: 1,
+                borderRadius: 10,
+                padding: "7px 0",
+                border: `1.4px solid ${customersSubTab === "offers" ? PRIMARY : LINE}`,
+                background: customersSubTab === "offers" ? PRIMARY : SURFACE,
+                color: customersSubTab === "offers" ? "#fff" : MUTED,
+              }}
+            >
+              {t.dashOffersSection}
+            </button>
+            <button
+              onClick={() => setCustomersSubTab("customers")}
+              className="btn-press font-bold text-xs"
+              style={{
+                flex: 1,
+                borderRadius: 10,
+                padding: "7px 0",
+                border: `1.4px solid ${customersSubTab === "customers" ? PRIMARY : LINE}`,
+                background: customersSubTab === "customers" ? PRIMARY : SURFACE,
+                color: customersSubTab === "customers" ? "#fff" : MUTED,
+              }}
+            >
+              {t.navCustomers}
+            </button>
+          </div>
 
-      {/* Sales performance: what got purchased, rejected, or is still pending */}
-      <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
-        <p className="font-bold text-sm mb-3" style={{ color: TEXT }}>{t.dashSalesPerformance}</p>
-        <div className="flex flex-wrap" style={{ gap: 10 }}>
-          {OFFER_STATUS_IDS.map((id) => {
-            const info = stats.offersByStatus[id] || { count: 0, totals: {} };
-            const valueText = fmtOffersTotals(info.totals, t);
-            const prevCount = prevStats ? (prevStats.offersByStatus[id] || { count: 0 }).count : null;
-            const delta = compare ? (prevStats ? pctChange(info.count, prevCount) : null) : undefined;
-            return (
-              <div
-                key={id}
-                style={{
-                  flex: "1 1 45%",
-                  minWidth: 140,
-                  background: SURFACE_SUBTLE,
-                  borderRadius: 12,
-                  padding: 10,
-                  borderTop: `3px solid ${offerStatusColor(id)}`,
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold" style={{ color: MUTED }}>{t.offerStatuses[id]}</span>
-                  <span className="font-extrabold" style={{ fontSize: 20, color: offerStatusColor(id) }}>{info.count}</span>
-                </div>
-                {valueText && (
-                  <p className="text-xs font-bold mt-1" style={{ color: TEXT, margin: "4px 0 0" }}>{valueText}</p>
-                )}
-                {delta !== undefined && (
-                  <div className="flex items-center gap-1 mt-1">
-                    {delta === null ? (
-                      <span className="text-xs" style={{ color: MUTED }}>{t.dashNoComparisonData}</span>
-                    ) : (
-                      <span
-                        className="flex items-center gap-1 text-xs font-bold"
-                        style={{ color: delta >= 0 ? "#2F9E58" : "#C4443A" }}
-                      >
-                        {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                        {Math.abs(delta).toFixed(0)}%
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+          {customersSubTab === "offers" && (
+            <OffersListSection
+              t={t}
+              offersList={offersList}
+              offerStatusFilter={offerStatusFilter}
+              setOfferStatusFilter={setOfferStatusFilter}
+              offersListValueTotals={offersListValueTotals}
+              visits={visits}
+              onOpenCustomer={onOpenCustomer}
+              exchangeRate={exchangeRate}
+              unifyCurrency={unifyCurrency}
+            />
+          )}
 
-      <OffersListSection
-        t={t}
-        offersList={offersList}
-        offerStatusFilter={offerStatusFilter}
-        setOfferStatusFilter={setOfferStatusFilter}
-        offersListValueTotals={offersListValueTotals}
-        visits={visits}
-        onOpenCustomer={onOpenCustomer}
-      />
-
-      <CustomersAddedSection
-        t={t}
-        customersAddedLabel={customersAddedLabel}
-        periodCustomersList={periodCustomersList}
-        onOpenCustomer={onOpenCustomer}
-      />
+          {customersSubTab === "customers" && (
+            <CustomersAddedSection
+              t={t}
+              customersAddedLabel={customersAddedLabel}
+              periodCustomersList={periodCustomersList}
+              onOpenCustomer={onOpenCustomer}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

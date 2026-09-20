@@ -7,9 +7,55 @@
 // or Excel changed; only the JSX moved.
 // ============================================================================
 
-import React, { useState } from "react";
-import { Copy, Trash2, Download, Upload, UserCheck, Eye, X, LayoutDashboard } from "lucide-react";
+import { useState } from "react";
+import { Copy, Trash2, Download, Upload, UserCheck, Eye, X, LayoutDashboard, History, ChevronRight, Search } from "lucide-react";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
+
+// One row in the "manage tags" card — shared by the customers and
+// suppliers tabs, since both need the exact same rename/merge UI, just
+// pointed at a different data source and rename function.
+function TagRow({ tag, count, isEditing, draft, onDraftChange, onStartEdit, onSave, onCancel, busy, t }) {
+  return (
+    <div style={{ background: SURFACE_SUBTLE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 10px" }}>
+      {isEditing ? (
+        <div className="flex items-center gap-2">
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => onDraftChange(e.target.value)}
+            style={{ flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 8, border: `1px solid ${LINE}`, background: SURFACE, color: TEXT }}
+          />
+          <button
+            disabled={busy || !draft.trim()}
+            onClick={onSave}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg btn-press"
+            style={{ background: GOLD, color: "#fff", opacity: busy || !draft.trim() ? 0.6 : 1, whiteSpace: "nowrap" }}
+          >
+            {t.tagRenameBtn}
+          </button>
+          <button onClick={onCancel} aria-label={t.cancelBtn} style={{ color: MUTED, padding: 4 }}>
+            <X size={16} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold" style={{ color: TEXT }}>
+            {tag} <span style={{ color: MUTED, fontWeight: 400 }}>({count || 0})</span>
+          </span>
+          <button
+            disabled={busy}
+            onClick={onStartEdit}
+            className="text-xs font-bold"
+            style={{ color: GOLD, opacity: busy ? 0.5 : 1 }}
+          >
+            {t.edit}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export default function SettingsScreen({
   t,
@@ -58,7 +104,20 @@ export default function SettingsScreen({
   newMemberRole,
   setNewMemberRole,
   grantAccess,
+  openAuditLog,
+  allTags,
+  tagCounts,
+  renameTag,
+  tagBusy,
+  allSupplierTags,
+  supplierTagCounts,
+  renameSupplierTag,
+  supplierTagBusy,
 }) {
+  const [editingTag, setEditingTag] = useState(null);
+  const [tagDraft, setTagDraft] = useState("");
+  const [tagTab, setTagTab] = useState("customers");
+  const [tagSearch, setTagSearch] = useState("");
   const [exportTab, setExportTab] = useState("customers");
   const [newAdminEmail, setNewAdminEmail] = useState("");
   return (
@@ -78,6 +137,100 @@ export default function SettingsScreen({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {canEdit && (
+        <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
+          <p className="font-bold text-base mb-1" style={{ color: TEXT }}>{t.tagManagementTitle}</p>
+          <p className="text-xs mb-3" style={{ color: MUTED }}>{t.tagManagementHint}</p>
+
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => { setTagTab("customers"); setEditingTag(null); setTagDraft(""); setTagSearch(""); }}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg"
+              style={{
+                background: tagTab === "customers" ? GOLD : SURFACE_SUBTLE,
+                color: tagTab === "customers" ? "#fff" : MUTED,
+                border: `1px solid ${tagTab === "customers" ? GOLD : LINE}`,
+              }}
+            >
+              {t.tagTabCustomers}
+            </button>
+            <button
+              onClick={() => { setTagTab("suppliers"); setEditingTag(null); setTagDraft(""); setTagSearch(""); }}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg"
+              style={{
+                background: tagTab === "suppliers" ? GOLD : SURFACE_SUBTLE,
+                color: tagTab === "suppliers" ? "#fff" : MUTED,
+                border: `1px solid ${tagTab === "suppliers" ? GOLD : LINE}`,
+              }}
+            >
+              {t.tagTabSuppliers}
+            </button>
+          </div>
+
+          {(() => {
+            const activeTags = tagTab === "customers" ? allTags : allSupplierTags;
+            const activeCounts = tagTab === "customers" ? tagCounts : supplierTagCounts;
+            const activeBusy = tagTab === "customers" ? tagBusy : supplierTagBusy;
+            const activeRename = tagTab === "customers" ? renameTag : renameSupplierTag;
+            const q = tagSearch.trim().toLowerCase();
+            const visibleTags = q ? activeTags.filter((tag) => tag.toLowerCase().includes(q)) : activeTags;
+
+            if (activeTags.length === 0) {
+              return <p className="text-xs" style={{ color: MUTED }}>{t.tagsEmpty}</p>;
+            }
+
+            return (
+              <>
+                {/* Only worth the extra row once the list is long enough
+                    that scrolling to find a tag is actually annoying —
+                    same threshold as the supplier picker sheet. */}
+                {activeTags.length > 6 && (
+                  <div className="relative mb-3">
+                    <Search
+                      size={15}
+                      color={MUTED}
+                      style={{ position: "absolute", [t.dir === "rtl" ? "right" : "left"]: 12, top: "50%", transform: "translateY(-50%)" }}
+                    />
+                    <input
+                      value={tagSearch}
+                      onChange={(e) => setTagSearch(e.target.value)}
+                      placeholder={t.tagSearchPlaceholder}
+                      style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 32, borderRadius: 10, width: "100%" }}
+                    />
+                  </div>
+                )}
+
+                {visibleTags.length === 0 ? (
+                  <p className="text-xs text-center py-2" style={{ color: MUTED }}>{t.noTagSearchResults}</p>
+                ) : (
+                  <div className="flex flex-col gap-2" style={{ maxHeight: 320, overflowY: "auto" }}>
+                    {visibleTags.map((tag) => (
+                      <TagRow
+                        key={tag}
+                        tag={tag}
+                        count={activeCounts[tag]}
+                        isEditing={editingTag === tag}
+                        draft={tagDraft}
+                        onDraftChange={setTagDraft}
+                        onStartEdit={() => { setEditingTag(tag); setTagDraft(tag); }}
+                        onSave={() => {
+                          activeRename(tag, tagDraft);
+                          setEditingTag(null);
+                          setTagDraft("");
+                        }}
+                        onCancel={() => { setEditingTag(null); setTagDraft(""); }}
+                        busy={activeBusy}
+                        t={t}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -188,6 +341,23 @@ export default function SettingsScreen({
             );
           })}
         </div>
+      )}
+
+      {(isOwnerAccount || isReviewer) && (
+        <button
+          onClick={openAuditLog}
+          className={`btn-press w-full flex items-center justify-between ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+          style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}
+        >
+          <div className="flex items-center gap-2">
+            <History size={17} color={PRIMARY} />
+            <div>
+              <p className="font-bold text-sm" style={{ color: TEXT }}>{t.auditLogBtn}</p>
+              <p className="text-xs" style={{ color: MUTED }}>{t.auditLogHint}</p>
+            </div>
+          </div>
+          <ChevronRight size={16} color={MUTED} style={{ transform: t.dir === "rtl" ? "none" : "rotate(180deg)" }} />
+        </button>
       )}
 
       {isReviewer && (

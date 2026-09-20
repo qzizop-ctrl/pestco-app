@@ -88,6 +88,19 @@ export function useFilteredData({
     [visibleVisits]
   );
 
+  // How many customers currently carry each tag, for the "manage tags"
+  // screen in Settings (rename/merge) — a tag with a count next to it is
+  // what makes typo variants like "VIP" vs "vip" visible in the first place.
+  const tagCounts = useMemo(() => {
+    const counts = {};
+    visibleVisits.forEach((v) => {
+      (v.tags || []).forEach((tag) => {
+        counts[tag] = (counts[tag] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [visibleVisits]);
+
   const sectorCounts = useMemo(
     () =>
       SECTOR_IDS.reduce((acc, id) => {
@@ -212,6 +225,18 @@ export function useFilteredData({
   // "filter by product" chip row on the Suppliers list.
   const allSupplierTags = useMemo(() => collectSupplierTags(visibleSuppliers), [visibleSuppliers]);
 
+  // How many suppliers currently carry each product tag — same purpose as
+  // tagCounts above, but for the suppliers tab of the "manage tags" card.
+  const supplierTagCounts = useMemo(() => {
+    const counts = {};
+    visibleSuppliers.forEach((s) => {
+      (s.tags || []).forEach((tag) => {
+        counts[tag] = (counts[tag] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [visibleSuppliers]);
+
   // All unique "goods/service type" values across every supplier, used to
   // populate a separate "filter by category" chip row — distinct from the
   // product tags above, since a supplier's category (e.g. "كاميرات مراقبة")
@@ -246,8 +271,8 @@ export function useFilteredData({
   return {
     visibleVisits, dueReminders, staleOffers, staleCustomers,
     pendingEdits, pendingSupplierEdits, duplicateGroups,
-    allTags, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
+    allTags, tagCounts, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
     dateAddedScopeTotal, availableAddedMonths, filtered,
-    visibleSuppliers, allSupplierTags, allSupplierCategories, filteredSuppliers,
+    visibleSuppliers, allSupplierTags, supplierTagCounts, allSupplierCategories, filteredSuppliers,
   };
 }

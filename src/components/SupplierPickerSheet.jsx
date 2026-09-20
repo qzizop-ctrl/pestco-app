@@ -6,7 +6,7 @@
 // until the offer itself is saved via the parent's addOffer/newOffer state.
 // ============================================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Check, Search } from "lucide-react";
 import { TEXT, MUTED, SURFACE, PRIMARY, GOLD_SOFT } from "../theme";
 

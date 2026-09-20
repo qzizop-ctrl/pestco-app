@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { reportException } from "../sentry";
 
 const STORAGE_KEY = "pestco_last_auto_backup";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -39,6 +40,7 @@ export function useAutoBackup({ isOwnerAccount, ready, visits, suppliers, saveBa
         notify(t.autoBackupDone);
       } catch (e) {
         console.error("Weekly auto-backup failed:", e);
+        reportException(e, { context: "Weekly auto-backup failed" });
         notify(t.autoBackupFailed);
       }
     });

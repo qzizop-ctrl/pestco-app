@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -9,6 +9,7 @@ import { Languages } from "lucide-react";
 import { auth, db } from "./firebase";
 import { PRIMARY } from "./theme";
 import { BrandMark, BADGE_WATERMARK } from "./components/Shared";
+import { reportException } from "./sentry";
 
 const BG = "#F7F6F2";
 const TEXT = "#22282B";
@@ -126,6 +127,7 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
           // Never block account creation over this — it only feeds the
           // reviewer's "pending accounts" list in Settings.
           console.error("Failed to record signup:", signupLogError);
+          reportException(signupLogError, { context: "Failed to record signup" });
         }
       } else if (mode === "reset") {
         await sendPasswordResetEmail(auth, email.trim());

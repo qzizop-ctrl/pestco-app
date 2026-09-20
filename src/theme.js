@@ -26,6 +26,14 @@ export const GOLD_SOFT = "#F3E6D0";
 
 export const LINE = "var(--line)";
 
+// Shared "negative"/"pending" accent colors used across the Dashboard
+// (offer breakdown bars, delta arrows, rejection stats) — pulled out here
+// so the same hex isn't repeated across Dashboard.jsx, SummaryCard.jsx and
+// SalesAnalysisCard.jsx. Deliberately distinct from DANGER/GOLD above,
+// which are used for other (non-dashboard) UI elements.
+export const DASH_NEGATIVE = "#C4443A";
+export const DASH_PENDING = "#C7A24A";
+
 export const THEME_VARS = {
   light: { "--bg": "#E4E0D5", "--surface": "#FFFFFF", "--surface-subtle": "#F8F6F0", "--text": "#1B241F", "--muted": "#6B7168", "--line": "#E7E2D6" },
   dark: { "--bg": "#0F1720", "--surface": "#182430", "--surface-subtle": "#1F2E3B", "--text": "#ECEAE2", "--muted": "#93A0AC", "--line": "#2C3B48" },
@@ -47,7 +55,7 @@ export const ACTIVITY_COLORS = {
   visit: "#2F9E58",
 };
 
-export const SECTOR_COLORS = {
+const SECTOR_COLORS = {
   construction: "#8C5A2C",
   education: "#2C6E8C",
   consultants: "#3D8C6C",
@@ -56,7 +64,7 @@ export const SECTOR_COLORS = {
 
 export const sectorColor = (id) => SECTOR_COLORS[id] || SECTOR_COLORS.private;
 
-export const STAGE_COLORS = {
+const STAGE_COLORS = {
   survey: "#6B7168",
   quote: "#B9832A",
   install: "#0F6E56",
@@ -65,7 +73,7 @@ export const STAGE_COLORS = {
 
 export const stageColor = (id) => STAGE_COLORS[id] || STAGE_COLORS.survey;
 
-export const OFFER_STATUS_COLORS = {
+const OFFER_STATUS_COLORS = {
   pending: "#DB9A2C",
   purchased: "#2F9E58",
   rejected: "#C4443A",

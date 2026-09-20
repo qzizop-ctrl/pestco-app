@@ -26,6 +26,41 @@ export function useAppPrefs() {
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
 
+  // USD->EGP exchange rate the user enters in Settings, and whether the
+  // Dashboard should use it to fold the offers-value summary into a single
+  // EGP figure instead of showing "X EGP + Y USD" side by side. Both are a
+  // per-device display preference (like lang/darkMode above), not shared
+  // data — every rep can set their own rate, and it never touches Firestore.
+  const [exchangeRate, setExchangeRate] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem("pestco_usd_rate"));
+      return saved > 0 ? saved : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const [unifyCurrency, setUnifyCurrency] = useState(() => {
+    try {
+      return localStorage.getItem("pestco_unify_currency") === "1";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (exchangeRate > 0) localStorage.setItem("pestco_usd_rate", String(exchangeRate));
+      else localStorage.removeItem("pestco_usd_rate");
+    } catch (e) {}
+  }, [exchangeRate]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("pestco_unify_currency", unifyCurrency ? "1" : "0");
+    } catch (e) {}
+  }, [unifyCurrency]);
+
   useEffect(() => {
     try {
       localStorage.setItem("pestco_lang", lang);
@@ -98,5 +133,8 @@ export function useAppPrefs() {
     };
   }, []);
 
-  return { lang, setLang, darkMode, setDarkMode, isOnline };
+  return {
+    lang, setLang, darkMode, setDarkMode, isOnline,
+    exchangeRate, setExchangeRate, unifyCurrency, setUnifyCurrency,
+  };
 }

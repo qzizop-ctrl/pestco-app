@@ -133,18 +133,11 @@ export function buildActivity(type, text) {
 // Builds a unique visit-history entry, used to track that an actual visit
 // happened on a given date (as opposed to just "the current visitDate"),
 // so the Dashboard can count real visit events per customer over time.
-//
-// `location`, when provided, is a plain { lat, lng } object captured from
-// the device's GPS at the moment the visit was logged (see src/geo.js).
-// It's optional and stored as `null` when unavailable (permission denied,
-// unsupported device, or timed out) — older entries simply don't have this
-// field at all, which every reader here already treats as "no location".
-export function buildVisitEntry(date, location) {
+export function buildVisitEntry(date) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     date: date || new Date().toISOString().slice(0, 10),
     at: new Date().toISOString(),
-    location: location || null,
   };
 }
 
@@ -212,6 +205,33 @@ export function fmtOffersTotals(totals, t, { showAllIfEmpty = false } = {}) {
   // whole string keeps it left-to-right and in the same order in every
   // locale.
   return `\u2066${joined}\u2069`;
+}
+
+// Folds a per-currency totals map (from sumOffersByCurrency) into a single
+// EGP number using a USD->EGP exchange rate, for the Dashboard's "unify
+// currency" display toggle. Returns null when the rate isn't a valid
+// positive number — the caller falls back to fmtOffersTotals' normal
+// per-currency display in that case, same as if the toggle were off.
+export function unifyOffersTotal(totals, rate) {
+  const r = Number(rate);
+  if (!(r > 0)) return null;
+  const egp = totals.EGP || 0;
+  const usd = totals.USD || 0;
+  return egp + usd * r;
+}
+
+// Every place that shows an aggregated offers total (Dashboard cards, the
+// PDF export, per-sector/per-member breakdowns, a customer's offers list)
+// goes through this single function so "unify currency" behaves exactly
+// the same everywhere instead of each call site re-implementing the same
+// on/off/fallback logic. Falls back to the normal per-currency display
+// (fmtOffersTotals) whenever unifying is off or the rate isn't set.
+export function fmtUnifiedOrSplit(totals, t, exchangeRate, unifyCurrency, opts) {
+  if (unifyCurrency) {
+    const unified = unifyOffersTotal(totals, exchangeRate);
+    if (unified !== null) return `${fmtMoney(unified, t.locale)} ${t.currencies.EGP}`;
+  }
+  return fmtOffersTotals(totals, t, opts);
 }
 
 export function visitStatus(visit) {
@@ -320,13 +340,41 @@ export function buildWhatsAppLink(phone) {
   return `https://wa.me/${digits}`;
 }
 
-// Normalizes a company name for duplicate-matching (trim, lowercase, collapse spaces)
-export function normalizeCompanyName(name) {
-  return (name || "")
+// Generic Arabic business-entity words that don't help identify *which*
+// company a name refers to (e.g. "شركة الاسكندرية" and "الاسكندرية" are
+// almost certainly the same customer) — stripped as whole words after
+// normalization below, never as a substring, so a company genuinely named
+// just "مجموعة" isn't reduced to nothing. Written in their normalized form
+// (ة already folded to ه) since that's what they're compared against.
+const AR_ENTITY_WORDS = ["شركه", "مؤسسه", "مجموعه", "مصنع", "معرض", "مكتب"];
+
+// Normalizes a company name for duplicate-matching. Trims/collapses
+// whitespace and lowercases as before, plus Arabic-specific folding so
+// common spelling variants of the same name actually match instead of
+// silently missing the duplicate:
+// - strips tashkeel (diacritics) and the tatweel elongation mark
+// - folds every alef variant (أ إ آ ٱ) to plain ا
+// - folds taa marbuta (ة) to ه and alef maksura (ى) to ي — the two most
+//   common typing inconsistencies in Arabic business names
+// - treats -, _, . and Arabic/Latin commas as word separators
+// - drops generic entity words (شركة/مؤسسة/...) so "شركة X" and "X" match
+function normalizeCompanyName(name) {
+  const s = (name || "")
     .toString()
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, " ");
+    .replace(/[\u064B-\u0652\u0670\u0640]/g, "")
+    .replace(/[إأآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[-_.,،]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return s
+    .split(" ")
+    .filter((w) => w && !AR_ENTITY_WORDS.includes(w))
+    .join(" ");
 }
 
 // Groups customers that share a phone number or a near-identical company
@@ -360,7 +408,7 @@ export function findDuplicateGroups(visits) {
 
 // The most recent moment of any recorded activity on a customer: a visit,
 // a scheduled call, a logged activity entry, or the record's creation.
-export function lastActivityDate(visit) {
+function lastActivityDate(visit) {
   const dates = [];
   const vd = parseVisitDate(visit.visitDate);
   if (vd) dates.push(vd);

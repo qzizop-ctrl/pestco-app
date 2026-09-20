@@ -3,7 +3,6 @@
 // only — form state and saveForm() still live in App.jsx.
 // ============================================================================
 
-import React from "react";
 import {
   Building2, User, Briefcase, Phone, Mail,
   LayoutGrid, Flag, Tag, CalendarDays, PhoneCall, StickyNote,
