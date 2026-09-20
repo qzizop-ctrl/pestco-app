@@ -1,6 +1,6 @@
 import { offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, SURFACE } from "../theme";
 import { OFFER_STATUS_IDS } from "../domain";
-import { fmtMoney, fmtOffersTotals } from "../helpers";
+import { fmtMoney, fmtUnifiedOrSplit } from "../helpers";
 
 // The "Offers" section of the Dashboard: status filter tabs + the list of
 // offers in the selected period/status, plus the running total footer.
@@ -10,6 +10,7 @@ import { fmtMoney, fmtOffersTotals } from "../helpers";
 // as those.
 export default function OffersListSection({
   t, offersList, offerStatusFilter, setOfferStatusFilter, offersListValueTotals, visits, onOpenCustomer,
+  exchangeRate, unifyCurrency,
 }) {
   return (
     <div style={{ marginBottom: 20 }}>
@@ -99,7 +100,7 @@ export default function OffersListSection({
               {t.dashOffersTotalLabel}: {offersList.length}
             </span>
             <span className="text-sm font-extrabold" style={{ color: TEXT }}>
-              {t.dashOffersTotalValueLabel}: {fmtOffersTotals(offersListValueTotals, t, { showAllIfEmpty: true })}
+              {t.dashOffersTotalValueLabel}: {fmtUnifiedOrSplit(offersListValueTotals, t, exchangeRate, unifyCurrency, { showAllIfEmpty: true })}
             </span>
           </div>
         </>

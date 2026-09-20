@@ -1,5 +1,5 @@
 import { sectorColor, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
-import { fmtOffersTotals } from "../helpers";
+import { fmtUnifiedOrSplit } from "../helpers";
 
 // `breakdown` is the array computeSectorBreakdown() returns — one entry
 // per SECTOR_IDS value, each already computed with the same
@@ -9,7 +9,7 @@ import { fmtOffersTotals } from "../helpers";
 // than more cards — four sectors' worth of full SummaryCards would be a
 // lot of vertical space for what's fundamentally a side-by-side
 // comparison.
-export default function SectorBreakdownCard({ t, breakdown }) {
+export default function SectorBreakdownCard({ t, breakdown, exchangeRate, unifyCurrency }) {
   const anyActivity = breakdown.some((s) => s.visitsCount > 0 || s.offersCount > 0);
 
   return (
@@ -45,7 +45,7 @@ export default function SectorBreakdownCard({ t, breakdown }) {
                   <td className="text-xs font-bold text-center" style={{ color: TEXT, padding: "8px 6px" }}>{s.visitsCount}</td>
                   <td className="text-xs font-bold text-center" style={{ color: TEXT, padding: "8px 6px" }}>{s.offersCount}</td>
                   <td className="text-xs font-bold text-center" style={{ color: TEXT, padding: "8px 6px", whiteSpace: "nowrap" }}>
-                    {fmtOffersTotals(s.offersValueTotals, t) || "—"}
+                    {fmtUnifiedOrSplit(s.offersValueTotals, t, exchangeRate, unifyCurrency) || "—"}
                   </td>
                   <td
                     className="text-xs font-extrabold text-center"

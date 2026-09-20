@@ -2,7 +2,7 @@ import { useState, Fragment } from "react";
 import { ChevronLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE, SUCCESS, DASH_NEGATIVE } from "../theme";
 import { STAGE_IDS, OFFER_STATUS_IDS } from "../domain";
-import { fmtOffersTotals } from "../helpers";
+import { fmtUnifiedOrSplit } from "../helpers";
 import { pctChange, computeStageConversionRates } from "../dashboardCalculations";
 
 // Merges what used to be three separate full-width cards on the Dashboard
@@ -18,6 +18,7 @@ import { pctChange, computeStageConversionRates } from "../dashboardCalculations
 // fit a table that can be 2 rows or 20.
 export default function SalesAnalysisCard({
   t, stats, prevStats, compare, rejectionReport, prevRejectionReport, topClients, prevTopClients, visits, onOpenCustomer,
+  exchangeRate, unifyCurrency,
 }) {
   const tabs = [
     { key: "pipeline", label: t.dashPipeline },
@@ -166,7 +167,7 @@ export default function SalesAnalysisCard({
         <div className="flex flex-wrap" style={{ gap: 10 }}>
           {OFFER_STATUS_IDS.map((id) => {
             const info = stats.offersByStatus[id] || { count: 0, totals: {} };
-            const valueText = fmtOffersTotals(info.totals, t);
+            const valueText = fmtUnifiedOrSplit(info.totals, t, exchangeRate, unifyCurrency);
             const prevCount = prevStats ? (prevStats.offersByStatus[id] || { count: 0 }).count : null;
             const delta = compare ? (prevStats ? pctChange(info.count, prevCount) : null) : undefined;
             return (
@@ -346,7 +347,7 @@ export default function SalesAnalysisCard({
                     </span>
                   </span>
                   <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID, flexShrink: 0 }}>
-                    {fmtOffersTotals(c.totals, t) || `0 ${t.dashCurrency}`}
+                    {fmtUnifiedOrSplit(c.totals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`}
                   </span>
                 </button>
               );
