@@ -2,16 +2,15 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { BottomNav } from "./components/Shared";
 import AppHeader from "./components/AppHeader";
-import UndoToast from "./components/UndoToast";
 import AppScreens from "./components/AppScreens";
-import RejectionReasonModal from "./components/RejectionReasonModal";
-import ConfirmModal from "./components/ConfirmModal";
+import AppModals from "./components/AppModals";
+import AppUndoToasts from "./components/AppUndoToasts";
 // xlsx is loaded lazily (dynamic import) only when Export/Import is
 // actually used from Settings, instead of top-level here — it's a sizeable
 // library that most sessions never touch, so this keeps it out of the
 // app's initial bundle/load. See useExcelExport / useExcelImport.
-import { reportException } from "./sentry";
 import AuthScreen from "./AuthScreen";
+import { DashboardProvider } from "./contexts/DashboardContext";
 import { useAppPrefs } from "./hooks/useAppPrefs";
 import { useWorkspace } from "./hooks/useWorkspace";
 import { useAccessManagement } from "./hooks/useAccessManagement";
@@ -32,6 +31,7 @@ import { useDialogState } from "./hooks/useDialogState";
 import { useCustomerFilters } from "./hooks/useCustomerFilters";
 import { useSupplierFilters } from "./hooks/useSupplierFilters";
 import { useTagManagement } from "./hooks/useTagManagement";
+import { useErrorReporting } from "./hooks/useErrorReporting";
 import { TEXT, MUTED, THEME_VARS } from "./theme";
 import { STRINGS } from "./i18n";
 import { STAGE_IDS } from "./domain";
@@ -92,17 +92,11 @@ export default function App() {
   } = useDialogState();
   const [showDuplicates, setShowDuplicates] = useState(false);
 
-  // ---- Dashboard's own tab state, lifted up here ----
-  // Dashboard is only rendered while screen === "dashboard" (see
-  // AppScreens.jsx); it unmounts the moment the person opens a customer's
-  // detail screen and remounts from scratch on the way back. Keeping
-  // activeTab/customersSubTab/salesTabVisited as local useState inside
-  // Dashboard meant every trip into a customer and back reset the person
-  // to the "overview" tab. Living here instead — in App, which stays
-  // mounted for the whole session — means they survive that round trip.
-  const [dashboardTab, setDashboardTab] = useState("overview");
-  const [dashboardCustomersSubTab, setDashboardCustomersSubTab] = useState("offers");
-  const [dashboardSalesTabVisited, setDashboardSalesTabVisited] = useState(false);
+  // Dashboard's own tab state (activeTab/customersSubTab/salesTabVisited)
+  // now lives in DashboardContext (see contexts/DashboardContext.jsx),
+  // provided further down in this file's return, and is read directly by
+  // Dashboard.jsx — no longer threaded through here or through
+  // AppScreens.jsx as props.
 
   // ---- Suppliers (separate from customers — contacts only) ----
   const {
@@ -123,39 +117,10 @@ export default function App() {
     return true;
   }, [isOnline, t, showAlert]);
 
-  // Surfaces a failed access-management write (grant/revoke/review/dismiss)
-  // instead of leaving it silent. This previously only logged to the
-  // browser console, so the owner would see the Settings action "succeed"
-  // with no feedback while the underlying Firestore write was actually
-  // rejected — most commonly because the security rules deployed on the
-  // live Firebase project are out of date (the firestore.rules file has to
-  // be deployed on its own; having it in the repo doesn't apply it).
-  const reportWorkspaceError = useCallback((e) => {
-    reportException(e, { source: "workspace" });
-    const code = e && e.code ? ` (${e.code})` : "";
-    showAlert(
-      lang === "ar"
-        ? `حصل خطأ أثناء حفظ التغيير${code}. لو بيتكرر، تأكد إن قواعد الأمان (Firestore Rules) متنشورة فعليًا على مشروع Firebase — وجودها في الكود مش كفاية.`
-        : `Failed to save the change${code}. If this keeps happening, confirm the Firestore security rules are actually deployed on the Firebase project — having them in the code isn't enough.`
-    );
-  }, [lang, showAlert]);
-
-  // Surfaces a save failure to the user instead of swallowing it silently.
-  // A "permission-denied" here almost always means the signed-in account's
-  // role in Firestore doesn't actually match what Settings shows (e.g. it's
-  // still "viewer" server-side) — this makes that visible instead of the
-  // save just silently doing nothing.
-  const reportSaveError = (e) => {
-    console.error("Save failed:", e);
-    const isPermissionError = e && (e.code === "permission-denied" || String(e.code || "").includes("permission-denied"));
-    showAlert(
-      isPermissionError
-        ? (lang === "ar"
-            ? "معنديش صلاحية أكتب في البيانات دي. تأكد إن الدور بتاعك مضبوط 'يشوف ويعدل' فعليًا."
-            : "You don't have permission to write this data. Confirm your role is actually set to 'editor'.")
-        : (lang === "ar" ? `حصل خطأ أثناء الحفظ: ${e && e.message ? e.message : e}` : `Save failed: ${e && e.message ? e.message : e}`)
-    );
-  };
+  // All three user-facing error messages (workspace writes, record saves,
+  // customer-list reads) now live in useErrorReporting — see that hook for
+  // the reasoning behind each one.
+  const { reportWorkspaceError, reportSaveError, reportVisitsError } = useErrorReporting({ lang, showAlert });
 
   const {
     authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
@@ -285,15 +250,8 @@ export default function App() {
   useEffect(() => {
     if (!visitsError || reportedVisitsErrorRef.current === ownerUid) return;
     reportedVisitsErrorRef.current = ownerUid;
-    const isPermissionError = visitsError.code === "permission-denied";
-    showAlert(
-      isPermissionError
-        ? (lang === "ar"
-            ? "معنديش صلاحية أشوف البيانات دي. تأكد إن الإيميل بتاعك مضاف صح في Settings عند صاحب الحساب."
-            : "You don't have permission to read this data. Confirm your email is correctly added in the owner's Settings.")
-        : (lang === "ar" ? `حصل خطأ أثناء تحميل العملاء: ${visitsError.message}` : `Failed to load customers: ${visitsError.message}`)
-    );
-  }, [visitsError, ownerUid, lang, showAlert]);
+    reportVisitsError(visitsError);
+  }, [visitsError, ownerUid, reportVisitsError]);
 
   // Excel export lives in useExcelExport (src/hooks/useExcelExport.js) — see
   // that file for visitsToRows/suppliersToRows and the actual xlsx writing.
@@ -413,6 +371,7 @@ export default function App() {
   }
 
   return (
+    <DashboardProvider>
     <div
       className="w-full min-h-full"
       style={{
@@ -460,9 +419,6 @@ export default function App() {
         clearCallReminder={clearCallReminder}
         confirmAction={confirmAction}
         dashboardAccess={dashboardAccess}
-        dashboardCustomersSubTab={dashboardCustomersSubTab}
-        dashboardSalesTabVisited={dashboardSalesTabVisited}
-        dashboardTab={dashboardTab}
         dateAddedFilter={dateAddedFilter}
         dateAddedScopeTotal={dateAddedScopeTotal}
         deleteActivity={deleteActivity}
@@ -531,9 +487,6 @@ export default function App() {
         screen={screen}
         sectorCounts={sectorCounts}
         sectorFilter={sectorFilter}
-        setDashboardCustomersSubTab={setDashboardCustomersSubTab}
-        setDashboardSalesTabVisited={setDashboardSalesTabVisited}
-        setDashboardTab={setDashboardTab}
         setDateAddedFilter={setDateAddedFilter}
         setExchangeRate={setExchangeRate}
         setExpandedOfferId={setExpandedOfferId}
@@ -594,54 +547,25 @@ export default function App() {
         visits={visits}
       />
 
-      {pendingDelete && (
-        <UndoToast
-          companyName={pendingDelete.companyName}
-          onUndo={undoDelete}
-          isRootScreen={isRootScreen}
-          t={t}
-        />
-      )}
-
-      {pendingSupplierDelete && (
-        <UndoToast
-          companyName={pendingSupplierDelete.companyName}
-          onUndo={undoSupplierDelete}
-          isRootScreen={isRootScreen}
-          t={t}
-        />
-      )}
+      <AppUndoToasts
+        t={t}
+        isRootScreen={isRootScreen}
+        pendingDelete={pendingDelete}
+        undoDelete={undoDelete}
+        pendingSupplierDelete={pendingSupplierDelete}
+        undoSupplierDelete={undoSupplierDelete}
+      />
 
       {isRootScreen && <BottomNav screen={screen} setScreen={setScreen} t={t} isOwnerAccount={isOwnerAccount} isReviewer={isReviewer} canViewDashboard={canViewDashboard} />}
 
-      {rejectionPrompt && (
-        <RejectionReasonModal
-          t={t}
-          initialReasonId={rejectionPrompt.initialReasonId}
-          initialReasonText={rejectionPrompt.initialReasonText}
-          onConfirm={(picked) => {
-            const { onConfirm } = rejectionPrompt;
-            setRejectionPrompt(null);
-            onConfirm(picked);
-          }}
-          onCancel={() => setRejectionPrompt(null)}
-        />
-      )}
-
-      {confirmDialog && (
-        <ConfirmModal
-          t={t}
-          message={confirmDialog.message}
-          variant={confirmDialog.variant}
-          danger={confirmDialog.danger}
-          onConfirm={() => {
-            const { onConfirm } = confirmDialog;
-            setConfirmDialog(null);
-            onConfirm();
-          }}
-          onCancel={() => setConfirmDialog(null)}
-        />
-      )}
+      <AppModals
+        t={t}
+        rejectionPrompt={rejectionPrompt}
+        setRejectionPrompt={setRejectionPrompt}
+        confirmDialog={confirmDialog}
+        setConfirmDialog={setConfirmDialog}
+      />
     </div>
+    </DashboardProvider>
   );
-  }
+}

@@ -6,6 +6,7 @@ import { SECTOR_IDS } from "./domain";
 import { parseVisitDate, fmtMoney, fmtUnifiedOrSplit, sumOffersByCurrency, toJsDate } from "./helpers";
 import { generateDashboardPdf } from "./pdfReport";
 import { reportException } from "./sentry";
+import { useDashboardContext } from "./contexts/DashboardContext";
 import {
   resolvePeriod, pctChange, computeAvgDealSizeForCurrency, computeWinRate,
   computeDecidedCount, buildOfferBreakdown, computePeriodStats,
@@ -28,21 +29,24 @@ import SectorBreakdownCard from "./components/SectorBreakdownCard";
 export default function Dashboard({
   visits, lang, onOpenCustomer, showAlert, staleOffers = [],
   exchangeRate = null, setExchangeRate = () => {}, unifyCurrency = false, setUnifyCurrency = () => {},
-  // Which of the three Dashboard tabs (overview / sales / customers) is
-  // currently shown below the filter bar, the "customers" tab's own
-  // offers/customers sub-toggle, and whether "sales" has ever been opened
-  // (gates the pricier sectorBreakdown computation below) — all three now
-  // live in App.jsx instead of as local useState here, because Dashboard
-  // only renders while screen === "dashboard" (see AppScreens.jsx) and
-  // fully unmounts the moment a customer's detail screen is opened. Local
-  // state here would reset to its default every time a manager opened a
-  // customer from the Dashboard and came back. See App.jsx's
-  // dashboardTab/dashboardCustomersSubTab/dashboardSalesTabVisited.
-  activeTab, setActiveTab, customersSubTab, setCustomersSubTab,
-  salesTabVisited, setSalesTabVisited,
 }) {
   const t = STRINGS[lang];
   const now = new Date();
+
+  // Which of the three Dashboard tabs (overview / sales / customers) is
+  // currently shown below the filter bar, the "customers" tab's own
+  // offers/customers sub-toggle, and whether "sales" has ever been opened
+  // (gates the pricier sectorBreakdown computation below) — all three live
+  // in DashboardContext (see contexts/DashboardContext.jsx) rather than as
+  // local useState here, because Dashboard only renders while
+  // screen === "dashboard" (see AppScreens.jsx) and fully unmounts the
+  // moment a customer's detail screen is opened. Local state here would
+  // reset to its default every time a manager opened a customer from the
+  // Dashboard and came back.
+  const {
+    activeTab, setActiveTab, customersSubTab, setCustomersSubTab,
+    salesTabVisited, setSalesTabVisited,
+  } = useDashboardContext();
 
   const availableYears = useMemo(() => {
     const years = new Set([now.getFullYear()]);
