@@ -88,6 +88,19 @@ export function useFilteredData({
     [visibleVisits]
   );
 
+  // How many customers currently carry each tag, for the "manage tags"
+  // screen in Settings (rename/merge) — a tag with a count next to it is
+  // what makes typo variants like "VIP" vs "vip" visible in the first place.
+  const tagCounts = useMemo(() => {
+    const counts = {};
+    visibleVisits.forEach((v) => {
+      (v.tags || []).forEach((tag) => {
+        counts[tag] = (counts[tag] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [visibleVisits]);
+
   const sectorCounts = useMemo(
     () =>
       SECTOR_IDS.reduce((acc, id) => {
@@ -246,7 +259,7 @@ export function useFilteredData({
   return {
     visibleVisits, dueReminders, staleOffers, staleCustomers,
     pendingEdits, pendingSupplierEdits, duplicateGroups,
-    allTags, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
+    allTags, tagCounts, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
     dateAddedScopeTotal, availableAddedMonths, filtered,
     visibleSuppliers, allSupplierTags, allSupplierCategories, filteredSuppliers,
   };
