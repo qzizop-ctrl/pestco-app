@@ -11,7 +11,7 @@ import { PRIMARY } from "../theme";
 // Pure presentational + the sign-out action itself (self-contained, not
 // part of the app's core state) — everything else is driven by props.
 export default function AppHeader({
-  isRootScreen, screen, formId, activeSupplierId, setScreen,
+  isRootScreen, screen, formId, activeSupplierId, setScreen, detailBackTarget,
   isOnline, darkMode, setDarkMode, lang, setLang, t,
 }) {
   return (
@@ -23,7 +23,7 @@ export default function AppHeader({
         <button
           onClick={() => setScreen(
             screen === "form" && formId ? "detail" :
-            screen === "detail" ? "list" :
+            screen === "detail" ? detailBackTarget :
             screen === "supplier-form" ? "suppliers" :
             screen === "audit-log" ? "settings" :
             "list"
@@ -77,34 +77,3 @@ export default function AppHeader({
             <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
           </>
         )}
-        <button
-          onClick={() => setDarkMode((d) => !d)}
-          className="btn-press flex items-center"
-          style={{ color: "#fff" }}
-          aria-label={darkMode ? t.lightModeToggle : t.darkModeToggle}
-          title={darkMode ? t.lightModeToggle : t.darkModeToggle}
-        >
-          {darkMode ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
-        <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
-        <button
-          onClick={() => setLang(lang === "ar" ? "en" : "ar")}
-          className="btn-press flex items-center gap-1 font-bold text-xs"
-          style={{ color: "#fff" }}
-          aria-label={t.langToggle}
-        >
-          <Languages size={14} /> {t.langToggle}
-        </button>
-      </div>
-      <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.22)" }} />
-      <button
-        onClick={() => signOut(auth).catch(() => {})}
-        className="btn-press flex items-center"
-        style={{ color: "#fff" }}
-        aria-label={t.signOut}
-      >
-        <LogOut size={16} />
-      </button>
-    </div>
-  );
-}
