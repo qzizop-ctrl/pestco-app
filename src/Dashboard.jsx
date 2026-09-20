@@ -28,6 +28,18 @@ import SectorBreakdownCard from "./components/SectorBreakdownCard";
 export default function Dashboard({
   visits, lang, onOpenCustomer, showAlert, staleOffers = [],
   exchangeRate = null, setExchangeRate = () => {}, unifyCurrency = false, setUnifyCurrency = () => {},
+  // Which of the three Dashboard tabs (overview / sales / customers) is
+  // currently shown below the filter bar, the "customers" tab's own
+  // offers/customers sub-toggle, and whether "sales" has ever been opened
+  // (gates the pricier sectorBreakdown computation below) — all three now
+  // live in App.jsx instead of as local useState here, because Dashboard
+  // only renders while screen === "dashboard" (see AppScreens.jsx) and
+  // fully unmounts the moment a customer's detail screen is opened. Local
+  // state here would reset to its default every time a manager opened a
+  // customer from the Dashboard and came back. See App.jsx's
+  // dashboardTab/dashboardCustomersSubTab/dashboardSalesTabVisited.
+  activeTab, setActiveTab, customersSubTab, setCustomersSubTab,
+  salesTabVisited, setSalesTabVisited,
 }) {
   const t = STRINGS[lang];
   const now = new Date();
@@ -55,14 +67,6 @@ export default function Dashboard({
   const [sector, setSector] = useState("all");
   const [compare, setCompare] = useState(false);
   const [offerStatusFilter, setOfferStatusFilter] = useState("all");
-  // Which of the three Dashboard tabs (overview / sales / customers) is
-  // currently shown below the filter bar — see the tab bar in the render
-  // below. Kept as simple local UI state, not persisted.
-  const [activeTab, setActiveTab] = useState("overview");
-  // Within the "customers" tab, a second-level toggle between the offers
-  // list and the customers-added list — both used to be stacked one after
-  // the other, which made that tab long to scroll on an active month.
-  const [customersSubTab, setCustomersSubTab] = useState("offers");
 
   const resolved = useMemo(() => resolvePeriod(period, now, t), [period, t]);
   const isSingleMonth = resolved.granularity === "day";
@@ -120,7 +124,6 @@ export default function Dashboard({
   // at least once — this is the priciest of the Dashboard's derived stats
   // on a large visits list, and most sessions land on "overview" and
   // never open "sales" at all.
-  const [salesTabVisited, setSalesTabVisited] = useState(false);
   const sectorBreakdown = useMemo(
     () => (sector === "all" && salesTabVisited ? computeSectorBreakdown(visits, resolved.start, resolved.end, isSingleMonth) : null),
     [visits, resolved, isSingleMonth, sector, salesTabVisited]
