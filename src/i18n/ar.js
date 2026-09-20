@@ -136,6 +136,15 @@ export const AR = {
   statusUpcoming: "قادمة",
   statusNone: "بدون تذكير",
   whatsapp: "واتساب",
+  tagManagementTitle: "إدارة التاجز",
+  tagManagementHint: "عدّل اسم أي تاج عشان يتغيّر في كل العملاء اللي بيحملوه دفعة واحدة. لو كتبت اسم تاج موجود بالفعل، الاتنين هيندمجوا في واحد.",
+  tagsEmpty: "مفيش تاجز مضافة لحد دلوقتي",
+  tagRenameBtn: "حفظ",
+  cancelBtn: "إلغاء",
+  tagRenameConfirm: (oldTag, newTag, count) => {
+    const who = count === 1 ? "عميل واحد" : count === 2 ? "عميلين" : `${count} عملاء`;
+    return `هيتغيّر التاج "${oldTag}" إلى "${newTag}" في ${who}. تأكيد؟`;
+  },
   currencySettingsTitle: "توحيد العملة",
   currencySettingsHint: "حدد سعر الدولار بالجنيه عشان تقدر توحّد إجمالي قيمة العروض في الداشبورد بعملة واحدة بدل ما يتقسم.",
   exchangeRateLabel: "دولار إلى جنيه",
