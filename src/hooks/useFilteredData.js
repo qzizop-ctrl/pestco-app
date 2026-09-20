@@ -225,6 +225,18 @@ export function useFilteredData({
   // "filter by product" chip row on the Suppliers list.
   const allSupplierTags = useMemo(() => collectSupplierTags(visibleSuppliers), [visibleSuppliers]);
 
+  // How many suppliers currently carry each product tag — same purpose as
+  // tagCounts above, but for the suppliers tab of the "manage tags" card.
+  const supplierTagCounts = useMemo(() => {
+    const counts = {};
+    visibleSuppliers.forEach((s) => {
+      (s.tags || []).forEach((tag) => {
+        counts[tag] = (counts[tag] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [visibleSuppliers]);
+
   // All unique "goods/service type" values across every supplier, used to
   // populate a separate "filter by category" chip row — distinct from the
   // product tags above, since a supplier's category (e.g. "كاميرات مراقبة")
@@ -261,6 +273,6 @@ export function useFilteredData({
     pendingEdits, pendingSupplierEdits, duplicateGroups,
     allTags, tagCounts, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
     dateAddedScopeTotal, availableAddedMonths, filtered,
-    visibleSuppliers, allSupplierTags, allSupplierCategories, filteredSuppliers,
+    visibleSuppliers, allSupplierTags, supplierTagCounts, allSupplierCategories, filteredSuppliers,
   };
 }
