@@ -31,6 +31,7 @@ import { useFilteredData } from "./hooks/useFilteredData";
 import { useDialogState } from "./hooks/useDialogState";
 import { useCustomerFilters } from "./hooks/useCustomerFilters";
 import { useSupplierFilters } from "./hooks/useSupplierFilters";
+import { useTagManagement } from "./hooks/useTagManagement";
 import { TEXT, MUTED, THEME_VARS } from "./theme";
 import { STRINGS } from "./i18n";
 import { STAGE_IDS } from "./domain";
@@ -280,7 +281,7 @@ export default function App() {
   const {
     visibleVisits, dueReminders, staleOffers, staleCustomers,
     pendingEdits, pendingSupplierEdits, duplicateGroups,
-    allTags, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
+    allTags, tagCounts, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
     dateAddedScopeTotal, availableAddedMonths, filtered,
     visibleSuppliers, allSupplierTags, allSupplierCategories, filteredSuppliers,
   } = useFilteredData({
@@ -289,6 +290,10 @@ export default function App() {
     dateAddedFilter, setDateAddedFilter, debouncedQuery,
     supplierTagFilter, supplierCategoryFilter, debouncedSupplierQuery,
     t,
+  });
+
+  const { renameTag, tagBusy } = useTagManagement({
+    ownerUid, visits: visibleVisits, canEdit, requireOnline, confirmAction, reportSaveError, t,
   });
 
   // The live listener already holds every customer (no pagination limit),
@@ -486,6 +491,7 @@ export default function App() {
         removeAdminEmail={removeAdminEmail}
         removeTagFromForm={removeTagFromForm}
         removeTagFromSupplierForm={removeTagFromSupplierForm}
+        renameTag={renameTag}
         reviewSignup={reviewSignup}
         revokeAccess={revokeAccess}
         saveForm={saveForm}
@@ -534,6 +540,8 @@ export default function App() {
         suppliersLoaded={suppliersLoaded}
         switchOwnerWorkspace={switchOwnerWorkspace}
         t={t}
+        tagBusy={tagBusy}
+        tagCounts={tagCounts}
         tagFilter={tagFilter}
         toggleOfferSupplier={toggleOfferSupplier}
         togglePin={togglePin}
