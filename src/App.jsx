@@ -92,6 +92,18 @@ export default function App() {
   } = useDialogState();
   const [showDuplicates, setShowDuplicates] = useState(false);
 
+  // ---- Dashboard's own tab state, lifted up here ----
+  // Dashboard is only rendered while screen === "dashboard" (see
+  // AppScreens.jsx); it unmounts the moment the person opens a customer's
+  // detail screen and remounts from scratch on the way back. Keeping
+  // activeTab/customersSubTab/salesTabVisited as local useState inside
+  // Dashboard meant every trip into a customer and back reset the person
+  // to the "overview" tab. Living here instead — in App, which stays
+  // mounted for the whole session — means they survive that round trip.
+  const [dashboardTab, setDashboardTab] = useState("overview");
+  const [dashboardCustomersSubTab, setDashboardCustomersSubTab] = useState("offers");
+  const [dashboardSalesTabVisited, setDashboardSalesTabVisited] = useState(false);
+
   // ---- Suppliers (separate from customers — contacts only) ----
   const {
     supplierQuery, setSupplierQuery, debouncedSupplierQuery,
@@ -448,6 +460,9 @@ export default function App() {
         clearCallReminder={clearCallReminder}
         confirmAction={confirmAction}
         dashboardAccess={dashboardAccess}
+        dashboardCustomersSubTab={dashboardCustomersSubTab}
+        dashboardSalesTabVisited={dashboardSalesTabVisited}
+        dashboardTab={dashboardTab}
         dateAddedFilter={dateAddedFilter}
         dateAddedScopeTotal={dateAddedScopeTotal}
         deleteActivity={deleteActivity}
@@ -516,6 +531,9 @@ export default function App() {
         screen={screen}
         sectorCounts={sectorCounts}
         sectorFilter={sectorFilter}
+        setDashboardCustomersSubTab={setDashboardCustomersSubTab}
+        setDashboardSalesTabVisited={setDashboardSalesTabVisited}
+        setDashboardTab={setDashboardTab}
         setDateAddedFilter={setDateAddedFilter}
         setExchangeRate={setExchangeRate}
         setExpandedOfferId={setExpandedOfferId}
