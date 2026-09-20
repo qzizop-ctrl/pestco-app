@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, collection, onSnapshot } from "firebase/firestore";
+import { doc, collection, onSnapshot, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { isAdminEmail, resolvePrimaryAdminEmail, isPrimaryAdminEmail } from "../adminPermissions";
 import { reportException } from "../sentry";
@@ -238,6 +238,50 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
           // signed in with no data and no way forward.
           if (!isReviewerEmail) {
             setAuthError(true);
+            // Self-heal: AuthScreen's registration flow writes signups/{uid}
+            // right after creating the account, in a separate call that can
+            // fail silently (dropped connection, backgrounded app) without
+            // blocking the signup itself — see the comment there. When that
+            // happens the account exists in Firebase Auth (so re-registering
+            // just gets "email already in use") but never shows up in the
+            // reviewer's pending-accounts list in Settings, with no way for
+            // the owner to grant access. Since we're authenticated right
+            // now, re-write the doc if it's missing before signing out.
+            //
+            // Only do this within a few minutes of account creation — this
+            // branch also covers a *dismissed* or *revoked* account trying
+            // to log back in, and those must NOT reappear in "pending
+            // review" every time they retry (that's what dismiss/revoke
+            // are for). A fresh signup retrying right after the original
+            // write failed and a months-old dismissed account both land
+            // here identically; creation-time recency is the only signal
+            // available to tell them apart.
+            const accountAgeMs = user.metadata?.creationTime
+              ? Date.now() - new Date(user.metadata.creationTime).getTime()
+              : Infinity;
+            if (accountAgeMs < 15 * 60 * 1000) {
+              // No existence check first — a plain user can't even read the
+              // signups collection (only a reviewer can, see
+              // firestore.rules), so a getDoc here would just fail
+              // silently and never reach the write. Firestore's own rules
+              // already make this safe without one: `allow create` covers
+              // a missing doc (the actual repair case), while `allow
+              // update: if false` rejects this exact same call as a no-op
+              // whenever the doc already exists and is correct.
+              setDoc(doc(db, "signups", user.uid), {
+                email: emailKey,
+                createdAt: serverTimestamp(),
+              }).catch((e) => {
+                // permission-denied here just means the doc already exists
+                // (the "update: if false" case above) — the expected,
+                // harmless outcome for a still-pending or already-repaired
+                // signup, not a real failure worth logging.
+                if (e.code !== "permission-denied") {
+                  console.error("Signup self-heal failed:", e);
+                  reportException(e, { context: "Signup self-heal failed" });
+                }
+              });
+            }
             signOut(auth).catch((e) => {
               console.error("Sign-out for unauthorized account failed:", e);
               reportException(e, { context: "Sign-out for unauthorized account failed" });
