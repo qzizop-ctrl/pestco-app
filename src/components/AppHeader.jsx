@@ -77,3 +77,34 @@ export default function AppHeader({
             <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
           </>
         )}
+        <button
+          onClick={() => setDarkMode((d) => !d)}
+          className="btn-press flex items-center"
+          style={{ color: "#fff" }}
+          aria-label={darkMode ? t.lightModeToggle : t.darkModeToggle}
+          title={darkMode ? t.lightModeToggle : t.darkModeToggle}
+        >
+          {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
+        <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
+        <button
+          onClick={() => setLang(lang === "ar" ? "en" : "ar")}
+          className="btn-press flex items-center gap-1 font-bold text-xs"
+          style={{ color: "#fff" }}
+          aria-label={t.langToggle}
+        >
+          <Languages size={14} /> {t.langToggle}
+        </button>
+      </div>
+      <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.22)" }} />
+      <button
+        onClick={() => signOut(auth).catch(() => {})}
+        className="btn-press flex items-center"
+        style={{ color: "#fff" }}
+        aria-label={t.signOut}
+      >
+        <LogOut size={16} />
+      </button>
+    </div>
+  );
+}
