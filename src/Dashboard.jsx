@@ -27,7 +27,7 @@ import SectorBreakdownCard from "./components/SectorBreakdownCard";
 
 export default function Dashboard({
   visits, lang, onOpenCustomer, showAlert, staleOffers = [],
-  exchangeRate = null, unifyCurrency = false, setUnifyCurrency = () => {},
+  exchangeRate = null, setExchangeRate = () => {}, unifyCurrency = false, setUnifyCurrency = () => {},
 }) {
   const t = STRINGS[lang];
   const now = new Date();
@@ -267,37 +267,53 @@ export default function Dashboard({
         </div>
 
         <div
-          className="flex items-center justify-between"
           style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: "10px 12px" }}
         >
-          <div>
+          <div className="flex items-center justify-between">
             <p className="text-xs font-bold" style={{ color: TEXT }}>{t.unifyCurrencyToggle}</p>
-            {!exchangeRate && (
-              <p className="text-xs" style={{ color: MUTED }}>{t.unifyCurrencyNeedsRate}</p>
-            )}
-          </div>
-          <button
-            onClick={() => exchangeRate && setUnifyCurrency((v) => !v)}
-            aria-label={t.unifyCurrencyToggle}
-            aria-pressed={unifyCurrency && !!exchangeRate}
-            disabled={!exchangeRate}
-            className="btn-press"
-            style={{
-              width: 40, height: 22, borderRadius: 11, position: "relative",
-              background: unifyCurrency && exchangeRate ? GOLD : LINE,
-              border: "none", opacity: exchangeRate ? 1 : 0.5,
-              cursor: exchangeRate ? "pointer" : "not-allowed",
-            }}
-          >
-            <span
+            <button
+              onClick={() => exchangeRate && setUnifyCurrency((v) => !v)}
+              aria-label={t.unifyCurrencyToggle}
+              aria-pressed={unifyCurrency && !!exchangeRate}
+              disabled={!exchangeRate}
+              className="btn-press"
               style={{
-                position: "absolute", top: 2,
-                left: unifyCurrency && exchangeRate ? 20 : 2,
-                width: 18, height: 18, borderRadius: "50%", background: "#fff",
-                transition: "left .15s",
+                width: 40, height: 22, borderRadius: 11, position: "relative",
+                background: unifyCurrency && exchangeRate ? GOLD : LINE,
+                border: "none", opacity: exchangeRate ? 1 : 0.5,
+                cursor: exchangeRate ? "pointer" : "not-allowed",
               }}
-            />
-          </button>
+            >
+              <span
+                style={{
+                  position: "absolute", top: 2,
+                  left: unifyCurrency && exchangeRate ? 20 : 2,
+                  width: 18, height: 18, borderRadius: "50%", background: "#fff",
+                  transition: "left .15s",
+                }}
+              />
+            </button>
+          </div>
+
+          {/* The rate itself is entered right here, not in Settings — Settings
+              is owner/admin-only, but anyone who can see the Dashboard (any
+              member granted dashboard access) needs to be able to set their
+              own rate to actually use the toggle above. */}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs" style={{ color: MUTED }}>{t.exchangeRateLabel}:</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs" style={{ color: MUTED }}>1$ =</span>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={exchangeRate ?? ""}
+                onChange={(e) => setExchangeRate(e.target.value ? Number(e.target.value) : null)}
+                style={{ width: 68, padding: "4px 6px", borderRadius: 8, border: `1px solid ${LINE}`, background: SURFACE_SUBTLE, color: TEXT, textAlign: "center", fontSize: 12 }}
+              />
+              <span className="text-xs" style={{ color: MUTED }}>{t.currencies.EGP}</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
