@@ -283,7 +283,7 @@ export default function App() {
     pendingEdits, pendingSupplierEdits, duplicateGroups,
     allTags, tagCounts, sectorCounts, totalCustomers, missingDataCount, noVisitsCount,
     dateAddedScopeTotal, availableAddedMonths, filtered,
-    visibleSuppliers, allSupplierTags, allSupplierCategories, filteredSuppliers,
+    visibleSuppliers, allSupplierTags, supplierTagCounts, allSupplierCategories, filteredSuppliers,
   } = useFilteredData({
     visits, suppliers, pendingDelete, pendingSupplierDelete,
     sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly,
@@ -292,8 +292,8 @@ export default function App() {
     t,
   });
 
-  const { renameTag, tagBusy } = useTagManagement({
-    ownerUid, visits: visibleVisits, canEdit, requireOnline, confirmAction, reportSaveError, t,
+  const { renameTag, tagBusy, renameSupplierTag, supplierTagBusy } = useTagManagement({
+    ownerUid, visits: visibleVisits, suppliers: visibleSuppliers, canEdit, requireOnline, confirmAction, reportSaveError, t,
   });
 
   // The live listener already holds every customer (no pagination limit),
@@ -491,6 +491,7 @@ export default function App() {
         removeAdminEmail={removeAdminEmail}
         removeTagFromForm={removeTagFromForm}
         removeTagFromSupplierForm={removeTagFromSupplierForm}
+        renameSupplierTag={renameSupplierTag}
         renameTag={renameTag}
         reviewSignup={reviewSignup}
         revokeAccess={revokeAccess}
@@ -539,6 +540,8 @@ export default function App() {
         suppliers={suppliers}
         suppliersLoaded={suppliersLoaded}
         switchOwnerWorkspace={switchOwnerWorkspace}
+        supplierTagCounts={supplierTagCounts}
+        supplierTagBusy={supplierTagBusy}
         t={t}
         tagBusy={tagBusy}
         tagCounts={tagCounts}
