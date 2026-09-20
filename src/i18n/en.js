@@ -149,11 +149,8 @@ export const EN = {
     const noun = entityType === "supplier" ? "supplier" : "customer";
     return `"${oldTag}" will become "${newTag}" on ${count} ${noun}${count === 1 ? "" : "s"}. Continue?`;
   },
-  currencySettingsTitle: "Unify currency",
-  currencySettingsHint: "Set the USD-to-EGP rate to combine the Dashboard's offers-value total into one currency instead of splitting it.",
   exchangeRateLabel: "USD to EGP",
   unifyCurrencyToggle: "Unify currency on Dashboard",
-  unifyCurrencyNeedsRate: "Set the exchange rate above first",
   excelTitle: "Excel Import / Export",
   exportBtn: "Export all visits (Excel)",
   importBtn: "Import from Excel file",

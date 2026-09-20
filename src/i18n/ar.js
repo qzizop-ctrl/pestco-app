@@ -153,11 +153,8 @@ export const AR = {
     const who = count === 1 ? nouns.one : count === 2 ? nouns.two : nouns.many(count);
     return `هيتغيّر التاج "${oldTag}" إلى "${newTag}" في ${who}. تأكيد؟`;
   },
-  currencySettingsTitle: "توحيد العملة",
-  currencySettingsHint: "حدد سعر الدولار بالجنيه عشان تقدر توحّد إجمالي قيمة العروض في الداشبورد بعملة واحدة بدل ما يتقسم.",
   exchangeRateLabel: "دولار إلى جنيه",
   unifyCurrencyToggle: "توحيد العملة في الداشبورد",
-  unifyCurrencyNeedsRate: "حدد سعر الصرف فوق في الإعدادات الأول",
   excelTitle: "استيراد / تصدير إكسيل",
   exportBtn: "تصدير كل الزيارات (إكسيل)",
   importBtn: "استيراد من ملف إكسيل",
