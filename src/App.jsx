@@ -46,6 +46,20 @@ export default function App() {
   } = useAppPrefs();
 
   const [screen, setScreen] = useState("list"); // dashboard | list | form | detail | settings
+
+  // Remembers whichever root screen ("list" or "dashboard") was last
+  // active before opening a customer's detail screen, so the back button
+  // (header + Android hardware back) returns to wherever the customer was
+  // actually opened from instead of always assuming "list". See
+  // AppHeader.jsx / useAndroidBackButton.js for where this is consumed.
+  const lastRootScreenRef = useRef("list");
+  useEffect(() => {
+    if (screen === "list" || screen === "dashboard") {
+      lastRootScreenRef.current = screen;
+    }
+  }, [screen]);
+  const detailBackTarget = lastRootScreenRef.current;
+
   const {
     query, setQuery, debouncedQuery,
     sectorFilter, setSectorFilter,
@@ -197,6 +211,7 @@ export default function App() {
   useAndroidBackButton({
     screen,
     setScreen,
+    detailBackTarget,
     form,
     isRootScreen,
     hasOpenModal: !!rejectionPrompt || !!confirmDialog,
@@ -403,6 +418,7 @@ export default function App() {
         formId={form.id}
         activeSupplierId={activeSupplierId}
         setScreen={setScreen}
+        detailBackTarget={detailBackTarget}
         isOnline={isOnline}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
@@ -610,4 +626,4 @@ export default function App() {
       )}
     </div>
   );
-}
+  }
