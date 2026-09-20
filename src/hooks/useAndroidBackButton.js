@@ -13,7 +13,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 // No-ops entirely outside a native Capacitor build (e.g. in the browser
 // during `npm run dev`), so it's always safe to call.
 // ---------------------------------------------------------------------------
-export function useAndroidBackButton({ screen, setScreen, form, isRootScreen, hasOpenModal, closeModal }) {
+export function useAndroidBackButton({ screen, setScreen, detailBackTarget, form, isRootScreen, hasOpenModal, closeModal }) {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
@@ -25,7 +25,7 @@ export function useAndroidBackButton({ screen, setScreen, form, isRootScreen, ha
       if (!isRootScreen) {
         setScreen(
           screen === "form" && form.id ? "detail" :
-          screen === "detail" ? "list" :
+          screen === "detail" ? detailBackTarget :
           screen === "supplier-form" ? "suppliers" :
           "list"
         );
@@ -37,5 +37,5 @@ export function useAndroidBackButton({ screen, setScreen, form, isRootScreen, ha
     return () => {
       sub.then((s) => s.remove()).catch(() => {});
     };
-  }, [screen, form.id, isRootScreen, hasOpenModal, closeModal, setScreen]);
+  }, [screen, form.id, isRootScreen, hasOpenModal, closeModal, setScreen, detailBackTarget]);
 }
