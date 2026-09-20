@@ -26,6 +26,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "npm"
 
       # =========================
       # JDK
@@ -39,8 +40,21 @@ jobs:
       # =========================
       # Install dependencies
       # =========================
+      # Same reasoning as build-windows.yml's install step: a transient
+      # runner-network blip (ECONNRESET etc.) mid-download shouldn't fail
+      # the whole build, so retry the step itself a few times rather than
+      # relying only on npm's own registry-level retry config.
       - name: Install dependencies
-        run: npm install
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: npm install
+        env:
+          npm_config_fetch_retries: 5
+          npm_config_fetch_retry_mintimeout: 20000
+          npm_config_fetch_retry_maxtimeout: 120000
 
       # =========================
       # Run tests

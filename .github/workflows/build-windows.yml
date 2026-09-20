@@ -26,12 +26,32 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "npm"
 
       # =========================
       # Install dependencies
       # =========================
+      # electron's postinstall step downloads a large prebuilt binary
+      # straight from GitHub releases (outside npm's own registry, so
+      # npm's registry-level retry logic doesn't cover it), which is what
+      # actually failed here (ECONNRESET) rather than anything about this
+      # repo's code — a transient runner network blip mid-download, not a
+      # reproducible error. npm_config_fetch_retries covers registry
+      # installs; wrapping the whole step in a retry action is what
+      # actually covers the electron binary download, since that request
+      # is unaffected by the npm config. Three attempts, a fixed pause
+      # between them so a same-minute network hiccup doesn't repeat.
       - name: Install dependencies
-        run: npm install
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: npm install
+        env:
+          npm_config_fetch_retries: 5
+          npm_config_fetch_retry_mintimeout: 20000
+          npm_config_fetch_retry_maxtimeout: 120000
 
       # =========================
       # Run tests
