@@ -137,12 +137,18 @@ export const EN = {
   statusNone: "No call set",
   whatsapp: "WhatsApp",
   tagManagementTitle: "Manage Tags",
-  tagManagementHint: "Rename a tag to update it on every customer that carries it at once. Typing an existing tag's name merges the two into one.",
+  tagManagementHint: "Rename a tag to update it everywhere it's used at once. Typing an existing tag's name merges the two into one.",
+  tagTabCustomers: "Customers",
+  tagTabSuppliers: "Suppliers",
   tagsEmpty: "No tags added yet",
+  tagSearchPlaceholder: "Search tags...",
+  noTagSearchResults: "No tag matches that name",
   tagRenameBtn: "Save",
   cancelBtn: "Cancel",
-  tagRenameConfirm: (oldTag, newTag, count) =>
-    `"${oldTag}" will become "${newTag}" on ${count} customer${count === 1 ? "" : "s"}. Continue?`,
+  tagRenameConfirm: (oldTag, newTag, count, entityType) => {
+    const noun = entityType === "supplier" ? "supplier" : "customer";
+    return `"${oldTag}" will become "${newTag}" on ${count} ${noun}${count === 1 ? "" : "s"}. Continue?`;
+  },
   currencySettingsTitle: "Unify currency",
   currencySettingsHint: "Set the USD-to-EGP rate to combine the Dashboard's offers-value total into one currency instead of splitting it.",
   exchangeRateLabel: "USD to EGP",

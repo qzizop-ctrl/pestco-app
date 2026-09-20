@@ -137,12 +137,20 @@ export const AR = {
   statusNone: "بدون تذكير",
   whatsapp: "واتساب",
   tagManagementTitle: "إدارة التاجز",
-  tagManagementHint: "عدّل اسم أي تاج عشان يتغيّر في كل العملاء اللي بيحملوه دفعة واحدة. لو كتبت اسم تاج موجود بالفعل، الاتنين هيندمجوا في واحد.",
+  tagManagementHint: "عدّل اسم أي تاج عشان يتغيّر في كل اللي بيحمله دفعة واحدة. لو كتبت اسم تاج موجود بالفعل، الاتنين هيندمجوا في واحد.",
+  tagTabCustomers: "العملاء",
+  tagTabSuppliers: "الموردين",
   tagsEmpty: "مفيش تاجز مضافة لحد دلوقتي",
+  tagSearchPlaceholder: "دوّر على تاج...",
+  noTagSearchResults: "مفيش تاج بالاسم ده",
   tagRenameBtn: "حفظ",
   cancelBtn: "إلغاء",
-  tagRenameConfirm: (oldTag, newTag, count) => {
-    const who = count === 1 ? "عميل واحد" : count === 2 ? "عميلين" : `${count} عملاء`;
+  tagRenameConfirm: (oldTag, newTag, count, entityType) => {
+    const nouns =
+      entityType === "supplier"
+        ? { one: "مورد واحد", two: "موردين", many: (n) => `${n} موردين` }
+        : { one: "عميل واحد", two: "عميلين", many: (n) => `${n} عملاء` };
+    const who = count === 1 ? nouns.one : count === 2 ? nouns.two : nouns.many(count);
     return `هيتغيّر التاج "${oldTag}" إلى "${newTag}" في ${who}. تأكيد؟`;
   },
   currencySettingsTitle: "توحيد العملة",
