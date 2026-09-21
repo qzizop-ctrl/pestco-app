@@ -8,13 +8,14 @@ import { useResetViewOnOpen } from "./useResetViewOnOpen";
 //
 // 1. resetToDefaultView — clears search/filters and, unless `force` or the
 //    current screen is one worth preserving, falls back to the list screen.
-//    Screens like "detail"/"supplier-form"/"settings"/"suppliers"/"dashboard"
-//    are left alone by default: stepping out to take a phone call and coming
-//    back to find the customer's page gone, notes still unwritten, was its
-//    own bug. `force=true` (used on sign-out below) always resets regardless
-//    — staying on someone's customer/supplier record after logging out
-//    (e.g. a different person logging into a shared device) would be a real
-//    privacy problem, not a convenience worth preserving.
+//    Screens like "form"/"detail"/"supplier-form"/"settings"/"suppliers"/
+//    "dashboard" are left alone by default: stepping out to take a phone
+//    call and coming back to find the customer's page gone, notes still
+//    unwritten, was its own bug. `force=true` (used on sign-out below)
+//    always resets regardless — staying on someone's customer/supplier
+//    record after logging out (e.g. a different person logging into a
+//    shared device) would be a real privacy problem, not a convenience
+//    worth preserving.
 //
 // 2. useResetViewOnOpen(resetToDefaultView) — same reset, triggered when a
 //    backgrounded mobile app is reopened (see that hook for why).
@@ -34,7 +35,13 @@ import { useResetViewOnOpen } from "./useResetViewOnOpen";
 // into its own hook because it shares this hook's job of "keep the visible
 // screen honest," not because it's logically the same mechanism.
 // ---------------------------------------------------------------------------
-const PRESERVED_SCREENS_ON_RESUME = ["detail", "supplier-form", "settings", "suppliers", "dashboard"];
+// "form" (new/edit customer) was missing from this list — this is the fix
+// for exactly the bug in the comment above: switching to another app mid
+// "add new customer" and coming back wiped the unsaved draft, because
+// resuming reset the screen to "list" like any other unlisted screen.
+// "supplier-form" was already covered, so the equivalent new/edit-supplier
+// case wasn't affected.
+const PRESERVED_SCREENS_ON_RESUME = ["form", "detail", "supplier-form", "settings", "suppliers", "dashboard"];
 
 export function useAppViewLifecycle({
   user,
