@@ -20,7 +20,8 @@ import { useExcelImport } from "./hooks/useExcelImport";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { useReminders } from "./hooks/useReminders";
 import { useAndroidBackButton } from "./hooks/useAndroidBackButton";
-import { useResetViewOnOpen } from "./hooks/useResetViewOnOpen";
+import { useAppViewLifecycle } from "./hooks/useAppViewLifecycle";
+import { useActiveCustomerView } from "./hooks/useActiveCustomerView";
 import { useNavRestore } from "./hooks/useNavRestore";
 import { useCustomerRecords } from "./hooks/useCustomerRecords";
 import { useSupplierRecords } from "./hooks/useSupplierRecords";
@@ -34,8 +35,6 @@ import { useTagManagement } from "./hooks/useTagManagement";
 import { useErrorReporting } from "./hooks/useErrorReporting";
 import { TEXT, MUTED, THEME_VARS } from "./theme";
 import { STRINGS } from "./i18n";
-import { STAGE_IDS } from "./domain";
-import { parseVisitDate, fmtUnifiedOrSplit, sumOffersByCurrency } from "./helpers";
 
 const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
 
@@ -198,60 +197,13 @@ export default function App() {
     },
   });
 
-  // Clears stale search/filter state whenever the app is reopened on
-  // mobile — see useResetViewOnOpen for why that part is needed (Capacitor
-  // just backgrounds the app on Home, so without this, old filters/search
-  // text could sit active indefinitely). Screen navigation is handled
-  // separately: if the person is actively looking at a specific
-  // customer/supplier ("detail"/"supplier-form"), jumping them back to the
-  // list every time the app merely comes back to the foreground was its
-  // own bug — e.g. stepping out to take a phone call and coming back to
-  // find the customer's page gone, notes still unwritten. Screens like that
-  // are left alone by default; falling back to "list" is still correct for
-  // transient/no-longer-meaningful screens (a half-filled "new customer"
-  // form, etc.) since there's no in-progress record identity to preserve.
-  // `force=true` always resets to "list" regardless — used on sign-out
-  // below, where staying on someone's customer/supplier record after
-  // logging out (e.g. a different person logging into a shared device)
-  // would be a real privacy problem, not a convenience to preserve.
-  const PRESERVED_SCREENS_ON_RESUME = ["detail", "supplier-form", "settings", "suppliers", "dashboard"];
-  const resetToDefaultView = (force = false) => {
-    setScreen((current) => (!force && PRESERVED_SCREENS_ON_RESUME.includes(current) ? current : "list"));
-    setQuery("");
-    setSectorFilter("all");
-    setStageFilter("all");
-    setTagFilter("all");
-    setMissingDataOnly(false);
-    setNoVisitsOnly(false);
-    setDateAddedFilter("all");
-  };
-  useResetViewOnOpen(resetToDefaultView);
-
-  // Signing out only swaps AuthScreen back in — it doesn't touch screen/
-  // filter state, since those live in this same component and nothing
-  // else was clearing them. Without this, whoever logs in next (the same
-  // person again, or a different account on a shared device) landed
-  // straight back on whatever screen/filters were active when the
-  // previous session logged out, instead of a clean customer list.
-  const wasSignedIn = useRef(false);
-  useEffect(() => {
-    if (!user && wasSignedIn.current) {
-      resetToDefaultView(true);
-    }
-    wasSignedIn.current = !!user;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  // Surfaces a *read* failure on the customer list itself — previously this
-  // was swallowed entirely by useLiveData, so an account without real
-  // server-side access just saw an empty list forever with zero indication
-  // why. Alerts once per failed ownerUid, not on every re-render.
-  const reportedVisitsErrorRef = useRef(null);
-  useEffect(() => {
-    if (!visitsError || reportedVisitsErrorRef.current === ownerUid) return;
-    reportedVisitsErrorRef.current = ownerUid;
-    reportVisitsError(visitsError);
-  }, [visitsError, ownerUid, reportVisitsError]);
+  // App-resume / sign-out view resets, plus visits-read-error reporting —
+  // see src/hooks/useAppViewLifecycle.js for the reasoning behind each.
+  useAppViewLifecycle({
+    user, setScreen, setQuery, setSectorFilter, setStageFilter, setTagFilter,
+    setMissingDataOnly, setNoVisitsOnly, setDateAddedFilter,
+    visitsError, ownerUid, reportVisitsError,
+  });
 
   // Excel export lives in useExcelExport (src/hooks/useExcelExport.js) — see
   // that file for visitsToRows/suppliersToRows and the actual xlsx writing.
@@ -326,18 +278,9 @@ export default function App() {
     openDetail, openEditSupplier,
   });
 
-  const activeStageIdx = active ? STAGE_IDS.indexOf(active.stage || "") : -1;
-  const activityLog = active ? [...(active.activityLog || [])].sort((a, b) => (a.at < b.at ? 1 : -1)) : [];
-  const activeOffers = active ? [...(active.offers || [])].sort((a, b) => {
-    const da = parseVisitDate(a.offerDate);
-    const db = parseVisitDate(b.offerDate);
-    if (!da && !db) return 0;
-    if (!da) return 1;
-    if (!db) return -1;
-    return db - da;
-  }) : [];
-  const activeOffersTotals = sumOffersByCurrency(activeOffers);
-  const activeOffersValueText = fmtUnifiedOrSplit(activeOffersTotals, t, exchangeRate, unifyCurrency);
+  const { activeStageIdx, activityLog, activeOffers, activeOffersValueText } = useActiveCustomerView({
+    active, t, exchangeRate, unifyCurrency,
+  });
 
   const themeVars = darkMode ? THEME_VARS.dark : THEME_VARS.light;
 
