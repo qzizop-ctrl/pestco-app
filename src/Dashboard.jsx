@@ -1,27 +1,21 @@
 import { useState } from "react";
-import { Calendar, Users, FileText, Wallet, TrendingUp, ChevronDown, Percent, DollarSign, FileDown } from "lucide-react";
-import { PRIMARY, TEXT, MUTED, LINE, GOLD, SURFACE, SURFACE_SUBTLE } from "./theme";
 import { STRINGS } from "./i18n";
-import { SECTOR_IDS } from "./domain";
-import { parseVisitDate, fmtMoney, fmtUnifiedOrSplit } from "./helpers";
-import { generateDashboardPdf } from "./pdfReport";
-import { reportException } from "./sentry";
 import { useDashboardContext } from "./contexts/DashboardContext";
 import { useDashboardStats } from "./hooks/useDashboardStats";
-import { pctChange } from "./dashboardCalculations";
-// The four components below used to be defined inline in this file (which
-// had grown past 990 lines). They're pure presentational pieces with no
-// dependency on Dashboard's internal state, so they were split out into
-// src/components/ — see each file for details.
-import PeriodSheet from "./components/PeriodSheet";
-import SplitBar from "./components/SplitBar";
-import SummaryCard from "./components/SummaryCard";
-import OffersListSection from "./components/OffersListSection";
-import CustomersAddedSection from "./components/CustomersAddedSection";
-import SalesAnalysisCard from "./components/SalesAnalysisCard";
-import StaleOffersCard from "./components/StaleOffersCard";
-import SectorBreakdownCard from "./components/SectorBreakdownCard";
-
+import { useDashboardPdfExport } from "./hooks/useDashboardPdfExport";
+// This file used to hold ~990 lines, then ~440 after a first round of
+// extracting pure presentational pieces into src/components/ (PeriodSheet,
+// SplitBar, SummaryCard, etc — see each file). It's now split one level
+// further: the filter bar, the tab switcher, and each of the three tabs'
+// content are their own components, and the PDF-export logic is its own
+// hook. Dashboard.jsx itself is left as just the wiring between
+// useDashboardStats/useDashboardPdfExport and whichever tab is active — see
+// each extracted file for the reasoning behind that specific piece.
+import DashboardFilterBar from "./components/DashboardFilterBar";
+import DashboardTabs from "./components/DashboardTabs";
+import DashboardOverviewTab from "./components/DashboardOverviewTab";
+import DashboardSalesTab from "./components/DashboardSalesTab";
+import DashboardCustomersTab from "./components/DashboardCustomersTab";
 
 export default function Dashboard({
   visits, lang, onOpenCustomer, showAlert, staleOffers = [],
@@ -65,9 +59,9 @@ export default function Dashboard({
   // customers/offers lists...) lives in useDashboardStats — see that hook
   // for the reasoning behind each individual value.
   const {
-    availableYears, resolved, isSingleMonth, stats, prevStats,
+    availableYears, resolved, stats, prevStats,
     avgDealSize, prevAvgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount, prevWinRate,
-    offerBreakdown, rejectionReport, prevRejectionReport, topClients, prevTopClients,
+    rejectionReport, prevRejectionReport, topClients, prevTopClients,
     sectorBreakdown, staleOffersFiltered, offersCountSegments, offersValueSegments,
     customersAddedLabel, periodCustomersList, offersList, offersListValueTotals,
   } = useDashboardStats({
@@ -75,365 +69,97 @@ export default function Dashboard({
     exchangeRate, unifyCurrency, salesTabVisited, staleOffers, offerStatusFilter,
   });
 
-  // ---- PDF report export ----
-  const [pdfBusy, setPdfBusy] = useState(false);
-  const handleExportPdf = async () => {
-    if (pdfBusy) return;
-    setPdfBusy(true);
-    try {
-      // Full offers list for the period (not limited by the on-screen
-      // status-filter tabs — a manager report should show everything),
-      // sorted the same way the on-screen list is.
-      const allOffersInPeriod = [...stats.offersInRange].sort((a, b) => {
-        const da = parseVisitDate(a.offerDate);
-        const db = parseVisitDate(b.offerDate);
-        if (!da && !db) return 0;
-        if (!da) return 1;
-        if (!db) return -1;
-        return db - da;
-      });
-      await generateDashboardPdf({
-        t, stats, periodLabel: resolved.rangeLabel,
-        sectorLabel: sector === "all" ? null : t.sectors[sector],
-        avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
-        offersList: allOffersInPeriod,
-        rejectionReport,
-        exchangeRate, unifyCurrency,
-      });
-    } catch (e) {
-      console.error("PDF export failed:", e);
-      reportException(e, { context: "PDF export failed" });
-      if (showAlert) showAlert(t.dashPdfError);
-    } finally {
-      setPdfBusy(false);
-    }
-  };
+  const { pdfBusy, handleExportPdf } = useDashboardPdfExport({
+    t, stats, resolved, sector,
+    avgDealSize, avgDealSizeUSD, winRate, winRateDecidedCount,
+    rejectionReport, exchangeRate, unifyCurrency, showAlert,
+  });
 
   return (
     <div className="px-4 pt-4 pb-24" style={{ direction: t.dir }}>
-      {/* Filters */}
-      <div className="flex flex-col gap-3 mb-4">
-        <button
-          onClick={() => setPeriodSheetOpen(true)}
-          className="btn-press flex items-center justify-between"
-          style={{
-            background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12,
-            padding: "12px 14px", width: "100%",
-          }}
-        >
-          <span className="font-bold text-sm" style={{ color: TEXT }}>
-            {t.dashPeriodLabel}: {resolved.pillLabel}
-          </span>
-          <ChevronDown size={18} color={MUTED} />
-        </button>
+      <DashboardFilterBar
+        t={t}
+        resolved={resolved}
+        periodSheetOpen={periodSheetOpen}
+        setPeriodSheetOpen={setPeriodSheetOpen}
+        period={period}
+        availableYears={availableYears}
+        setPeriod={setPeriod}
+        sector={sector}
+        setSector={setSector}
+        exchangeRate={exchangeRate}
+        setExchangeRate={setExchangeRate}
+        unifyCurrency={unifyCurrency}
+        setUnifyCurrency={setUnifyCurrency}
+        compare={compare}
+        setCompare={setCompare}
+        pdfBusy={pdfBusy}
+        handleExportPdf={handleExportPdf}
+      />
 
-        {periodSheetOpen && (
-          <PeriodSheet
-            t={t}
-            period={period}
-            availableYears={availableYears}
-            onApply={setPeriod}
-            onClose={() => setPeriodSheetOpen(false)}
-          />
-        )}
-
-        <div>
-          <label>{t.dashSector}</label>
-          <select value={sector} onChange={(e) => setSector(e.target.value)}>
-            <option value="all">{t.dashAllSectors}</option>
-            {SECTOR_IDS.map((id) => (
-              <option key={id} value={id}>{t.sectors[id]}</option>
-            ))}
-          </select>
-        </div>
-
-        <div
-          style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: "10px 12px" }}
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold" style={{ color: TEXT }}>{t.unifyCurrencyToggle}</p>
-            <button
-              onClick={() => exchangeRate && setUnifyCurrency((v) => !v)}
-              aria-label={t.unifyCurrencyToggle}
-              aria-pressed={unifyCurrency && !!exchangeRate}
-              disabled={!exchangeRate}
-              className="btn-press"
-              style={{
-                width: 40, height: 22, borderRadius: 11, position: "relative",
-                background: unifyCurrency && exchangeRate ? GOLD : LINE,
-                border: "none", opacity: exchangeRate ? 1 : 0.5,
-                cursor: exchangeRate ? "pointer" : "not-allowed",
-              }}
-            >
-              <span
-                style={{
-                  position: "absolute", top: 2,
-                  left: unifyCurrency && exchangeRate ? 20 : 2,
-                  width: 18, height: 18, borderRadius: "50%", background: "#fff",
-                  transition: "left .15s",
-                }}
-              />
-            </button>
-          </div>
-
-          {/* The rate itself is entered right here, not in Settings — Settings
-              is owner/admin-only, but anyone who can see the Dashboard (any
-              member granted dashboard access) needs to be able to set their
-              own rate to actually use the toggle above. */}
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs" style={{ color: MUTED }}>{t.exchangeRateLabel}:</span>
-            <div className="flex items-center gap-1">
-              <span className="text-xs" style={{ color: MUTED }}>1$ =</span>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={exchangeRate ?? ""}
-                onChange={(e) => setExchangeRate(e.target.value ? Number(e.target.value) : null)}
-                style={{ width: 68, padding: "4px 6px", borderRadius: 8, border: `1px solid ${LINE}`, background: SURFACE_SUBTLE, color: TEXT, textAlign: "center", fontSize: 12 }}
-              />
-              <span className="text-xs" style={{ color: MUTED }}>{t.currencies.EGP}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCompare((c) => !c)}
-            className="btn-press flex items-center justify-center gap-2 font-bold text-xs"
-            style={{
-              flex: 1,
-              border: `1.4px solid ${compare ? PRIMARY : LINE}`,
-              background: compare ? PRIMARY : SURFACE,
-              color: compare ? "#fff" : MUTED,
-              borderRadius: 12,
-              padding: "9px 0",
-            }}
-          >
-            <TrendingUp size={14} /> {t.dashCompareToggle}
-          </button>
-          <button
-            onClick={handleExportPdf}
-            disabled={pdfBusy}
-            className="btn-press flex items-center justify-center gap-2 font-bold text-xs"
-            style={{
-              flex: 1,
-              border: `1.4px solid ${GOLD}`,
-              background: pdfBusy ? SURFACE_SUBTLE : GOLD,
-              color: pdfBusy ? MUTED : "#fff",
-              borderRadius: 12,
-              padding: "9px 0",
-              opacity: pdfBusy ? 0.7 : 1,
-            }}
-          >
-            <FileDown size={14} /> {pdfBusy ? t.dashPdfGenerating : t.dashExportPdfBtn}
-          </button>
-        </div>
-      </div>
-
-      {/* Section tabs — the rest of the Dashboard below the filter bar is
-          split into three panes (overview / sales / customers) instead of
-          one long stack, so a manager sees one focused group at a time.
-          The filter bar above (period/sector/compare/export) stays shared
-          across all three since it drives every tab's data. */}
-      <div
-        className="flex items-center gap-1 mb-4"
-        style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 12, padding: 3 }}
-      >
-        {[
-          { key: "overview", label: t.dashTabOverview },
-          { key: "sales", label: t.dashTabSales },
-          { key: "customers", label: t.dashTabCustomers },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => {
-              setActiveTab(tab.key);
-              if (tab.key === "sales") setSalesTabVisited(true);
-            }}
-            className="btn-press flex-1 font-bold text-xs"
-            style={{
-              borderRadius: 9,
-              padding: "8px 0",
-              background: activeTab === tab.key ? PRIMARY : "transparent",
-              color: activeTab === tab.key ? "#fff" : MUTED,
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <DashboardTabs
+        t={t}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        setSalesTabVisited={setSalesTabVisited}
+      />
 
       {activeTab === "overview" && (
-        <>
-          {/* Offers open for a while with no update — same list/threshold the
-              Alerts Center uses, surfaced here too since a manager reading the
-              Dashboard shouldn't have to switch screens to see it. */}
-          <StaleOffersCard t={t} staleOffers={staleOffersFiltered} onOpenCustomer={onOpenCustomer} />
-
-          {stats.visitsCount === 0 && (
-            <div
-              className="text-center"
-              style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 18, marginBottom: 14 }}
-            >
-              <p className="text-sm font-bold" style={{ color: MUTED }}>{t.dashNoVisitsInPeriod}</p>
-            </div>
-          )}
-
-          {/* Summary cards */}
-          <div className="flex flex-wrap gap-3 mb-5">
-            <SummaryCard
-              icon={Calendar}
-              label={t.dashCardVisits}
-              value={stats.visitsCount}
-              delta={compare ? (prevStats ? pctChange(stats.visitsCount, prevStats.visitsCount) : null) : undefined}
-              t={t}
-            />
-            <SummaryCard
-              icon={Users}
-              label={customersAddedLabel}
-              value={stats.customersAddedCount}
-              delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
-              t={t}
-            />
-            <SummaryCard
-              icon={FileText}
-              label={t.dashCardOffersCount}
-              value={stats.offersCount}
-              delta={compare ? (prevStats ? pctChange(stats.offersCount, prevStats.offersCount) : null) : undefined}
-              extra={<SplitBar segments={offersCountSegments} />}
-              t={t}
-            />
-            <SummaryCard
-              icon={Wallet}
-              label={t.dashCardOffersValue}
-              value={fmtUnifiedOrSplit(stats.offersValueTotals, t, exchangeRate, unifyCurrency, { showAllIfEmpty: true })}
-              delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
-              extra={<SplitBar segments={offersValueSegments} />}
-              t={t}
-            />
-            <SummaryCard
-              icon={DollarSign}
-              label={t.dashAvgDealSize}
-              value={
-      avgDealSize === null
-        ? t.dashNoOffersYet
-        : `${fmtMoney(avgDealSize, `${t.locale}-u-nu-latn`)} ${t.dashCurrency}`
-    }
-    subValue={
-      avgDealSizeUSD !== null
-        ? `${fmtMoney(avgDealSizeUSD, `${t.locale}-u-nu-latn`)} ${t.currencies.USD}`
-        : undefined
-    }
-              delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
-              t={t}
-            />
-            <SummaryCard
-              icon={Percent}
-              label={t.dashWinRate}
-              value={winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}%`}
-              subValue={winRate !== null ? t.dashWinRateSample(winRateDecidedCount) : undefined}
-              delta={
-                compare
-                  ? (prevStats && winRate !== null && prevWinRate !== null
-                      ? { points: winRate - prevWinRate }
-                      : null)
-                  : undefined
-              }
-              t={t}
-            />
-          </div>
-        </>
+        <DashboardOverviewTab
+          t={t}
+          staleOffersFiltered={staleOffersFiltered}
+          onOpenCustomer={onOpenCustomer}
+          stats={stats}
+          prevStats={prevStats}
+          compare={compare}
+          customersAddedLabel={customersAddedLabel}
+          offersCountSegments={offersCountSegments}
+          offersValueSegments={offersValueSegments}
+          exchangeRate={exchangeRate}
+          unifyCurrency={unifyCurrency}
+          avgDealSize={avgDealSize}
+          avgDealSizeUSD={avgDealSizeUSD}
+          prevAvgDealSize={prevAvgDealSize}
+          winRate={winRate}
+          winRateDecidedCount={winRateDecidedCount}
+          prevWinRate={prevWinRate}
+        />
       )}
 
       {activeTab === "sales" && (
-        <>
-          {/* Every sector side by side for the same period — only shown when
-              "all sectors" is selected (see sectorBreakdown above). */}
-          {sectorBreakdown && (
-            <SectorBreakdownCard t={t} breakdown={sectorBreakdown} exchangeRate={exchangeRate} unifyCurrency={unifyCurrency} />
-          )}
-
-          {/* Pipeline + Sales Performance + Rejection Reasons, combined into one
-              tabbed card — see SalesAnalysisCard.jsx for why these three used
-              to be separate cards and no longer are. */}
-          <SalesAnalysisCard
-            t={t}
-            stats={stats}
-            prevStats={prevStats}
-            compare={compare}
-            rejectionReport={rejectionReport}
-            prevRejectionReport={prevRejectionReport}
-            topClients={topClients}
-            prevTopClients={prevTopClients}
-            visits={visits}
-            onOpenCustomer={onOpenCustomer}
-            exchangeRate={exchangeRate}
-            unifyCurrency={unifyCurrency}
-          />
-        </>
+        <DashboardSalesTab
+          t={t}
+          sectorBreakdown={sectorBreakdown}
+          stats={stats}
+          prevStats={prevStats}
+          compare={compare}
+          rejectionReport={rejectionReport}
+          prevRejectionReport={prevRejectionReport}
+          topClients={topClients}
+          prevTopClients={prevTopClients}
+          visits={visits}
+          onOpenCustomer={onOpenCustomer}
+          exchangeRate={exchangeRate}
+          unifyCurrency={unifyCurrency}
+        />
       )}
 
       {activeTab === "customers" && (
-        <>
-          {/* Second-level toggle — this tab used to show the offers list
-              and the customers-added list stacked one after another,
-              which meant a lot of scrolling once either list had more
-              than a handful of rows. */}
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              onClick={() => setCustomersSubTab("offers")}
-              className="btn-press font-bold text-xs"
-              style={{
-                flex: 1,
-                borderRadius: 10,
-                padding: "7px 0",
-                border: `1.4px solid ${customersSubTab === "offers" ? PRIMARY : LINE}`,
-                background: customersSubTab === "offers" ? PRIMARY : SURFACE,
-                color: customersSubTab === "offers" ? "#fff" : MUTED,
-              }}
-            >
-              {t.dashOffersSection}
-            </button>
-            <button
-              onClick={() => setCustomersSubTab("customers")}
-              className="btn-press font-bold text-xs"
-              style={{
-                flex: 1,
-                borderRadius: 10,
-                padding: "7px 0",
-                border: `1.4px solid ${customersSubTab === "customers" ? PRIMARY : LINE}`,
-                background: customersSubTab === "customers" ? PRIMARY : SURFACE,
-                color: customersSubTab === "customers" ? "#fff" : MUTED,
-              }}
-            >
-              {t.navCustomers}
-            </button>
-          </div>
-
-          {customersSubTab === "offers" && (
-            <OffersListSection
-              t={t}
-              offersList={offersList}
-              offerStatusFilter={offerStatusFilter}
-              setOfferStatusFilter={setOfferStatusFilter}
-              offersListValueTotals={offersListValueTotals}
-              visits={visits}
-              onOpenCustomer={onOpenCustomer}
-              exchangeRate={exchangeRate}
-              unifyCurrency={unifyCurrency}
-            />
-          )}
-
-          {customersSubTab === "customers" && (
-            <CustomersAddedSection
-              t={t}
-              customersAddedLabel={customersAddedLabel}
-              periodCustomersList={periodCustomersList}
-              onOpenCustomer={onOpenCustomer}
-            />
-          )}
-        </>
+        <DashboardCustomersTab
+          t={t}
+          customersSubTab={customersSubTab}
+          setCustomersSubTab={setCustomersSubTab}
+          offersList={offersList}
+          offerStatusFilter={offerStatusFilter}
+          setOfferStatusFilter={setOfferStatusFilter}
+          offersListValueTotals={offersListValueTotals}
+          visits={visits}
+          onOpenCustomer={onOpenCustomer}
+          exchangeRate={exchangeRate}
+          unifyCurrency={unifyCurrency}
+          customersAddedLabel={customersAddedLabel}
+          periodCustomersList={periodCustomersList}
+        />
       )}
     </div>
   );
