@@ -14,6 +14,7 @@ import FilterSheet from "./FilterSheet";
 import PendingEditsSheet from "./PendingEditsSheet";
 import { PRIMARY, TEXT, MUTED, GOLD, LINE, SURFACE, sectorColor } from "../theme";
 import { SECTOR_IDS } from "../domain";
+import { useIncrementalReveal } from "../hooks/useIncrementalReveal";
 
 export default function CustomerListScreen({
   t,
@@ -62,6 +63,17 @@ export default function CustomerListScreen({
     (missingDataOnly ? 1 : 0) +
     (noVisitsOnly ? 1 : 0) +
     (dateAddedFilter !== "all" ? 1 : 0);
+
+  // Only render a growing window of `filtered` instead of every row at
+  // once — see useIncrementalReveal.js for why. resetKey is built from the
+  // query/filter state (not from `filtered` itself) so a live Firestore
+  // update while scrolled down doesn't reset the scroll position back to
+  // the first page.
+  const revealResetKey = [
+    query, sectorFilter, stageFilter, tagFilter,
+    missingDataOnly, noVisitsOnly, dateAddedFilter,
+  ].join("|");
+  const { visibleItems, hasMore, sentinelRef } = useIncrementalReveal(filtered, revealResetKey);
 
   return (
     <div className="px-4 pt-4 pb-24">
@@ -216,9 +228,14 @@ export default function CustomerListScreen({
         </div>
       )}
 
-      {filtered.map((v) => (
+      {visibleItems.map((v) => (
         <VisitCard key={v.id} visit={v} onOpen={openDetail} onTogglePin={togglePin} canEdit={canEdit} t={t} />
       ))}
+
+      {/* Invisible sentinel: once it scrolls into view, useIncrementalReveal
+          mounts the next page of rows. rootMargin on the observer means
+          this fires a bit before the user actually reaches the bottom. */}
+      {hasMore && <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />}
 
       {canEdit && (
         <button
