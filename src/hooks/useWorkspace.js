@@ -237,29 +237,44 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
           // "email not registered" style message instead of leaving it
           // signed in with no data and no way forward.
           if (!isReviewerEmail) {
+            // firestore.rules now requires request.auth.token.email_verified
+            // on the signups/{uid} create, so an unverified account can
+            // never reach the reviewer's pending list no matter what this
+            // client does — closing the gap where anyone could register
+            // with an email they don't own and hope to get approved on
+            // sight. Tell the person to verify instead of the generic
+            // "no account" message, and don't bother attempting the
+            // doc write below; it would just fail.
+            if (!user.emailVerified) {
+              setAuthError("unverified");
+              signOut(auth).catch((e) => {
+                console.error("Sign-out for unverified account failed:", e);
+                reportException(e, { context: "Sign-out for unverified account failed" });
+              });
+              return;
+            }
             setAuthError(true);
-            // Self-heal: AuthScreen's registration flow writes signups/{uid}
-            // right after creating the account, in a separate call that can
-            // fail silently (dropped connection, backgrounded app) without
-            // blocking the signup itself — see the comment there. When that
-            // happens the account exists in Firebase Auth (so re-registering
-            // just gets "email already in use") but never shows up in the
-            // reviewer's pending-accounts list in Settings, with no way for
-            // the owner to grant access. Since we're authenticated right
-            // now, re-write the doc if it's missing before signing out.
+            // Self-heal: AuthScreen's registration flow sends the
+            // verification email right after creating the account, but
+            // doesn't write signups/{uid} itself anymore (it can't yet —
+            // the account isn't verified at that point). Once the person
+            // verifies and logs back in, write it here instead, now that
+            // the rules' email_verified check can actually pass.
             //
-            // Only do this within a few minutes of account creation — this
-            // branch also covers a *dismissed* or *revoked* account trying
-            // to log back in, and those must NOT reappear in "pending
-            // review" every time they retry (that's what dismiss/revoke
-            // are for). A fresh signup retrying right after the original
-            // write failed and a months-old dismissed account both land
-            // here identically; creation-time recency is the only signal
-            // available to tell them apart.
+            // Only do this within a reasonable window of account creation
+            // — this branch also covers a *dismissed* or *revoked* account
+            // trying to log back in, and those must NOT reappear in
+            // "pending review" every time they retry (that's what
+            // dismiss/revoke are for). A verified signup retrying after
+            // the original write failed and a months-old dismissed account
+            // both land here identically; creation-time recency is the
+            // only signal available to tell them apart. Widened from the
+            // original 15 minutes since verifying an email realistically
+            // takes longer than that.
             const accountAgeMs = user.metadata?.creationTime
               ? Date.now() - new Date(user.metadata.creationTime).getTime()
               : Infinity;
-            if (accountAgeMs < 15 * 60 * 1000) {
+            if (accountAgeMs < 24 * 60 * 60 * 1000) {
               // No existence check first — a plain user can't even read the
               // signups collection (only a reviewer can, see
               // firestore.rules), so a getDoc here would just fail
