@@ -37,6 +37,20 @@
 ملف `*.test.js` جنبه — الأسلوب المتبع في المشروع إن كل ملف منطق ليه ملف
 اختبار بنفس الاسم.
 
+نفس الفكرة سارية على الـ hooks والمكونات كمان (مش بس pure functions):
+- **Hook بلا Firebase** (زي `useFilteredData.js`) بيتفحص بـ
+  `renderHook`/`act` من `@testing-library/react` — مثال كامل في
+  `useFilteredData.test.js`.
+- **مكوّن عرض بسيط** (زي `SummaryCard.jsx`) بيتفحص بـ `render`/`screen` من
+  نفس المكتبة — مثال في `SummaryCard.test.jsx`.
+- Hook متشابك مع Firebase مباشرة (زي `useCustomerRecords.js`) محتاج mock
+  لـ `firebase/firestore` الأول؛ لو مش متأكد إزاي، خد `useFilteredData.test.js`
+  كمرجع أسلوب (بيانات وهمية + fake timers لو فيه تواريخ) وابدأ بمنطق مبسّط.
+
+`npm run test:coverage` بيولّد تقرير تغطية (`coverage/index.html`) — مفيش
+حد أدنى مفروض حاليًا، لكن شوف التقرير قبل ما تضيف PR كبير عشان تلاحظ لو
+سيبت جزء أساسي من غير اختبار.
+
 ## تقسيم الملفات الكبيرة
 
 لو لقيت نفسك بتضيف مية سطر جديدة لملف React شاشة كبير، فكّر هل الإضافة دي

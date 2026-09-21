@@ -49,6 +49,7 @@ scripts/                 سكربتات مساعدة (تثبيت سلامة xlsx
 | `dev` | تشغيل السيرفر المحلي للتطوير |
 | `build` | بناء نسخة الإنتاج (ويب) |
 | `test` / `test:watch` | تشغيل الاختبارات |
+| `test:coverage` | تشغيل الاختبارات + تقرير تغطية (`coverage/index.html`) |
 | `lint` / `lint:fix` | فحص/إصلاح الكود بـ ESLint |
 | `format` / `format:check` | تنسيق الكود بـ Prettier |
 | `android:setup` | بناء + إضافة مشروع أندرويد + تشغيل الباتش + مزامنة Capacitor |
@@ -85,10 +86,18 @@ npm run firebase:deploy-rules
 
 ## الاختبارات
 ```bash
-npm test        # تشغيل مرة واحدة
+npm test              # تشغيل مرة واحدة
 npm run test:watch
+npm run test:coverage # + تقرير تغطية في coverage/index.html
 ```
-الاختبارات الحالية تغطي: صلاحيات الأدمن (`adminPermissions.test.js`)، حسابات لوحة التحكم (`dashboardCalculations.test.js`)، استيراد الإكسيل (`helpers.excelImport.test.js`)، دوال `helpers.js` الأخرى (`helpers.test.js`)، والتراجع عن آخر تعديل (`lastChange.test.js`).
+الاختبارات الحالية تغطي: صلاحيات الأدمن (`adminPermissions.test.js`)، حسابات لوحة التحكم (`dashboardCalculations.test.js`)، استيراد الإكسيل (`helpers.excelImport.test.js`)، دوال `helpers.js` الأخرى (`helpers.test.js`)، والتراجع عن آخر تعديل (`lastChange.test.js`) — كل دول pure functions.
+
+بالإضافة لأول اختبارات hook/component في المشروع: فلترة القوائم واكتشاف
+التكرارات (`hooks/useFilteredData.test.js`، عبر `renderHook`) ومكوّن كارت
+الملخص في الداشبورد (`components/SummaryCard.test.jsx`، عبر `render`/
+`screen`) — الاثنين بيستخدموا `@testing-library/react`، وبيئة التشغيل
+`jsdom` (مُعدّة في `vite.config.js`). راجع [`CONTRIBUTING.md`](./CONTRIBUTING.md#إضافة-اختبارات)
+لو حابب تضيف اختبار مشابه.
 
 ## سجل التعديلات
 تفاصيل التعديلات السابقة (ربط الموردين بالعروض، استرجاع سكربت باتش الأندرويد، إلخ) منقولة إلى [`CHANGELOG.md`](./CHANGELOG.md).
