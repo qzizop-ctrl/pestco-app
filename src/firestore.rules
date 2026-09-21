@@ -203,7 +203,15 @@ service cloud.firestore {
 
       allow read, delete: if isReviewer();
 
+      // email_verified is a claim Firebase itself sets on the ID token
+      // only after the user clicks the link in a real verification email
+      // — the client can't forge it. Requiring it here means a signup
+      // can't reach the reviewer's pending-accounts list (and so can't be
+      // approved) on an email the registrant doesn't actually control,
+      // closing the impersonation gap where anyone could type in a
+      // teammate's address and hope the reviewer approves on sight.
       allow create: if hasEmail()
+        && request.auth.token.email_verified == true
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['email', 'createdAt'])
         && request.resource.data.email == myEmail();

@@ -3,10 +3,11 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
+  signOut,
 } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Languages } from "lucide-react";
-import { auth, db } from "./firebase";
+import { auth } from "./firebase";
 import { PRIMARY } from "./theme";
 import { BrandMark, BADGE_WATERMARK } from "./components/Shared";
 import { reportException } from "./sentry";
@@ -33,6 +34,10 @@ const STRINGS = {
     resetTitle: "استرجاع كلمة السر",
     sendReset: "إرسال لينك الاسترجاع",
     backToLogin: "رجوع لتسجيل الدخول",
+    verifyEmailSent:
+      "تم إرسال لينك تأكيد على بريدك. افتحه واضغط عليه، وبعدين سجّل دخول تاني عشان طلبك يوصل للمراجعة.",
+    unverifiedError:
+      "لازم تأكد بريدك الإلكتروني الأول. افتح اللينك اللي بعتناه لك، وبعدين سجّل دخول تاني.",
     errors: {
       "auth/invalid-email": "البريد الإلكتروني غير صحيح",
       "auth/user-not-found": "لا يوجد حساب بهذا البريد",
@@ -62,6 +67,10 @@ const STRINGS = {
     resetTitle: "Reset Password",
     sendReset: "Send Reset Link",
     backToLogin: "Back to Sign In",
+    verifyEmailSent:
+      "We sent a verification link to your email. Click it, then sign in again so your request can go to review.",
+    unverifiedError:
+      "Please verify your email first — open the link we sent you, then sign in again.",
     errors: {
       "auth/invalid-email": "Invalid email address",
       "auth/user-not-found": "No account found with this email",
@@ -94,7 +103,10 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
   // with this email" message Firebase itself uses for a bad login, then
   // clear the flag so it doesn't resurface on an unrelated later attempt.
   useEffect(() => {
-    if (authError) {
+    if (authError === "unverified") {
+      setError(t.unverifiedError);
+      onClearAuthError && onClearAuthError();
+    } else if (authError) {
       setError(errMsg("auth/user-not-found"));
       onClearAuthError && onClearAuthError();
     }
@@ -116,19 +128,29 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
       if (mode === "login") {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       } else if (mode === "register") {
-        const cleanEmail = email.trim().toLowerCase();
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        // The signups/{uid} doc (which puts the account in the reviewer's
+        // pending-accounts list) now requires a verified email address at
+        // the Firestore rules level — see firestore.rules. Writing it here
+        // would just fail with permission-denied until that happens, so
+        // it's no longer attempted from this screen at all: useWorkspace's
+        // existing self-heal write picks it up automatically the moment
+        // the account logs back in with a verified email.
         try {
-          await setDoc(doc(db, "signups", cred.user.uid), {
-            email: cleanEmail,
-            createdAt: serverTimestamp(),
-          });
-        } catch (signupLogError) {
-          // Never block account creation over this — it only feeds the
-          // reviewer's "pending accounts" list in Settings.
-          console.error("Failed to record signup:", signupLogError);
-          reportException(signupLogError, { context: "Failed to record signup" });
+          await sendEmailVerification(cred.user);
+        } catch (verifyError) {
+          console.error("Failed to send verification email:", verifyError);
+          reportException(verifyError, { context: "Failed to send verification email" });
         }
+        // Nothing useful for this account to do while signed in and
+        // unverified (it has no access yet either way) — sign it back out
+        // and tell the person to verify first, rather than leaving an
+        // unverified session sitting around.
+        await signOut(auth).catch(() => {});
+        // Not switchMode() here — it clears `info`, and that's the message
+        // we're trying to show.
+        setMode("login");
+        setInfo(t.verifyEmailSent);
       } else if (mode === "reset") {
         await sendPasswordResetEmail(auth, email.trim());
         setInfo(t.resetSent);
