@@ -14,6 +14,7 @@ import PendingEditsSheet from "../PendingEditsSheet";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD, GOLD_SOFT, LINE, SURFACE } from "../../theme";
 import { buildWhatsAppLink } from "../../helpers";
 import { openWhatsApp } from "../../nativeWhatsApp";
+import { useIncrementalReveal } from "../../hooks/useIncrementalReveal";
 
 export function SuppliersListScreen({
   t,
@@ -44,6 +45,13 @@ export function SuppliersListScreen({
   const activeFilterCount =
     (supplierCategoryFilter !== "all" ? 1 : 0) +
     (supplierTagFilter !== "all" ? 1 : 0);
+
+  // Same windowed-rendering fix as CustomerList.jsx — see
+  // useIncrementalReveal.js. resetKey is the query/filter state, not
+  // filteredSuppliers itself, so a live update doesn't reset scroll.
+  const revealResetKey = [supplierQuery, supplierCategoryFilter, supplierTagFilter].join("|");
+  const { visibleItems: visibleSuppliers, hasMore, sentinelRef } =
+    useIncrementalReveal(filteredSuppliers, revealResetKey);
 
   return (
     <div className="px-4 pt-4 pb-24">
@@ -163,7 +171,7 @@ export function SuppliersListScreen({
         </div>
       )}
 
-      {filteredSuppliers.map((s) => (
+      {visibleSuppliers.map((s) => (
         <div
           key={s.id}
           style={{
@@ -278,6 +286,8 @@ export function SuppliersListScreen({
           </button>
         </div>
       ))}
+
+      {hasMore && <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />}
 
       {canEdit && (
         <button
