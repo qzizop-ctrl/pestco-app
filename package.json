@@ -2,6 +2,7 @@
   "name": "pestco-app",
   "version": "1.0.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "تطبيق متابعة زيارات عملاء PEST",
   "main": "electron.js",
   "scripts": {
