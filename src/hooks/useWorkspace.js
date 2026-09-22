@@ -54,33 +54,67 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       setPrimaryAdminEmail(null);
       return;
     }
+    // Waiting unconditionally for the server-confirmed (non-cache) snapshot
+    // below is what the comment on it says: it stops a stale cached read
+    // from signing a legitimate admin back out. But "wait unconditionally"
+    // has no upper bound — if the very first Firestore round trip after a
+    // cold app start on Android stalls (a slow-to-establish Watch stream,
+    // a flaky connection at that exact moment), this listener sits with
+    // adminEmails stuck at null forever. That cascades: the permission
+    // effect below refuses to proceed while adminEmails === null, so
+    // ownerUid never resolves, permissionLoading never turns false, and
+    // the whole app is left sitting on its loading skeletons indefinitely
+    // — reported as the app never finishing loading except right after
+    // clearing app storage (which, being a truly empty cache, happens not
+    // to hit whatever is slow/stuck about that server round trip).
+    // staleFallbackTimer gives the server a bounded window (8s) to confirm
+    // before falling back to the cached read just to unblock the UI; a
+    // real confirmed snapshot, whenever it does arrive, always overrides
+    // that fallback below, so the original stale-admin protection still
+    // applies in the normal (fast network) case.
+    let settled = false;
+    let staleFallbackTimer = null;
+    const applyAdminsSnap = (snap) => {
+      const emails = (snap.data()?.emails || [])
+        .map((e) => String(e).trim().toLowerCase())
+        .filter(Boolean);
+      setAdminEmails(emails);
+      // See adminPermissions.js — explicit primaryEmail field wins, only
+      // falling back to "first in the array" for a doc that predates it.
+      setPrimaryAdminEmail(resolvePrimaryAdminEmail(snap.data()?.primaryEmail, emails));
+    };
     const unsub = onSnapshot(
       doc(db, "config", "admins"),
       (snap) => {
-        // Same reasoning as the access_by_email listener below: a snapshot
-        // can arrive from the local cache before Firestore confirms it with
-        // the server. On a device whose cache predates this doc existing
-        // (or predates the current admin being added to it), that stale
-        // cached read looks like "no admins" and was signing a legitimate
-        // admin account back out on every fresh app open. Wait for the
-        // confirmed read instead of acting on the cached one.
         if (snap.metadata.fromCache) {
+          if (!settled && !staleFallbackTimer) {
+            staleFallbackTimer = setTimeout(() => {
+              if (!settled) applyAdminsSnap(snap);
+            }, 8000);
+          }
           return;
         }
-        const emails = (snap.data()?.emails || [])
-          .map((e) => String(e).trim().toLowerCase())
-          .filter(Boolean);
-        setAdminEmails(emails);
-        // See adminPermissions.js — explicit primaryEmail field wins, only
-        // falling back to "first in the array" for a doc that predates it.
-        setPrimaryAdminEmail(resolvePrimaryAdminEmail(snap.data()?.primaryEmail, emails));
+        settled = true;
+        if (staleFallbackTimer) {
+          clearTimeout(staleFallbackTimer);
+          staleFallbackTimer = null;
+        }
+        applyAdminsSnap(snap);
       },
       (error) => {
+        settled = true;
+        if (staleFallbackTimer) {
+          clearTimeout(staleFallbackTimer);
+          staleFallbackTimer = null;
+        }
         setAdminEmails([]);
         setPrimaryAdminEmail(null);
       }
     );
-    return () => unsub();
+    return () => {
+      if (staleFallbackTimer) clearTimeout(staleFallbackTimer);
+      unsub();
+    };
   }, [user]);
 
   const [members, setMembers] = useState({});
@@ -161,176 +195,213 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
 
     const lookupRef = doc(db, "access_by_email", emailKey);
 
+    const lookupRef = doc(db, "access_by_email", emailKey);
+
+    // Same bounded-fallback shape as the config/admins listener above, for
+    // the same reason: waiting unconditionally for the server-confirmed
+    // snapshot is what stops a stale cached role from showing edit
+    // controls the server would then reject (see the comment inside
+    // applyAccessSnap below) — but with no upper bound, a slow/stuck first
+    // round trip after a cold app start leaves ownerUid/permissionLoading
+    // stuck forever, which is the "app never finishes loading" bug this
+    // hook was reported for. allowSignOut gates the one part of this that
+    // is genuinely unsafe to act on from a merely-provisional cached read:
+    // signing the account out because it looks like it has no access.
+    // That branch only runs once a real server-confirmed snapshot says so
+    // — a provisional cached "no access" instead just keeps waiting rather
+    // than risking a wrong sign-out. Provisional cached data that DOES
+    // show valid access is applied either way, since unblocking the UI
+    // with (possibly slightly stale) real access is the whole point, and
+    // a later confirmed snapshot still always overrides it.
+    let settled = false;
+    let staleFallbackTimer = null;
+
+    const applyAccessSnap = (snap, { allowSignOut }) => {
+      const ownersMap = snap.exists() ? snap.data().owners || {} : {};
+      // Single-owner app (see the comment in grantAccess below), so this
+      // is a flat boolean rather than keyed per-owner — matches how
+      // `owners` itself is already treated as "at most one real entry"
+      // everywhere else in this file.
+      setMyDashboardAccess(snap.exists() && snap.data().dashboardAccess === true);
+      const externalOwners = Object.entries(ownersMap)
+        .filter(([, role]) => role === "editor" || role === "viewer")
+        .map(([uid, role]) => ({ uid, role }));
+
+      // The signed-in account is always an owner of its own workspace on
+      // initial login, but only when they have no other granted access —
+      // someone who was invited as a viewer/editor should land straight
+      // in the workspace they were granted, never in a phantom empty
+      // "Owner" workspace of their own. A revoked external user must also
+      // NOT be converted into a new owner workspace.
+      //
+      // Self-provisioning into an "owner" workspace is further restricted
+      // to accounts in config/admins (see adminEmails above). This is a
+      // single-owner app: anyone else who signs up writes a
+      // `signups/{uid}` doc and must be explicitly granted editor/viewer
+      // access from Settings first. Without this check, any brand-new
+      // registration (or a dismissed/removed one) fell through to "no
+      // other access found" and was silently made owner of its own empty
+      // workspace — which is exactly what let an un-reviewed or dismissed
+      // account see the Settings screen and still use the app.
+      const previousOwner = previousResolvedOwnerRef.current;
+      const hasKnownExternalAccess = Boolean(previousOwner && previousOwner !== user.uid);
+      const isReviewerEmail = adminEmails.includes(emailKey);
+
+      let nextOwners = externalOwners;
+      if (externalOwners.some((x) => x.uid === user.uid)) {
+        nextOwners = externalOwners.map((x) => x.uid === user.uid ? { ...x, role: "owner" } : x);
+      } else if (isReviewerEmail && !hasKnownExternalAccess && externalOwners.length === 0) {
+        nextOwners = [{ uid: user.uid, role: "owner" }, ...externalOwners];
+      }
+
+      // Remove duplicates and keep a stable order.
+      const seen = new Set();
+      nextOwners = nextOwners.filter((x) => {
+        if (seen.has(x.uid)) return false;
+        seen.add(x.uid);
+        return true;
+      });
+
+      if (nextOwners.length === 0) {
+        if (!allowSignOut) {
+          // Provisional cached read showing no access — could just be
+          // stale and about to be corrected once the server confirms, so
+          // don't take the destructive sign-out branch on it. Keep
+          // waiting for the real confirmed snapshot instead.
+          return;
+        }
+        setOwnerUid(null);
+        setMyRole(null);
+        setMyDashboardAccess(false);
+        setAvailableOwners([]);
+        previousResolvedOwnerRef.current = null;
+        setScreen("list");
+        setActiveId(null);
+        setPermissionLoading(false);
+        // Not the reviewer and not granted access by anyone: this account
+        // has nothing to do in the app (still pending review, dismissed,
+        // or revoked). Sign it back out and let AuthScreen show an
+        // "email not registered" style message instead of leaving it
+        // signed in with no data and no way forward.
+        if (!isReviewerEmail) {
+          // firestore.rules now requires request.auth.token.email_verified
+          // on the signups/{uid} create, so an unverified account can
+          // never reach the reviewer's pending list no matter what this
+          // client does — closing the gap where anyone could register
+          // with an email they don't own and hope to get approved on
+          // sight. Tell the person to verify instead of the generic
+          // "no account" message, and don't bother attempting the
+          // doc write below; it would just fail.
+          if (!user.emailVerified) {
+            setAuthError("unverified");
+            signOut(auth).catch((e) => {
+              console.error("Sign-out for unverified account failed:", e);
+              reportException(e, { context: "Sign-out for unverified account failed" });
+            });
+            return;
+          }
+          setAuthError(true);
+          // Self-heal: AuthScreen's registration flow sends the
+          // verification email right after creating the account, but
+          // doesn't write signups/{uid} itself anymore (it can't yet —
+          // the account isn't verified at that point). Once the person
+          // verifies and logs back in, write it here instead, now that
+          // the rules' email_verified check can actually pass.
+          //
+          // Only do this within a reasonable window of account creation
+          // — this branch also covers a *dismissed* or *revoked* account
+          // trying to log back in, and those must NOT reappear in
+          // "pending review" every time they retry (that's what
+          // dismiss/revoke are for). A verified signup retrying after
+          // the original write failed and a months-old dismissed account
+          // both land here identically; creation-time recency is the
+          // only signal available to tell them apart. Widened from the
+          // original 15 minutes since verifying an email realistically
+          // takes longer than that.
+          const accountAgeMs = user.metadata?.creationTime
+            ? Date.now() - new Date(user.metadata.creationTime).getTime()
+            : Infinity;
+          if (accountAgeMs < 24 * 60 * 60 * 1000) {
+            // No existence check first — a plain user can't even read the
+            // signups collection (only a reviewer can, see
+            // firestore.rules), so a getDoc here would just fail
+            // silently and never reach the write. Firestore's own rules
+            // already make this safe without one: `allow create` covers
+            // a missing doc (the actual repair case), while `allow
+            // update: if false` rejects this exact same call as a no-op
+            // whenever the doc already exists and is correct.
+            setDoc(doc(db, "signups", user.uid), {
+              email: emailKey,
+              createdAt: serverTimestamp(),
+            }).catch((e) => {
+              // permission-denied here just means the doc already exists
+              // (the "update: if false" case above) — the expected,
+              // harmless outcome for a still-pending or already-repaired
+              // signup, not a real failure worth logging.
+              if (e.code !== "permission-denied") {
+                console.error("Signup self-heal failed:", e);
+                reportException(e, { context: "Signup self-heal failed" });
+              }
+            });
+          }
+          signOut(auth).catch((e) => {
+            console.error("Sign-out for unauthorized account failed:", e);
+            reportException(e, { context: "Sign-out for unauthorized account failed" });
+          });
+        }
+        return;
+      }
+
+      setAvailableOwners(nextOwners);
+
+      let savedOwner = null;
+      try {
+        savedOwner = localStorage.getItem("pestco_selected_owner");
+      } catch (e) {}
+
+      const currentOwner = previousResolvedOwnerRef.current;
+      const currentStillValid = nextOwners.some((x) => x.uid === currentOwner);
+      const savedStillValid = nextOwners.some((x) => x.uid === savedOwner);
+      const selected = currentStillValid
+        ? currentOwner
+        : savedStillValid
+          ? savedOwner
+          : nextOwners[0].uid;
+
+      const selectedEntry = nextOwners.find((x) => x.uid === selected);
+      setOwnerUid(selected);
+      setMyRole(selectedEntry?.role || null);
+      previousResolvedOwnerRef.current = selected;
+      try {
+        localStorage.setItem("pestco_selected_owner", selected);
+      } catch (e) {}
+      setPermissionLoading(false);
+    };
+
     const unsub = onSnapshot(
       lookupRef,
       (snap) => {
-        // A snapshot can arrive from the local cache before Firestore has
-        // confirmed the real answer with the server — e.g. right after
-        // reopening the app, the cache may still hold whatever role this
-        // account had *before* the owner's last change (say "editor" from
-        // before it was switched to "viewer"). Acting on that stale cached
-        // value made the UI show edit controls that the server would then
-        // correctly reject, which looked like "it lets me try, then says
-        // I'm not allowed." So: nothing is committed — role, ownerUid, or
-        // localStorage — until Firestore confirms the read with the server.
         if (snap.metadata.fromCache) {
-          return;
-        }
-
-        const ownersMap = snap.exists() ? snap.data().owners || {} : {};
-        // Single-owner app (see the comment in grantAccess below), so this
-        // is a flat boolean rather than keyed per-owner — matches how
-        // `owners` itself is already treated as "at most one real entry"
-        // everywhere else in this file.
-        setMyDashboardAccess(snap.exists() && snap.data().dashboardAccess === true);
-        const externalOwners = Object.entries(ownersMap)
-          .filter(([, role]) => role === "editor" || role === "viewer")
-          .map(([uid, role]) => ({ uid, role }));
-
-        // The signed-in account is always an owner of its own workspace on
-        // initial login, but only when they have no other granted access —
-        // someone who was invited as a viewer/editor should land straight
-        // in the workspace they were granted, never in a phantom empty
-        // "Owner" workspace of their own. A revoked external user must also
-        // NOT be converted into a new owner workspace.
-        //
-        // Self-provisioning into an "owner" workspace is further restricted
-        // to accounts in config/admins (see adminEmails above). This is a
-        // single-owner app: anyone else who signs up writes a
-        // `signups/{uid}` doc and must be explicitly granted editor/viewer
-        // access from Settings first. Without this check, any brand-new
-        // registration (or a dismissed/removed one) fell through to "no
-        // other access found" and was silently made owner of its own empty
-        // workspace — which is exactly what let an un-reviewed or dismissed
-        // account see the Settings screen and still use the app.
-        const previousOwner = previousResolvedOwnerRef.current;
-        const hasKnownExternalAccess = Boolean(previousOwner && previousOwner !== user.uid);
-        const isReviewerEmail = adminEmails.includes(emailKey);
-
-        let nextOwners = externalOwners;
-        if (externalOwners.some((x) => x.uid === user.uid)) {
-          nextOwners = externalOwners.map((x) => x.uid === user.uid ? { ...x, role: "owner" } : x);
-        } else if (isReviewerEmail && !hasKnownExternalAccess && externalOwners.length === 0) {
-          nextOwners = [{ uid: user.uid, role: "owner" }, ...externalOwners];
-        }
-
-        // Remove duplicates and keep a stable order.
-        const seen = new Set();
-        nextOwners = nextOwners.filter((x) => {
-          if (seen.has(x.uid)) return false;
-          seen.add(x.uid);
-          return true;
-        });
-
-        if (nextOwners.length === 0) {
-          setOwnerUid(null);
-          setMyRole(null);
-          setMyDashboardAccess(false);
-          setAvailableOwners([]);
-          previousResolvedOwnerRef.current = null;
-          setScreen("list");
-          setActiveId(null);
-          setPermissionLoading(false);
-          // Not the reviewer and not granted access by anyone: this account
-          // has nothing to do in the app (still pending review, dismissed,
-          // or revoked). Sign it back out and let AuthScreen show an
-          // "email not registered" style message instead of leaving it
-          // signed in with no data and no way forward.
-          if (!isReviewerEmail) {
-            // firestore.rules now requires request.auth.token.email_verified
-            // on the signups/{uid} create, so an unverified account can
-            // never reach the reviewer's pending list no matter what this
-            // client does — closing the gap where anyone could register
-            // with an email they don't own and hope to get approved on
-            // sight. Tell the person to verify instead of the generic
-            // "no account" message, and don't bother attempting the
-            // doc write below; it would just fail.
-            if (!user.emailVerified) {
-              setAuthError("unverified");
-              signOut(auth).catch((e) => {
-                console.error("Sign-out for unverified account failed:", e);
-                reportException(e, { context: "Sign-out for unverified account failed" });
-              });
-              return;
-            }
-            setAuthError(true);
-            // Self-heal: AuthScreen's registration flow sends the
-            // verification email right after creating the account, but
-            // doesn't write signups/{uid} itself anymore (it can't yet —
-            // the account isn't verified at that point). Once the person
-            // verifies and logs back in, write it here instead, now that
-            // the rules' email_verified check can actually pass.
-            //
-            // Only do this within a reasonable window of account creation
-            // — this branch also covers a *dismissed* or *revoked* account
-            // trying to log back in, and those must NOT reappear in
-            // "pending review" every time they retry (that's what
-            // dismiss/revoke are for). A verified signup retrying after
-            // the original write failed and a months-old dismissed account
-            // both land here identically; creation-time recency is the
-            // only signal available to tell them apart. Widened from the
-            // original 15 minutes since verifying an email realistically
-            // takes longer than that.
-            const accountAgeMs = user.metadata?.creationTime
-              ? Date.now() - new Date(user.metadata.creationTime).getTime()
-              : Infinity;
-            if (accountAgeMs < 24 * 60 * 60 * 1000) {
-              // No existence check first — a plain user can't even read the
-              // signups collection (only a reviewer can, see
-              // firestore.rules), so a getDoc here would just fail
-              // silently and never reach the write. Firestore's own rules
-              // already make this safe without one: `allow create` covers
-              // a missing doc (the actual repair case), while `allow
-              // update: if false` rejects this exact same call as a no-op
-              // whenever the doc already exists and is correct.
-              setDoc(doc(db, "signups", user.uid), {
-                email: emailKey,
-                createdAt: serverTimestamp(),
-              }).catch((e) => {
-                // permission-denied here just means the doc already exists
-                // (the "update: if false" case above) — the expected,
-                // harmless outcome for a still-pending or already-repaired
-                // signup, not a real failure worth logging.
-                if (e.code !== "permission-denied") {
-                  console.error("Signup self-heal failed:", e);
-                  reportException(e, { context: "Signup self-heal failed" });
-                }
-              });
-            }
-            signOut(auth).catch((e) => {
-              console.error("Sign-out for unauthorized account failed:", e);
-              reportException(e, { context: "Sign-out for unauthorized account failed" });
-            });
+          if (!settled && !staleFallbackTimer) {
+            staleFallbackTimer = setTimeout(() => {
+              if (!settled) applyAccessSnap(snap, { allowSignOut: false });
+            }, 8000);
           }
           return;
         }
-
-        setAvailableOwners(nextOwners);
-
-        let savedOwner = null;
-        try {
-          savedOwner = localStorage.getItem("pestco_selected_owner");
-        } catch (e) {}
-
-        const currentOwner = previousResolvedOwnerRef.current;
-        const currentStillValid = nextOwners.some((x) => x.uid === currentOwner);
-        const savedStillValid = nextOwners.some((x) => x.uid === savedOwner);
-        const selected = currentStillValid
-          ? currentOwner
-          : savedStillValid
-            ? savedOwner
-            : nextOwners[0].uid;
-
-        const selectedEntry = nextOwners.find((x) => x.uid === selected);
-        setOwnerUid(selected);
-        setMyRole(selectedEntry?.role || null);
-        previousResolvedOwnerRef.current = selected;
-        try {
-          localStorage.setItem("pestco_selected_owner", selected);
-        } catch (e) {}
-        setPermissionLoading(false);
+        settled = true;
+        if (staleFallbackTimer) {
+          clearTimeout(staleFallbackTimer);
+          staleFallbackTimer = null;
+        }
+        applyAccessSnap(snap, { allowSignOut: true });
       },
       (error) => {
+        settled = true;
+        if (staleFallbackTimer) {
+          clearTimeout(staleFallbackTimer);
+          staleFallbackTimer = null;
+        }
         console.error("Permission listener failed:", error);
         reportException(error, { context: "Permission listener failed" });
         setOwnerUid(null);
@@ -344,7 +415,10 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       }
     );
 
-    return () => unsub();
+    return () => {
+      if (staleFallbackTimer) clearTimeout(staleFallbackTimer);
+      unsub();
+    };
   }, [user, adminEmails]);
 
   // Keep the selected workspace and role synchronized when the user changes
