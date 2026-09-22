@@ -26,7 +26,7 @@ export function useAutoBackup({ isOwnerAccount, ready, visits, suppliers, saveBa
     let lastRun = 0;
     try {
       lastRun = Number(localStorage.getItem(STORAGE_KEY)) || 0;
-    } catch (e) {}
+    } catch {}
 
     if (Date.now() - lastRun < WEEK_MS) return;
 
@@ -36,7 +36,7 @@ export function useAutoBackup({ isOwnerAccount, ready, visits, suppliers, saveBa
         await saveBackupWorkbook(visits, suppliers);
         try {
           localStorage.setItem(STORAGE_KEY, String(Date.now()));
-        } catch (e) {}
+        } catch {}
         notify(t.autoBackupDone);
       } catch (e) {
         console.error("Weekly auto-backup failed:", e);

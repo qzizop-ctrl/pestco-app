@@ -9,7 +9,7 @@ export function useAppPrefs() {
     try {
       const saved = localStorage.getItem("pestco_lang");
       return saved && STRINGS[saved] ? saved : "ar";
-    } catch (e) {
+    } catch {
       return "ar";
     }
   });
@@ -17,7 +17,7 @@ export function useAppPrefs() {
   const [darkMode, setDarkMode] = useState(() => {
     try {
       return localStorage.getItem("pestco_dark") === "1";
-    } catch (e) {
+    } catch {
       return false;
     }
   });
@@ -35,7 +35,7 @@ export function useAppPrefs() {
     try {
       const saved = Number(localStorage.getItem("pestco_usd_rate"));
       return saved > 0 ? saved : null;
-    } catch (e) {
+    } catch {
       return null;
     }
   });
@@ -43,7 +43,7 @@ export function useAppPrefs() {
   const [unifyCurrency, setUnifyCurrency] = useState(() => {
     try {
       return localStorage.getItem("pestco_unify_currency") === "1";
-    } catch (e) {
+    } catch {
       return false;
     }
   });
@@ -52,25 +52,25 @@ export function useAppPrefs() {
     try {
       if (exchangeRate > 0) localStorage.setItem("pestco_usd_rate", String(exchangeRate));
       else localStorage.removeItem("pestco_usd_rate");
-    } catch (e) {}
+    } catch {}
   }, [exchangeRate]);
 
   useEffect(() => {
     try {
       localStorage.setItem("pestco_unify_currency", unifyCurrency ? "1" : "0");
-    } catch (e) {}
+    } catch {}
   }, [unifyCurrency]);
 
   useEffect(() => {
     try {
       localStorage.setItem("pestco_lang", lang);
-    } catch (e) {}
+    } catch {}
   }, [lang]);
 
   useEffect(() => {
     try {
       localStorage.setItem("pestco_dark", darkMode ? "1" : "0");
-    } catch (e) {}
+    } catch {}
   }, [darkMode]);
 
   // `navigator.onLine` only reports whether the device has *a* network
@@ -109,7 +109,7 @@ export function useAppPrefs() {
         });
         clearTimeout(timeoutId);
         if (!cancelled) setIsOnline(true);
-      } catch (e) {
+      } catch {
         if (!cancelled) setIsOnline(false);
       }
     };

@@ -13,7 +13,7 @@ export function useReminders({ visits, user, ownerUid, canEdit, t }) {
       if (window.Notification && Notification.permission === "default") {
         Notification.requestPermission();
       }
-    } catch (e) {}
+    } catch {}
     requestNotificationPermission();
   }, []);
 
@@ -39,7 +39,7 @@ export function useReminders({ visits, user, ownerUid, canEdit, t }) {
                 body: t.reminderBody(v.contactName),
               });
             }
-          } catch (e) {}
+          } catch {}
           if (canEdit) {
             updateDoc(doc(db, "users", ownerUid, "visits", v.id), { notified: true }).catch(() => {});
           }
