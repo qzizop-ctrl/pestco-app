@@ -322,55 +322,49 @@ export async function generateDashboardPdf(opts) {
     }
   }
 
-  try {
-    // 1) Offers list, split into fixed-size row batches. chunkArray always
-    // returns at least one chunk (an empty one, rendered as the "no
-    // offers" placeholder, when offersList is empty) — so there's always
-    // exactly one true last chunk to attach the footer to below.
-    const offerRows = offersList.map((o) => [
-      o.customerName || t.noCompanyName,
-      o.name || "",
-      `${fmtMoney(o.amount)} ${t.currencies[o.currency] || t.currencies.EGP}`,
-      t.offerStatuses[o.status] || o.status,
-      o.offerDate || "",
-    ]);
-    const offerChunks = chunkArray(offerRows, ROWS_PER_CHUNK);
-    const footerHtml = footerFragmentHtml(t);
+  // 1) Offers list, split into fixed-size row batches. chunkArray always
+  // returns at least one chunk (an empty one, rendered as the "no
+  // offers" placeholder, when offersList is empty) — so there's always
+  // exactly one true last chunk to attach the footer to below.
+  const offerRows = offersList.map((o) => [
+    o.customerName || t.noCompanyName,
+    o.name || "",
+    `${fmtMoney(o.amount)} ${t.currencies[o.currency] || t.currencies.EGP}`,
+    t.offerStatuses[o.status] || o.status,
+    o.offerDate || "",
+  ]);
+  const offerChunks = chunkArray(offerRows, ROWS_PER_CHUNK);
+  const footerHtml = footerFragmentHtml(t);
 
-    // 2) Fixed-size front matter — always safe as a single container.
-    await renderHtmlChunk(buildFrontMatterHtml(opts));
+  // 2) Fixed-size front matter — always safe as a single container.
+  await renderHtmlChunk(buildFrontMatterHtml(opts));
 
-    // 3) Offers list. The footer note is attached to the bottom of the
-    // last batch here — not rendered as its own page — so the report
-    // never ends on a near-blank page holding only that one line.
-    for (let i = 0; i < offerChunks.length; i++) {
-      const isLastChunk = i === offerChunks.length - 1;
-      await renderHtmlChunk(buildOffersChunkHtml({
-        t, rows: offerChunks[i], isFirstChunk: i === 0, isLastChunk,
-        trailingHtml: isLastChunk ? footerHtml : "",
-      }));
-    }
+  // 3) Offers list. The footer note is attached to the bottom of the
+  // last batch here — not rendered as its own page — so the report
+  // never ends on a near-blank page holding only that one line.
+  for (let i = 0; i < offerChunks.length; i++) {
+    const isLastChunk = i === offerChunks.length - 1;
+    await renderHtmlChunk(buildOffersChunkHtml({
+      t, rows: offerChunks[i], isFirstChunk: i === 0, isLastChunk,
+      trailingHtml: isLastChunk ? footerHtml : "",
+    }));
+  }
 
-    // 4) Page numbers, stamped onto every page now that the final page
-    // count is known — has to happen after all content is in, since
-    // chunks upstream (offers) don't know the eventual total while
-    // they're being rendered.
-    await addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight });
+  // 4) Page numbers, stamped onto every page now that the final page
+  // count is known — has to happen after all content is in, since
+  // chunks upstream (offers) don't know the eventual total while
+  // they're being rendered.
+  await addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight });
 
-    const dateSuffix = new Date().toISOString().slice(0, 10);
-    const fileName = `pestco_report_${dateSuffix}.pdf`;
+  const dateSuffix = new Date().toISOString().slice(0, 10);
+  const fileName = `pestco_report_${dateSuffix}.pdf`;
 
-    if (Capacitor.isNativePlatform()) {
-      await saveAndSharePdfNative(pdf, fileName);
-    } else {
-      // Plain browser tab / Electron: the standard Blob-download path
-      // works fine here, no native file handoff needed.
-      pdf.save(fileName);
-    }
-  } catch (err) {
-    // Surface generation/save failures to the caller instead of letting
-    // them disappear silently — see the Dashboard button's try/catch.
-    throw err;
+  if (Capacitor.isNativePlatform()) {
+    await saveAndSharePdfNative(pdf, fileName);
+  } else {
+    // Plain browser tab / Electron: the standard Blob-download path
+    // works fine here, no native file handoff needed.
+    pdf.save(fileName);
   }
 }
 
