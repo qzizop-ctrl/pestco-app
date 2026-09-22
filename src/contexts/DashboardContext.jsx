@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useState } from "react";
 
 // Holds Dashboard's own tab state (activeTab, customersSubTab,
 // salesTabVisited) outside of the Dashboard component itself.
@@ -33,10 +33,7 @@ export function DashboardProvider({ children }) {
   );
 }
 
-export function useDashboardContext() {
-  const ctx = useContext(DashboardContext);
-  if (!ctx) {
-    throw new Error("useDashboardContext must be used inside a DashboardProvider");
-  }
-  return ctx;
-}
+// The consumer hook lives in ../hooks/useDashboardContext.js, not here —
+// a file that exports a component (DashboardProvider) alongside a plain
+// hook function breaks Vite Fast Refresh for both.
+export { DashboardContext };
