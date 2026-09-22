@@ -1,7 +1,7 @@
 import React from "react";
 import { Star, User } from "lucide-react";
 import { TagChip } from "../Shared";
-import { TEXT, MUTED, GOLD, STATUS_COLORS, stageColor } from "../../theme";
+import { MUTED, GOLD, STATUS_COLORS, stageColor } from "../../theme";
 import { STAGE_IDS } from "../../domain";
 import { visitStatus } from "../../helpers";
 
