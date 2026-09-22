@@ -10,7 +10,7 @@ import {
 import { TagChip } from "../Shared";
 import { FormSection, IconField } from "../CustomerForm";
 import PendingChangeBanner from "../PendingChangeBanner";
-import { PRIMARY, PRIMARY_MID, DANGER, LINE, SURFACE } from "../../theme";
+import { PRIMARY, DANGER, LINE, SURFACE } from "../../theme";
 import { parseTagsCell } from "../../helpers";
 import { db } from "../../firebase";
 import { doc } from "firebase/firestore";
