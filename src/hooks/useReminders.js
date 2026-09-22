@@ -13,7 +13,9 @@ export function useReminders({ visits, user, ownerUid, canEdit, t }) {
       if (window.Notification && Notification.permission === "default") {
         Notification.requestPermission();
       }
-    } catch {}
+    } catch {
+      // Requesting notification permission may be unsupported or blocked — safe to ignore.
+    }
     requestNotificationPermission();
   }, []);
 
@@ -39,7 +41,9 @@ export function useReminders({ visits, user, ownerUid, canEdit, t }) {
                 body: t.reminderBody(v.contactName),
               });
             }
-          } catch {}
+          } catch {
+            // Showing the notification may fail (e.g. permission revoked) — safe to ignore.
+          }
           if (canEdit) {
             updateDoc(doc(db, "users", ownerUid, "visits", v.id), { notified: true }).catch(() => {});
           }

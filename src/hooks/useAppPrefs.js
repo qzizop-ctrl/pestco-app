@@ -52,25 +52,33 @@ export function useAppPrefs() {
     try {
       if (exchangeRate > 0) localStorage.setItem("pestco_usd_rate", String(exchangeRate));
       else localStorage.removeItem("pestco_usd_rate");
-    } catch {}
+    } catch {
+      // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
+    }
   }, [exchangeRate]);
 
   useEffect(() => {
     try {
       localStorage.setItem("pestco_unify_currency", unifyCurrency ? "1" : "0");
-    } catch {}
+    } catch {
+      // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
+    }
   }, [unifyCurrency]);
 
   useEffect(() => {
     try {
       localStorage.setItem("pestco_lang", lang);
-    } catch {}
+    } catch {
+      // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
+    }
   }, [lang]);
 
   useEffect(() => {
     try {
       localStorage.setItem("pestco_dark", darkMode ? "1" : "0");
-    } catch {}
+    } catch {
+      // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
+    }
   }, [darkMode]);
 
   // `navigator.onLine` only reports whether the device has *a* network

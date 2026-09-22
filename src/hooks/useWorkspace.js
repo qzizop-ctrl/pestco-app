@@ -172,7 +172,9 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       previousResolvedOwnerRef.current = null;
       try {
         localStorage.removeItem("pestco_selected_owner");
-      } catch {}
+      } catch {
+        // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
+      }
       return;
     }
 
@@ -355,7 +357,9 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       let savedOwner = null;
       try {
         savedOwner = localStorage.getItem("pestco_selected_owner");
-      } catch {}
+      } catch {
+        // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
+      }
 
       const currentOwner = previousResolvedOwnerRef.current;
       const currentStillValid = nextOwners.some((x) => x.uid === currentOwner);
@@ -372,7 +376,9 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       previousResolvedOwnerRef.current = selected;
       try {
         localStorage.setItem("pestco_selected_owner", selected);
-      } catch {}
+      } catch {
+        // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
+      }
       setPermissionLoading(false);
     };
 
@@ -431,7 +437,9 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
     setScreen("list");
     try {
       localStorage.setItem("pestco_selected_owner", selected.uid);
-    } catch {}
+    } catch {
+      // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
+    }
   };
 
   useEffect(() => {
