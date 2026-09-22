@@ -95,7 +95,7 @@ export default function FilterSheet({
     const d = new Date(y, m - 1, 1);
     try {
       return d.toLocaleDateString(t.locale, { month: "long", year: "numeric" });
-    } catch (e) {
+    } catch {
       return key;
     }
   };

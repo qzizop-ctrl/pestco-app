@@ -54,7 +54,7 @@ export function beep() {
       o.start(ctx.currentTime + delay);
       o.stop(ctx.currentTime + delay + 0.4);
     });
-  } catch (e) {
+  } catch {
     /* الجهاز لا يدعم تشغيل صوت / device doesn't support audio */
   }
 }
