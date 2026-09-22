@@ -32,7 +32,7 @@ export function useFilteredData({
       visibleVisits
         .filter((v) => v.callDateTime && new Date(v.callDateTime).getTime() <= now + 24 * 3600 * 1000)
         .sort((a, b) => new Date(a.callDateTime) - new Date(b.callDateTime)),
-    [visibleVisits, nowBucket]
+    [visibleVisits, nowBucket, now]
   );
 
   const staleOffers = useMemo(
@@ -47,14 +47,14 @@ export function useFilteredData({
           })
           .map((o) => ({ ...o, customer: v }))
       ),
-    [visibleVisits, nowBucket]
+    [visibleVisits, nowBucket, now]
   );
 
   // Customers with no recent activity (visit, call, or note) — a nudge to
   // follow up before they go completely cold.
   const staleCustomers = useMemo(
     () => visibleVisits.filter((v) => isStaleCustomer(v, STALE_ACTIVITY_DAYS)),
-    [visibleVisits, nowBucket]
+    [visibleVisits]
   );
 
   // Customers with a pending edit OR a pending deletion awaiting the owner's
@@ -163,7 +163,7 @@ export function useFilteredData({
     if (!availableAddedMonths.some((m) => m.key === dateAddedFilter)) {
       setDateAddedFilter("all");
     }
-  }, [availableAddedMonths, dateAddedFilter]);
+  }, [availableAddedMonths, dateAddedFilter, setDateAddedFilter]);
 
   const filtered = useMemo(
     () =>

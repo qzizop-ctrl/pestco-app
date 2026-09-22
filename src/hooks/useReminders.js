@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import { beep } from "../components/Shared";
+import { beep } from "../sound";
 import { requestNotificationPermission } from "../notifications";
 
 // Requests notification permission on mount, then polls every 15s for any

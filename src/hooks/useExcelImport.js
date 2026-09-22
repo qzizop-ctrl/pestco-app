@@ -20,7 +20,7 @@ import { parseTagsCell, findSectorId, findRoleId, findStageId, normalizeExcelDat
 // updateDoc() call afterward. MAX_IMPORT_ROWS caps a single import so an
 // oversized or wrong file fails fast with a clear message rather than
 // churning through thousands of rows silently.
-export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, showAlert, appendActivity }) {
+export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, showAlert, appendActivity: _appendActivity }) {
   const fileInputRef = useRef(null);
   const supplierFileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
@@ -137,7 +137,7 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         setImportProgress({ done: count, total: pending.length });
       }
       showAlert(t.importSuccess(count));
-    } catch (err) {
+    } catch {
       showAlert(t.importError);
     } finally {
       setImporting(false);
@@ -225,7 +225,7 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         setSupplierImportProgress({ done: count, total: pending.length });
       }
       showAlert(t.importSuppliersSuccess(count));
-    } catch (err) {
+    } catch {
       showAlert(t.importSuppliersError);
     } finally {
       setImportingSuppliers(false);

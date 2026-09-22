@@ -14,7 +14,7 @@ import { reportException } from "../sentry";
 // The "write side" (granting/revoking access, admin management) lives in
 // useAccessManagement.js, which takes this hook's output (user,
 // isOwnerAccount, isReviewer, etc.) as its input — see that file.
-export function useWorkspace({ requireOnline, reportError, screen, setScreen, setActiveId }) {
+export function useWorkspace({ requireOnline: _requireOnline, reportError: _reportError, screen, setScreen, setActiveId }) {
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
 
@@ -101,7 +101,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
         }
         applyAdminsSnap(snap);
       },
-      (error) => {
+      (_error) => {
         settled = true;
         if (staleFallbackTimer) {
           clearTimeout(staleFallbackTimer);
@@ -423,7 +423,7 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
       if (staleFallbackTimer) clearTimeout(staleFallbackTimer);
       unsub();
     };
-  }, [user, adminEmails]);
+  }, [user, adminEmails, setActiveId, setScreen]);
 
   // Keep the selected workspace and role synchronized when the user changes
   // workspace from Settings.

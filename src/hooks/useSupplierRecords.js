@@ -61,7 +61,7 @@ export function useSupplierRecords({
     if (!requireOnline()) return;
     if (!validateSupplier() || !user || !ownerUid) return;
 
-    const { id, tagsInput, last_change, ...rest } = supplierForm;
+    const { id: _id, tagsInput, last_change: _last_change, ...rest } = supplierForm;
     const data = { ...rest, tags: parseTagsCell(tagsInput) };
     const original = activeSupplierId ? suppliers.find((s) => s.id === activeSupplierId) : null;
 

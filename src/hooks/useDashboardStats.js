@@ -28,9 +28,9 @@ export function useDashboardStats({
       if (d) years.add(d.getFullYear());
     });
     return Array.from(years).sort((a, b) => b - a);
-  }, [visits]);
+  }, [visits, now]);
 
-  const resolved = useMemo(() => resolvePeriod(period, now, t), [period, t]);
+  const resolved = useMemo(() => resolvePeriod(period, now, t), [period, now, t]);
   const isSingleMonth = resolved.granularity === "day";
 
   const stats = useMemo(

@@ -91,7 +91,7 @@ export function useCustomerRecords({
     if (!validate() || !user || !ownerUid) return;
 
     const proceedSave = async () => {
-      const { id, tagsInput, activityLog, offers, visitHistory, last_change, originalCustomer, ...rest } = form;
+      const { id, tagsInput, activityLog: _activityLog, offers: _offers, visitHistory: _visitHistory, last_change: _last_change, originalCustomer: _originalCustomer, ...rest } = form;
       const data = { ...rest, tags: parseTagsCell(tagsInput) };
       const original = id ? visits.find((v) => v.id === id) : null;
 
@@ -295,7 +295,7 @@ export function useCustomerRecords({
     } catch (e) {
       reportSaveError(e);
     }
-  }, [canEdit, ownerUid, requireOnline]);
+  }, [canEdit, ownerUid, requireOnline, reportSaveError]);
 
   // Records that an actual visit happened today: pushes a new visit-history
   // entry (so the Dashboard's visit count reflects real repeat visits) and

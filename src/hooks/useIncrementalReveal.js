@@ -36,7 +36,6 @@ export function useIncrementalReveal(items, resetKey, pageSize = DEFAULT_PAGE_SI
   // update too), only on the caller-supplied query signature.
   useEffect(() => {
     setVisibleCount(pageSize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey, pageSize]);
 
   useEffect(() => {
