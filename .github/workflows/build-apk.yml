@@ -57,6 +57,17 @@ jobs:
           npm_config_fetch_retry_maxtimeout: 120000
 
       # =========================
+      # Lint
+      # =========================
+      # Blocking, same as the tests step below: `npm run lint` was defined
+      # in package.json but never actually wired into either workflow, so
+      # style/correctness issues it would catch (unused vars, hook-deps
+      # mistakes, etc.) could merge to main unnoticed. Runs before tests so
+      # a lint failure is reported first/fastest.
+      - name: Run lint
+        run: npm run lint
+
+      # =========================
       # Run tests
       # =========================
       # Blocking on purpose: this covers the business-logic tests
