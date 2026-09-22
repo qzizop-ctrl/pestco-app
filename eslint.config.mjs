@@ -25,6 +25,13 @@ export default [
       "android/**",
       "node_modules/**",
       "src-tauri/**",
+      // TypeScript — this project has no @typescript-eslint parser
+      // configured (everything else here is plain JS/JSX), so ESLint's
+      // default parser can't read the `import type`/type-annotation
+      // syntax in this file and fails with a parsing error. It's a
+      // static declarative config object with nothing for a linter to
+      // usefully check anyway.
+      "capacitor.config.ts",
     ],
   },
 
@@ -77,7 +84,6 @@ export default [
       "vite.config.js",
       "tailwind.config.js",
       "postcss.config.js",
-      "capacitor.config.ts",
     ],
     languageOptions: {
       ecmaVersion: 2022,
