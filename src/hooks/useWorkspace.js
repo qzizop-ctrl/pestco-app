@@ -195,8 +195,6 @@ export function useWorkspace({ requireOnline, reportError, screen, setScreen, se
 
     const lookupRef = doc(db, "access_by_email", emailKey);
 
-    const lookupRef = doc(db, "access_by_email", emailKey);
-
     // Same bounded-fallback shape as the config/admins listener above, for
     // the same reason: waiting unconditionally for the server-confirmed
     // snapshot is what stops a stale cached role from showing edit
