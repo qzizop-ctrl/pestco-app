@@ -25,7 +25,7 @@ export async function requestNotificationPermission() {
   if (!isNative()) return;
   try {
     await LocalNotifications.requestPermissions();
-  } catch (e) {
+  } catch {
     /* الجهاز رفض الإذن أو غير مدعوم / permission denied or unsupported */
   }
 }
@@ -45,7 +45,7 @@ export async function scheduleCallReminder(visitId, callDateTime, title, body) {
         },
       ],
     });
-  } catch (e) {
+  } catch {
     /* تجاهل خطأ الجدولة / ignore scheduling error */
   }
 }
@@ -54,7 +54,7 @@ export async function cancelCallReminder(visitId) {
   if (!isNative()) return;
   try {
     await LocalNotifications.cancel({ notifications: [{ id: idToNumber(visitId) }] });
-  } catch (e) {
+  } catch {
     /* تجاهل خطأ الإلغاء / ignore cancel error */
   }
 }

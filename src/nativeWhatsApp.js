@@ -26,7 +26,7 @@ export async function openWhatsApp(phone) {
     try {
       await WhatsApp.open({ phone: digits });
       return;
-    } catch (e) {
+    } catch {
       // Falls through to the wa.me link below.
     }
   }

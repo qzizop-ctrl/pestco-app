@@ -46,7 +46,7 @@ export function initErrorReporting() {
 export function reportException(error, extra) {
   try {
     Sentry.captureException(error, extra ? { extra } : undefined);
-  } catch (e) {
+  } catch {
     // Never let error reporting itself throw.
   }
 }

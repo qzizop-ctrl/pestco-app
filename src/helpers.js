@@ -251,7 +251,7 @@ export function fmtReminder(dt, locale) {
   try {
     const d = new Date(dt);
     return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
-  } catch (e) {
+  } catch {
     return dt;
   }
 }
@@ -272,7 +272,7 @@ export function fmtCreatedAt(ts, locale) {
   if (!d) return "";
   try {
     return d.toLocaleString(locale, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
-  } catch (e) {
+  } catch {
     return "";
   }
 }
@@ -281,7 +281,7 @@ export function fmtActivityDate(dt, locale) {
   try {
     const d = new Date(dt);
     return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
-  } catch (e) {
+  } catch {
     return dt;
   }
 }
@@ -313,7 +313,7 @@ export function fmtMoney(n, locale) {
     const [intPart, decPart] = num.toString().split(".");
     const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return (negative ? "-" : "") + withThousands + (decPart ? "." + decPart : "");
-  } catch (e) {
+  } catch {
     return String(n || 0);
   }
 }
