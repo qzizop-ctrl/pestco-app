@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { STRINGS } from "./i18n";
-import { useDashboardContext } from "./contexts/DashboardContext";
+import { useDashboardContext } from "./hooks/useDashboardContext";
 import { useDashboardStats } from "./hooks/useDashboardStats";
 import { useDashboardPdfExport } from "./hooks/useDashboardPdfExport";
 // This file used to hold ~990 lines, then ~440 after a first round of

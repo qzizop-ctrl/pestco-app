@@ -302,7 +302,7 @@ export function fmtActivityDate(dt, locale) {
 // comma, period — nothing else) sidesteps ICU/locale behavior altogether
 // and guarantees the same output on every device. The `locale` param is
 // kept for call-site compatibility but no longer affects the output.
-export function fmtMoney(n, locale) {
+export function fmtMoney(n, _locale) {
   try {
     let num = Number(n);
     if (!isFinite(num)) num = 0;

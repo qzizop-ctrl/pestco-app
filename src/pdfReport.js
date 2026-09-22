@@ -223,7 +223,7 @@ function buildFrontMatterHtml({
 
 // One chunk of the offers list (ROWS_PER_CHUNK rows or fewer), as its own
 // small, self-contained container.
-function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk, trailingHtml = "" }) {
+function buildOffersChunkHtml({ t, rows, isFirstChunk, isLastChunk: _isLastChunk, trailingHtml = "" }) {
   const align = t.dir === "rtl" ? "right" : "left";
   const title = isFirstChunk ? t.dashPdfOffersListSection : `${t.dashPdfOffersListSection} (${t.dashPdfContinued || "تابع"})`;
   const body = rows.length > 0

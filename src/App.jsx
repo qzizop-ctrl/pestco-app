@@ -1,4 +1,3 @@
-import { Capacitor } from "@capacitor/core";
 import { BottomNav } from "./components/Shared";
 import AppHeader from "./components/AppHeader";
 import AppScreens from "./components/AppScreens";
