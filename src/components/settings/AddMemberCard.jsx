@@ -1,4 +1,4 @@
-import { TEXT, MUTED, LINE, SURFACE, PRIMARY } from "../../theme";
+import { MUTED, LINE, SURFACE, PRIMARY } from "../../theme";
 
 export default function AddMemberCard({
   t,
