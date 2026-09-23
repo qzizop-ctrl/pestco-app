@@ -74,12 +74,12 @@ export default function CustomerFormScreen({
   saveForm,
   saving,
 }) {
-  // ملحوظة: تسجيل التغييرات (last_change.changes) بقى بيتحسب جوه saveForm
-  // نفسها في App.jsx، لأنها هي اللي عندها السجل الأصلي الموثوق من
-  // Firestore (visits state) وهي اللي بتكتب فعليًا على قاعدة البيانات.
-  // الاعتماد على نسخة محلية هنا كان بيدّي نتائج غلط دايمًا لأن الحفظ
-  // الفعلي (saveForm) كان بيتجاهل أي بيانات ممرّرة له ويبني last_change
-  // من جديد بدون تفاصيل.
+  // ملحوظة: تسجيل التغييرات (last_change.changes) بيتحسب جوه saveForm
+  // نفسها في useCustomerRecords.js (مش App.jsx — الملف ده كان اتنقل منه)،
+  // لأنها هي اللي عندها السجل الأصلي الموثوق من Firestore (visits state)
+  // وهي اللي بتكتب فعليًا على قاعدة البيانات. الاعتماد على نسخة محلية هنا
+  // كان بيدّي نتائج غلط دايمًا لأن الحفظ الفعلي (saveForm) كان بيتجاهل أي
+  // بيانات ممرّرة له ويبني last_change من جديد بدون تفاصيل.
 
   return (
     <div className="px-4 pt-4 pb-10 flex flex-col gap-4">
@@ -89,9 +89,10 @@ export default function CustomerFormScreen({
      >
       <FormSection title={t.formSectionBasic} first>
         <div>
-          <label>{t.companyLabel}</label>
+          <label htmlFor="cf-companyName">{t.companyLabel}</label>
           <IconField icon={Building2}>
             <input
+              id="cf-companyName"
               className="field-bare"
               value={form.companyName}
               onChange={(e) => setForm({ ...form, companyName: e.target.value })}
@@ -103,9 +104,10 @@ export default function CustomerFormScreen({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label>{t.contactLabel}</label>
+            <label htmlFor="cf-contactName">{t.contactLabel}</label>
             <IconField icon={User}>
               <input
+                id="cf-contactName"
                 className="field-bare"
                 value={form.contactName}
                 onChange={(e) => setForm({ ...form, contactName: e.target.value })}
@@ -116,9 +118,9 @@ export default function CustomerFormScreen({
           </div>
 
           <div>
-            <label>{t.roleLabel}</label>
+            <label htmlFor="cf-role">{t.roleLabel}</label>
             <IconField icon={Briefcase}>
-              <select className="field-bare" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              <select id="cf-role" className="field-bare" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {ROLE_IDS.map((id) => (
                   <option key={id} value={id}>{t.roles[id]}</option>
                 ))}
@@ -129,9 +131,10 @@ export default function CustomerFormScreen({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label>{t.phoneLabel}</label>
+            <label htmlFor="cf-phone">{t.phoneLabel}</label>
             <IconField icon={Phone}>
               <input
+                id="cf-phone"
                 className="field-bare"
                 type="tel"
                 value={form.phone}
@@ -142,9 +145,10 @@ export default function CustomerFormScreen({
           </div>
 
           <div>
-            <label>{t.emailLabel}</label>
+            <label htmlFor="cf-email">{t.emailLabel}</label>
             <IconField icon={Mail}>
               <input
+                id="cf-email"
                 className="field-bare"
                 type="email"
                 value={form.email}
@@ -159,9 +163,9 @@ export default function CustomerFormScreen({
       <CollapsibleSection title={t.formSectionClassification}>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label>{t.sectorLabel}</label>
+            <label htmlFor="cf-sector">{t.sectorLabel}</label>
             <IconField icon={LayoutGrid}>
-              <select className="field-bare" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
+              <select id="cf-sector" className="field-bare" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
                 <option value="" disabled>{t.sectorPlaceholder}</option>
                 {SECTOR_IDS.map((id) => (
                   <option key={id} value={id}>{t.sectors[id]}</option>
@@ -172,9 +176,9 @@ export default function CustomerFormScreen({
           </div>
 
           <div>
-            <label>{t.pipelineLabel}</label>
+            <label htmlFor="cf-stage">{t.pipelineLabel}</label>
             <IconField icon={Flag}>
-              <select className="field-bare" value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
+              <select id="cf-stage" className="field-bare" value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
                 <option value="">{t.stageNone}</option>
                 {STAGE_IDS.map((id) => (
                   <option key={id} value={id}>{t.stages[id]}</option>
@@ -185,9 +189,10 @@ export default function CustomerFormScreen({
         </div>
 
         <div>
-          <label>{t.tagsLabel}</label>
+          <label htmlFor="cf-tags">{t.tagsLabel}</label>
           <IconField icon={Tag}>
             <input
+              id="cf-tags"
               className="field-bare"
               value={form.tagsInput}
               onChange={(e) => setForm({ ...form, tagsInput: e.target.value })}
@@ -207,9 +212,10 @@ export default function CustomerFormScreen({
       <CollapsibleSection title={t.formSectionSchedule}>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label>{t.visitDateLabel}</label>
+            <label htmlFor="cf-visitDate">{t.visitDateLabel}</label>
             <IconField icon={CalendarDays}>
               <input
+                id="cf-visitDate"
                 className="field-bare"
                 type="date"
                 value={form.visitDate}
@@ -222,9 +228,10 @@ export default function CustomerFormScreen({
           </div>
 
           <div>
-            <label>{t.callDateLabel}</label>
+            <label htmlFor="cf-callDateTime">{t.callDateLabel}</label>
             <IconField icon={PhoneCall}>
               <input
+                id="cf-callDateTime"
                 className="field-bare"
                 type="datetime-local"
                 value={form.callDateTime}
@@ -240,9 +247,10 @@ export default function CustomerFormScreen({
 
       <CollapsibleSection title={t.formSectionNotes}>
         <div>
-          <label>{t.notesLabel}</label>
+          <label htmlFor="cf-notes">{t.notesLabel}</label>
           <IconField icon={StickyNote} top>
             <textarea
+              id="cf-notes"
               className="field-bare"
               rows={5}
               value={form.notes}

@@ -17,7 +17,7 @@ import { History, ChevronDown, ChevronUp, ChevronRight, Building2, Truck } from 
 import { TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE, PRIMARY, DANGER, SUCCESS } from "../theme";
 import { AUDIT_ACTION_IDS } from "../domain";
 import { fmtActivityDate } from "../helpers";
-import { useAuditLogFeed } from "../hooks/useAuditLog";
+import { useAuditLogFeed, AUDIT_LOG_LIMIT } from "../hooks/useAuditLog";
 import { SkeletonList } from "./Shared";
 
 function Chip({ active, onClick, children }) {
@@ -107,7 +107,16 @@ export default function AuditLogScreen({
         <History size={17} color={PRIMARY} />
         <span className="font-bold text-base" style={{ color: TEXT }}>{t.auditLogTitle}</span>
       </div>
-      <p className="text-xs mb-4" style={{ color: MUTED }}>{t.auditLogHint}</p>
+      <p className={`text-xs ${entries.length >= AUDIT_LOG_LIMIT ? "mb-1" : "mb-4"}`} style={{ color: MUTED }}>{t.auditLogHint}</p>
+      {/* Every filter below only searches within the entries this screen has
+          actually loaded (see AUDIT_LOG_LIMIT in useAuditLog.js). Once that
+          many entries exist, an older "from" date or a user who only shows
+          up further back can look like "no results" even though matching
+          entries exist beyond what's loaded — this makes that limit visible
+          instead of leaving it silent. */}
+      {entries.length >= AUDIT_LOG_LIMIT && (
+        <p className="text-xs mb-3" style={{ color: "#DB9A2C" }}>{t.auditLogLimitedHint}</p>
+      )}
 
       {/* Filters */}
       <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 12, marginBottom: 16 }}>

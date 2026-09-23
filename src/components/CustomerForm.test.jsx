@@ -11,7 +11,8 @@ import CustomerFormScreen, { IconField, FormSection } from "./CustomerForm";
 // contract: typing/selecting in a field calls setForm with the right merged
 // shape, validation errors passed in show up next to the right field, and
 // the save button reflects/respects the `saving` prop. Firestore/save logic
-// itself lives in App.jsx (saveForm), not here, so it isn't exercised.
+// itself lives in useCustomerRecords.js (saveForm), not here, so it isn't
+// exercised.
 // ---------------------------------------------------------------------------
 
 const t = STRINGS.en;
