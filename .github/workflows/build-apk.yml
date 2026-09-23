@@ -104,15 +104,6 @@ jobs:
         run: npx cap sync android
 
       # =========================
-      # DEBUG: check keystore secret length (temporary)
-      # =========================
-      - name: DEBUG check keystore secret length
-        run: |
-          echo "Length of secret: ${#ANDROID_RELEASE_KEYSTORE_B64}"
-        env:
-          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
-
-      # =========================
       # Release keystore
       # =========================
       - name: Decode release keystore
