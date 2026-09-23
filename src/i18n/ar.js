@@ -519,6 +519,12 @@ export const AR = {
   auditLogFilterTo: "إلى تاريخ",
   auditLogFilterAll: "الكل",
   auditLogClearFilters: "مسح الفلاتر",
+  // Shown when the screen has loaded the maximum number of recent entries
+  // (see AUDIT_LOG_LIMIT in useAuditLog.js) — warns that filtering by an
+  // older "from" date, or by a user who only shows up further back, may
+  // miss entries that exist but weren't loaded, instead of that silently
+  // looking like "no results".
+  auditLogLimitedHint: "بيتم عرض أحدث 500 عملية بس — الفلاتر (خصوصًا \"من تاريخ\" لفترة أقدم) ممكن متطلعش كل النتائج الفعلية.",
   auditLogEntityCustomer: "عميل",
   auditLogEntitySupplier: "مورد",
   auditLogActions: {
