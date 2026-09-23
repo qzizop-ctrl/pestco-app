@@ -52,6 +52,7 @@ export default function CustomerDetailScreen({
   openEdit,
   deleteVisit,
   setScreen,
+  showAlert,
 }) {
   // مرجع مستند العميل الصحيح في Firestore — نفس المسار المستخدم في باقي
   // التطبيق (App.jsx وuseLiveData.js): users/{ownerUid}/visits/{id}.
@@ -72,6 +73,7 @@ export default function CustomerDetailScreen({
     deleteSuccessMsg: t.deleteApprovedMsg,
     restoreSuccessMsg: t.deleteRestoredMsg,
     onDeleteSuccess: () => setScreen && setScreen("list"),
+    showAlert,
     onAudit: (action) => logAudit(ownerUid, {
       entityType: "customer", entityId: active?.id, entityName: active?.companyName,
       action, user, t,
