@@ -135,7 +135,11 @@ jobs:
       # step below rather than silently falling back to a debug-signed
       # "release" — see patchBuildGradle() in
       # scripts/patch-android-storage.cjs for the other half of this.
-      - name: Decode release keystore
+      - name: DEBUG check keystore secret length
+        run: echo "Length of secret: ${#ANDROID_RELEASE_KEYSTORE_B64}"
+        env:
+          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+          - name: Decode release keystore
         if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         run: echo "$ANDROID_RELEASE_KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.keystore"
         env:
