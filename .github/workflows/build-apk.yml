@@ -40,28 +40,6 @@ jobs:
           java-version: "17"
 
       # =========================
-      # TEMP: Generate release keystore (remove after copying secrets)
-      # =========================
-      - name: Generate Keystore (temporary - run once then remove)
-        run: |
-          keytool -genkeypair -v \
-            -keystore release.keystore \
-            -alias my-key-alias \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass "MyStrongPass123" \
-            -keypass "MyStrongPass123" \
-            -dname "CN=MyApp, OU=Dev, O=MyCompany, L=Cairo, S=Cairo, C=EG"
-
-      - name: Save Keystore Base64 to file (temporary)
-        run: base64 -w 0 release.keystore > keystore_base64.txt
-
-      - name: Upload Keystore Base64 (temporary)
-        uses: actions/upload-artifact@v4
-        with:
-          name: keystore-base64
-          path: keystore_base64.txt
-
-      # =========================
       # Install dependencies
       # =========================
       # Same reasoning as build-windows.yml's install step: a transient
