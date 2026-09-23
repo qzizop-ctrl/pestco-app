@@ -42,10 +42,6 @@ jobs:
       # =========================
       # Install dependencies
       # =========================
-      # Same reasoning as build-windows.yml's install step: a transient
-      # runner-network blip (ECONNRESET etc.) mid-download shouldn't fail
-      # the whole build, so retry the step itself a few times rather than
-      # relying only on npm's own registry-level retry config.
       - name: Install dependencies
         uses: nick-fields/retry@v3
         with:
@@ -61,21 +57,12 @@ jobs:
       # =========================
       # Lint
       # =========================
-      # Blocking, same as the tests step below: `npm run lint` was defined
-      # in package.json but never actually wired into either workflow, so
-      # style/correctness issues it would catch (unused vars, hook-deps
-      # mistakes, etc.) could merge to main unnoticed. Runs before tests so
-      # a lint failure is reported first/fastest.
       - name: Run lint
         run: npm run lint
 
       # =========================
       # Run tests
       # =========================
-      # Blocking on purpose: this covers the business-logic tests
-      # (permissions, dashboard calculations, etc.) — a red test here
-      # means the build below would ship a real regression, not just a
-      # style nit, so it should stop the release.
       - name: Run tests
         run: npm run test
 
@@ -101,9 +88,6 @@ jobs:
       # =========================
       # Android Storage Access
       # =========================
-      # Uses the same script as local dev (`npm run android:patch`) instead
-      # of duplicating the manifest/plugin patching inline here — see
-      # scripts/patch-android-storage.cjs.
       - name: Setup Android storage access
         run: npm run android:patch
 
@@ -120,39 +104,23 @@ jobs:
         run: npx cap sync android
 
       # =========================
-      # Release keystore
+      # DEBUG: check keystore secret length (temporary)
       # =========================
-      # =========================
-      # Release keystore
-      # =========================
-      # A real, persistent release keystore, not the auto-generated debug
-      # one — this used to build+publish `assembleDebug` (debug-signed,
-      # debuggable, unminified) as the public GitHub Release, which is not
-      # something end users should be installing: a debug build is far
-      # easier to tamper with/attach a debugger to, and ships unminified.
-      # ANDROID_RELEASE_KEYSTORE_B64 is the release .jks/.keystore file,
-      # base64-encoded, stored as a repo secret (generate once locally with
-      # `keytool -genkeypair ...`, then `base64 -w0 your.keystore`); the
-      # matching passwords/alias are separate secrets. If this secret isn't
-      # set, this step is skipped and the build below fails at the signing
-      # step below rather than silently falling back to a debug-signed
-      # "release" — see patchBuildGradle() in
-      # scripts/patch-android-storage.cjs for the other half of this.
       - name: DEBUG check keystore secret length
-        run: echo "Length of secret: ${#ANDROID_RELEASE_KEYSTORE_B64}"
+        run: |
+          echo "Length of secret: ${#ANDROID_RELEASE_KEYSTORE_B64}"
         env:
           ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
 
+      # =========================
+      # Release keystore
+      # =========================
       - name: Decode release keystore
         if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         run: echo "$ANDROID_RELEASE_KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.keystore"
         env:
           ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
-          - name: Decode release keystore
-        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
-        run: echo "$ANDROID_RELEASE_KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.keystore"
-        env:
-          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+
       # =========================
       # Gradle permission
       # =========================
@@ -162,18 +130,10 @@ jobs:
       # =========================
       # Build APK
       # =========================
-      # Signed with the release keystore decoded above; minifyEnabled/
-      # shrinkResources are turned on for this build type by
-      # patchBuildGradle() (see npm run android:patch, run earlier in this
-      # workflow via "Setup Android storage access").
       - name: Build release APK
         working-directory: android
         run: ./gradlew assembleRelease
         env:
-          # Empty (rather than a path to a file that doesn't exist) when the
-          # keystore secret isn't set, so patchBuildGradle()'s `file(ksPath)
-          # .exists()` check in build.gradle correctly falls through to an
-          # unsigned signingConfig instead of erroring on a bad path.
           ANDROID_RELEASE_KEYSTORE_PATH: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 != '' && format('{0}/release.keystore', runner.temp) || '' }}
           ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
           ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
