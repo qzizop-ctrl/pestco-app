@@ -118,22 +118,26 @@ jobs:
         run: npx cap sync android
 
       # =========================
-      # Debug keystore (persisted across runs)
+      # Release keystore
       # =========================
-      # Without this, Gradle auto-generates a brand-new random debug
-      # keystore on every fresh runner, so each build's APK is signed
-      # with a different certificate. Android then refuses to install a
-      # new APK over an already-installed one with a different signature
-      # (silently, or with "App not installed") — the old app just stays
-      # in place, which looks exactly like "the fix never took effect"
-      # even though the build was correct. Caching the same keystore
-      # file across runs keeps every build signed identically, so
-      # updates install over the previous version normally.
-      - name: Restore/cache debug keystore
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: android-debug-keystore
+      # A real, persistent release keystore, not the auto-generated debug
+      # one — this used to build+publish `assembleDebug` (debug-signed,
+      # debuggable, unminified) as the public GitHub Release, which is not
+      # something end users should be installing: a debug build is far
+      # easier to tamper with/attach a debugger to, and ships unminified.
+      # ANDROID_RELEASE_KEYSTORE_B64 is the release .jks/.keystore file,
+      # base64-encoded, stored as a repo secret (generate once locally with
+      # `keytool -genkeypair ...`, then `base64 -w0 your.keystore`); the
+      # matching passwords/alias are separate secrets. If this secret isn't
+      # set, this step is skipped and the build below fails at the signing
+      # step below rather than silently falling back to a debug-signed
+      # "release" — see patchBuildGradle() in
+      # scripts/patch-android-storage.cjs for the other half of this.
+      - name: Decode release keystore
+        if: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 != '' }}
+        run: echo "$ANDROID_RELEASE_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+        env:
+          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
 
       # =========================
       # Gradle permission
@@ -144,9 +148,22 @@ jobs:
       # =========================
       # Build APK
       # =========================
-      - name: Build debug APK
+      # Signed with the release keystore decoded above; minifyEnabled/
+      # shrinkResources are turned on for this build type by
+      # patchBuildGradle() (see npm run android:patch, run earlier in this
+      # workflow via "Setup Android storage access").
+      - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease
+        env:
+          # Empty (rather than a path to a file that doesn't exist) when the
+          # keystore secret isn't set, so patchBuildGradle()'s `file(ksPath)
+          # .exists()` check in build.gradle correctly falls through to an
+          # unsigned signingConfig instead of erroring on a bad path.
+          ANDROID_RELEASE_KEYSTORE_PATH: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 != '' && format('{0}/release.keystore', runner.temp) || '' }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
 
       # =========================
       # GitHub Release
@@ -156,6 +173,6 @@ jobs:
         with:
           tag_name: "v1.0.${{ github.run_number }}"
           name: "Release v1.0.${{ github.run_number }}"
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: android/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
