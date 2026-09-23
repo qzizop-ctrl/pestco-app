@@ -127,12 +127,29 @@ service cloud.firestore {
     // also append its audit entry — canWrite(ownerUid) already covers
     // owner + reviewer + editor. Entries can never be edited or deleted by
     // any client once written, so the trail can't be quietly tampered with.
+    //
+    // Beyond the identity check (changedById must be the caller — already
+    // in place), this also now constrains the shape of what can be
+    // written, closing two gaps a compromised/malicious editor account
+    // could otherwise use to pollute a supposedly-trustworthy admin trail:
+    //   - `action` must be one of the actual known actions (matches
+    //     AUDIT_ACTION_IDS in src/domain.js) rather than an arbitrary
+    //     string, since entries can never be corrected afterward.
+    //   - `at` must equal request.time (the server's own clock) instead of
+    //     a client-supplied ISO string — the log is read ordered by `at`
+    //     (see useAuditLog.js), so a caller no longer gets to backdate or
+    //     future-date an entry to reorder it or push real entries out of
+    //     the most-recent-500 window the Audit Log screen loads.
     match /users/{ownerUid}/auditLog/{entryId} {
 
       allow read: if isOwner(ownerUid) || isReviewer();
 
       allow create: if canWrite(ownerUid)
-        && request.resource.data.changedById == request.auth.uid;
+        && request.resource.data.changedById == request.auth.uid
+        && request.resource.data.action in
+             ['create', 'update', 'delete', 'restore', 'approve', 'rollback']
+        && request.resource.data.entityType in ['customer', 'supplier']
+        && request.resource.data.at == request.time;
 
       allow update, delete: if false;
     }
