@@ -31,6 +31,7 @@ export function SupplierFormScreen({
   user,
   isOwnerAccount,
   setScreen,
+  showAlert,
 }) {
   // نفس مسار مستند المورد المستخدم في باقي التطبيق: users/{ownerUid}/suppliers/{id}.
   const getDocRef = () => {
@@ -48,6 +49,7 @@ export function SupplierFormScreen({
     deleteSuccessMsg: t.deleteApprovedMsgSupplier,
     restoreSuccessMsg: t.deleteRestoredMsgSupplier,
     onFinally: () => setScreen && setScreen("suppliers"),
+    showAlert,
     onAudit: (action) => logAudit(ownerUid, {
       entityType: "supplier", entityId: activeSupplierId, entityName: supplierForm?.name,
       action, user, t,
