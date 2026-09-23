@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, collection, onSnapshot, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { isAdminEmail, resolvePrimaryAdminEmail, isPrimaryAdminEmail } from "../adminPermissions";
+import { resolveNextOwners, selectOwner, resolveNoOwnersOutcome } from "../workspaceAccess";
 import { reportException } from "../sentry";
 
 // Handles authentication plus multi-workspace permission resolution
@@ -223,9 +224,6 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
       // `owners` itself is already treated as "at most one real entry"
       // everywhere else in this file.
       setMyDashboardAccess(snap.exists() && snap.data().dashboardAccess === true);
-      const externalOwners = Object.entries(ownersMap)
-        .filter(([, role]) => role === "editor" || role === "viewer")
-        .map(([uid, role]) => ({ uid, role }));
 
       // The signed-in account is always an owner of its own workspace on
       // initial login, but only when they have no other granted access —
@@ -243,33 +241,40 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
       // other access found" and was silently made owner of its own empty
       // workspace — which is exactly what let an un-reviewed or dismissed
       // account see the Settings screen and still use the app.
+      //
+      // The actual decision (which owners this account ends up with) now
+      // lives in resolveNextOwners() — see workspaceAccess.js — kept pure
+      // and unit-tested there rather than inline here.
       const previousOwner = previousResolvedOwnerRef.current;
       const hasKnownExternalAccess = Boolean(previousOwner && previousOwner !== user.uid);
       const isReviewerEmail = adminEmails.includes(emailKey);
 
-      let nextOwners = externalOwners;
-      if (externalOwners.some((x) => x.uid === user.uid)) {
-        nextOwners = externalOwners.map((x) => x.uid === user.uid ? { ...x, role: "owner" } : x);
-      } else if (isReviewerEmail && !hasKnownExternalAccess && externalOwners.length === 0) {
-        nextOwners = [{ uid: user.uid, role: "owner" }, ...externalOwners];
-      }
-
-      // Remove duplicates and keep a stable order.
-      const seen = new Set();
-      nextOwners = nextOwners.filter((x) => {
-        if (seen.has(x.uid)) return false;
-        seen.add(x.uid);
-        return true;
+      const nextOwners = resolveNextOwners({
+        ownersMap, userUid: user.uid, isReviewerEmail, hasKnownExternalAccess,
       });
 
       if (nextOwners.length === 0) {
-        if (!allowSignOut) {
+        // See resolveNoOwnersOutcome() in workspaceAccess.js for what each
+        // outcome means; everything below is just carrying out that
+        // decision with the actual side effects (setState/signOut/setDoc)
+        // it always performed, in the same order as before.
+        const outcome = resolveNoOwnersOutcome({
+          allowSignOut,
+          isReviewerEmail,
+          emailVerified: user.emailVerified,
+          accountAgeMs: user.metadata?.creationTime
+            ? Date.now() - new Date(user.metadata.creationTime).getTime()
+            : Infinity,
+        });
+
+        if (outcome === "wait") {
           // Provisional cached read showing no access — could just be
           // stale and about to be corrected once the server confirms, so
           // don't take the destructive sign-out branch on it. Keep
           // waiting for the real confirmed snapshot instead.
           return;
         }
+
         setOwnerUid(null);
         setMyRole(null);
         setMyDashboardAccess(false);
@@ -278,12 +283,13 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
         setScreen("list");
         setActiveId(null);
         setPermissionLoading(false);
+
         // Not the reviewer and not granted access by anyone: this account
         // has nothing to do in the app (still pending review, dismissed,
         // or revoked). Sign it back out and let AuthScreen show an
         // "email not registered" style message instead of leaving it
         // signed in with no data and no way forward.
-        if (!isReviewerEmail) {
+        if (outcome === "needs_email_verification") {
           // firestore.rules now requires request.auth.token.email_verified
           // on the signups/{uid} create, so an unverified account can
           // never reach the reviewer's pending list no matter what this
@@ -292,36 +298,35 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
           // sight. Tell the person to verify instead of the generic
           // "no account" message, and don't bother attempting the
           // doc write below; it would just fail.
-          if (!user.emailVerified) {
-            setAuthError("unverified");
-            signOut(auth).catch((e) => {
-              console.error("Sign-out for unverified account failed:", e);
-              reportException(e, { context: "Sign-out for unverified account failed" });
-            });
-            return;
-          }
+          setAuthError("unverified");
+          signOut(auth).catch((e) => {
+            console.error("Sign-out for unverified account failed:", e);
+            reportException(e, { context: "Sign-out for unverified account failed" });
+          });
+          return;
+        }
+
+        if (outcome === "sign_out_and_self_heal" || outcome === "sign_out_only") {
           setAuthError(true);
-          // Self-heal: AuthScreen's registration flow sends the
-          // verification email right after creating the account, but
-          // doesn't write signups/{uid} itself anymore (it can't yet —
-          // the account isn't verified at that point). Once the person
-          // verifies and logs back in, write it here instead, now that
-          // the rules' email_verified check can actually pass.
-          //
-          // Only do this within a reasonable window of account creation
-          // — this branch also covers a *dismissed* or *revoked* account
-          // trying to log back in, and those must NOT reappear in
-          // "pending review" every time they retry (that's what
-          // dismiss/revoke are for). A verified signup retrying after
-          // the original write failed and a months-old dismissed account
-          // both land here identically; creation-time recency is the
-          // only signal available to tell them apart. Widened from the
-          // original 15 minutes since verifying an email realistically
-          // takes longer than that.
-          const accountAgeMs = user.metadata?.creationTime
-            ? Date.now() - new Date(user.metadata.creationTime).getTime()
-            : Infinity;
-          if (accountAgeMs < 24 * 60 * 60 * 1000) {
+          if (outcome === "sign_out_and_self_heal") {
+            // Self-heal: AuthScreen's registration flow sends the
+            // verification email right after creating the account, but
+            // doesn't write signups/{uid} itself anymore (it can't yet —
+            // the account isn't verified at that point). Once the person
+            // verifies and logs back in, write it here instead, now that
+            // the rules' email_verified check can actually pass.
+            //
+            // Only within a reasonable window of account creation — this
+            // branch also covers a *dismissed* or *revoked* account
+            // trying to log back in, and those must NOT reappear in
+            // "pending review" every time they retry (that's what
+            // dismiss/revoke are for). A verified signup retrying after
+            // the original write failed and a months-old dismissed
+            // account both land here identically; creation-time recency
+            // is the only signal available to tell them apart. Widened
+            // from the original 15 minutes since verifying an email
+            // realistically takes longer than that.
+            //
             // No existence check first — a plain user can't even read the
             // signups collection (only a reviewer can, see
             // firestore.rules), so a getDoc here would just fail
@@ -349,6 +354,8 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
             reportException(e, { context: "Sign-out for unauthorized account failed" });
           });
         }
+        // outcome === "reviewer_no_owners": nothing further to do — a
+        // reviewer with no resolved workspace still stays signed in.
         return;
       }
 
@@ -361,14 +368,9 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
         // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
       }
 
-      const currentOwner = previousResolvedOwnerRef.current;
-      const currentStillValid = nextOwners.some((x) => x.uid === currentOwner);
-      const savedStillValid = nextOwners.some((x) => x.uid === savedOwner);
-      const selected = currentStillValid
-        ? currentOwner
-        : savedStillValid
-          ? savedOwner
-          : nextOwners[0].uid;
+      const selected = selectOwner({
+        nextOwners, currentOwner: previousResolvedOwnerRef.current, savedOwner,
+      });
 
       const selectedEntry = nextOwners.find((x) => x.uid === selected);
       setOwnerUid(selected);
