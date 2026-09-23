@@ -69,8 +69,12 @@ export function useCustomerRecords({
     const clean = corePhoneDigits(phone);
     if (!clean) return null;
     return (
+      // Excludes soft-deleted records (deleted: true) — otherwise a phone
+      // number that only matches a customer someone already deleted would
+      // still trigger a "duplicate phone" warning, which is confusing since
+      // that customer is gone as far as the user can see.
       visits.find(
-        (v) => v.id !== excludeId && corePhoneDigits(v.phone) === clean
+        (v) => v.id !== excludeId && !v.deleted && corePhoneDigits(v.phone) === clean
       ) || null
     );
   };
@@ -320,10 +324,21 @@ export function useCustomerRecords({
   const clearCallReminder = async (visit) => {
     if (!requireOnline()) return;
     if (!user || !ownerUid || !visit) return;
-    updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
-      callDateTime: "",
-      notified: false,
-    }).catch(() => {});
+    // Awaited (and reported through reportSaveError like every other write
+    // in this file) rather than fired-and-forgotten: previously a failed
+    // update here was swallowed silently, so cancelCallReminder() and the
+    // "call done" activity entry below would still run even though the
+    // Firestore write never actually went through, leaving the reminder
+    // looking cleared everywhere except the database.
+    try {
+      await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
+        callDateTime: "",
+        notified: false,
+      });
+    } catch (e) {
+      reportSaveError(e);
+      return;
+    }
     cancelCallReminder(visit.id);
     await appendActivity(visit.id, buildActivity("call", t.activityCallDone));
   };
