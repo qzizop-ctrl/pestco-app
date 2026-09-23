@@ -5,6 +5,7 @@ import { scheduleCallReminder } from "../notifications";
 import { STRINGS } from "../i18n";
 import { MAX_IMPORT_ROWS, IMPORT_BATCH_SIZE } from "../domain";
 import { parseTagsCell, findSectorId, findRoleId, findStageId, normalizeExcelDate, normalizeExcelDateTime, buildActivity } from "../helpers";
+import { reportException } from "../sentry";
 
 // Excel *import* only — export lives in useExcelExport.js (the write side
 // uses a very different shape, so keeping them apart avoids one bloated
@@ -44,6 +45,11 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
     if (!file || !user || !ownerUid) return;
 
     setImporting(true);
+    // Declared outside the try so a batch failure partway through (see the
+    // catch block below) can still report how many rows were committed
+    // before it, instead of just "something went wrong" with no way to
+    // tell whether 0 rows or 450 rows actually landed in Firestore.
+    let count = 0;
     try {
       const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
@@ -116,7 +122,6 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
 
       setImportProgress({ done: 0, total: pending.length });
 
-      let count = 0;
       for (let i = 0; i < pending.length; i += IMPORT_BATCH_SIZE) {
         const chunk = pending.slice(i, i + IMPORT_BATCH_SIZE);
         const batch = writeBatch(db);
@@ -137,8 +142,15 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         setImportProgress({ done: count, total: pending.length });
       }
       showAlert(t.importSuccess(count));
-    } catch {
-      showAlert(t.importError);
+    } catch (err) {
+      // Was a bare `catch { showAlert(t.importError) }` — swallowed the
+      // real error (no console.error, no reportException, unlike every
+      // other Firestore write path in this app) and always showed the same
+      // generic message even when `count` rows had already committed in
+      // earlier batches before this one failed.
+      console.error("Excel import failed:", err);
+      reportException(err, { context: "Excel import failed", ownerUid, partiallyImported: count });
+      showAlert(count > 0 ? t.importPartialError(count) : t.importError);
     } finally {
       setImporting(false);
       setImportProgress(null);
@@ -159,6 +171,7 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
     if (!file || !user || !ownerUid) return;
 
     setImportingSuppliers(true);
+    let count = 0;
     try {
       const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
@@ -215,7 +228,6 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
 
       setSupplierImportProgress({ done: 0, total: pending.length });
 
-      let count = 0;
       for (let i = 0; i < pending.length; i += IMPORT_BATCH_SIZE) {
         const chunk = pending.slice(i, i + IMPORT_BATCH_SIZE);
         const batch = writeBatch(db);
@@ -225,8 +237,10 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         setSupplierImportProgress({ done: count, total: pending.length });
       }
       showAlert(t.importSuppliersSuccess(count));
-    } catch {
-      showAlert(t.importSuppliersError);
+    } catch (err) {
+      console.error("Excel supplier import failed:", err);
+      reportException(err, { context: "Excel supplier import failed", ownerUid, partiallyImported: count });
+      showAlert(count > 0 ? t.importSuppliersPartialError(count) : t.importSuppliersError);
     } finally {
       setImportingSuppliers(false);
       setSupplierImportProgress(null);
