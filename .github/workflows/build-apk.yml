@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HAS_RELEASE_KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 != '' }}
 
     steps:
       # =========================
@@ -150,7 +152,7 @@ jobs:
       # "release" — see patchBuildGradle() in
       # scripts/patch-android-storage.cjs for the other half of this.
       - name: Decode release keystore
-        if: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 != '' }}
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
         run: echo "$ANDROID_RELEASE_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
         env:
           ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
