@@ -161,6 +161,7 @@ export const AR = {
   importHint: "الملف لازم يكون بنفس أعمدة ملف التصدير (اسم الشركة، الشخص المسؤول، إلخ). الصفوف هتتضاف كزيارات جديدة.",
   importSuccess: (n) => `تم استيراد ${n} زيارة بنجاح`,
   importError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+  importPartialError: (n) => `توقف الاستيراد بسبب خطأ — اتحفظ ${n} زيارة قبل ما يحصل الخطأ.`,
   importing: "جارِ الاستيراد...",
   importProgress: (done, total) => `جارِ الاستيراد... (${done}/${total})`,
   importTooLarge: (max) => `الملف فيه أكتر من ${max} صف. قسّم الملف لأجزاء أصغر وحاول تاني.`,
@@ -228,6 +229,7 @@ export const AR = {
   importSuppliersHint: "الملف لازم يكون بنفس أعمدة ملف تصدير الموردين (اسم المورد، نوع البضاعة، إلخ). الصفوف هتتضاف كموردين جدد.",
   importSuppliersSuccess: (n) => `تم استيراد ${n} مورد بنجاح`,
   importSuppliersError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+  importSuppliersPartialError: (n) => `توقف الاستيراد بسبب خطأ — اتحفظ ${n} مورد قبل ما يحصل الخطأ.`,
   importSuppliersProgress: (done, total) => `جارِ استيراد الموردين... (${done}/${total})`,
   importSuppliersTooLarge: (max) => `الملف فيه أكتر من ${max} صف. قسّم الملف لأجزاء أصغر وحاول تاني.`,
 

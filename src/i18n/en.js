@@ -157,6 +157,7 @@ export const EN = {
   importHint: "The file must use the same columns as the exported file (Company Name, Contact Person, etc). Rows will be added as new visits.",
   importSuccess: (n) => `Successfully imported ${n} visit${n === 1 ? "" : "s"}`,
   importError: "Something went wrong reading the file, please check the file format",
+  importPartialError: (n) => `Import stopped after an error — ${n} visit${n === 1 ? "" : "s"} were already saved before it failed.`,
   importing: "Importing...",
   importProgress: (done, total) => `Importing... (${done}/${total})`,
   importTooLarge: (max) => `The file has more than ${max} rows. Split it into smaller files and try again.`,
@@ -216,6 +217,7 @@ export const EN = {
   importSuppliersHint: "The file must use the same columns as the exported suppliers file (Supplier Name, Goods/Service Type, etc). Rows will be added as new suppliers.",
   importSuppliersSuccess: (n) => `Successfully imported ${n} supplier${n === 1 ? "" : "s"}`,
   importSuppliersError: "Something went wrong reading the file, please check the file format",
+  importSuppliersPartialError: (n) => `Import stopped after an error — ${n} supplier${n === 1 ? "" : "s"} were already saved before it failed.`,
   importSuppliersProgress: (done, total) => `Importing suppliers... (${done}/${total})`,
   importSuppliersTooLarge: (max) => `The file has more than ${max} rows. Split it into smaller files and try again.`,
 
