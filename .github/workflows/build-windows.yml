@@ -142,6 +142,29 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
       # =========================
+      # Code signing (only if the secrets exist)
+      # =========================
+      # Passing `CSC_LINK: ${{ secrets.WIN_CSC_LINK }}` straight into the
+      # packaging step defines CSC_LINK as an EMPTY string when the secret is
+      # missing, and electron-builder then fails with "Env WIN_CSC_LINK is not
+      # correct, cannot resolve ... not a file". So the variables are only
+      # exported when the secret has a value; otherwise the build simply
+      # isn't signed (as before).
+      - name: Enable code signing (if configured)
+        shell: bash
+        run: |
+          if [[ -n "$CERT_B64" ]]; then
+            echo "CSC_LINK=$(printf %s "$CERT_B64" | tr -d '\r\n')" >> "$GITHUB_ENV"
+            echo "CSC_KEY_PASSWORD=$CERT_PASSWORD" >> "$GITHUB_ENV"
+            echo "Code signing enabled."
+          else
+            echo "No WIN_CSC_LINK secret - building unsigned."
+          fi
+        env:
+          CERT_B64: ${{ secrets.WIN_CSC_LINK }}
+          CERT_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      # =========================
       # Package Windows App
       # =========================
       # Without a version: build the installer only (nothing is published).
@@ -159,17 +182,12 @@ jobs:
       - name: Package Windows App (build only)
         if: ${{ steps.meta.outputs.version == '' }}
         run: npx electron-builder --win --publish never
-        env:
-          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
       - name: Package and publish Windows App
         if: ${{ steps.meta.outputs.version != '' }}
         run: npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
       # =========================
       # Keep the installer (private, 14 days)
