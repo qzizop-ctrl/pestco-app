@@ -44,7 +44,8 @@ export default [
       ecmaVersion: 2022,
       sourceType: "module",
       parserOptions: { ecmaFeatures: { jsx: true } },
-      globals: { ...globals.browser },
+      // __APP_VERSION__ is injected at build time by vite.config.js#define.
+      globals: { ...globals.browser, __APP_VERSION__: "readonly" },
     },
     plugins: {
       react,
@@ -99,6 +100,24 @@ export default [
       ecmaVersion: 2022,
       sourceType: "commonjs",
       globals: { ...globals.node },
+    },
+  },
+
+  // --- Firestore rules tests + service worker (public/sw.js) ---------------
+  {
+    files: ["tests/**/*.{js,mjs}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
+  },
+  {
+    files: ["public/sw.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "script",
+      globals: { ...globals.serviceworker },
     },
   },
 

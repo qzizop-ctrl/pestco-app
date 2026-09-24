@@ -55,6 +55,7 @@ scripts/                 سكربتات مساعدة (تثبيت سلامة xlsx
 | `android:setup` | بناء + إضافة مشروع أندرويد + تشغيل الباتش + مزامنة Capacitor |
 | `electron:build` | بناء نسخة ويندوز (.exe) |
 | `firebase:deploy-rules` | نشر `firestore.rules` فعليًا على مشروع Firebase |
+| `test:rules` | اختبارات قواعد Firestore على الـ emulator (محتاجة Java — انظر `tests/rules/README.md`) |
 | `xlsx:pin` / `xlsx:verify` | تثبيت/التحقق من سلامة حزمة xlsx (انظر تحت) |
 
 ## قواعد أمان Firestore
@@ -72,17 +73,47 @@ npm run firebase:deploy-rules
 ```
 **تنبيه:** وجود القواعد في الكود لا يعني أنها مطبَّقة فعليًا على المشروع الحي — لازم تُنشر بالأمر أعلاه بعد كل تعديل.
 
-## حزمة xlsx وتثبيت سلامتها
-حزمة `xlsx` بتتنزّل من رابط CDN مباشر (`cdn.sheetjs.com`) بدل npm registry — الأسلوب الرسمي من SheetJS، لكنه يعني أن `package-lock.json` لا يحسب لها hash تلقائيًا كباقي الحزم.
+### ما تفرضه القواعد الحالية
+- **الإيميل لازم يكون مؤكَّد** (`email_verified`) لأي صلاحية: أدمن، عضو، أو مالك. التسجيل بإيميل/باسورد بيسمح لأي حد يسجّل بأي عنوان، فبدون الشرط ده كان ممكن حد يسجّل بإيميل زميل قبل ما الزميل نفسه يسجّل ويورث الصلاحية اللي اتدّت للعنوان ده.
+- **المالك = أدمن فقط.** أي حساب غير مذكور في `config/admins` ما يقدرش يكتب في `users/{uid}/...` ولا ينشئ مستندات `access`، فالتسجيل المفتوح ما بقاش يقدر يملا Firestore ببيانات.
+- **`access_by_email` بيكتبه الأدمن فقط** (كان أي مستخدم يقدر يكتب على أي إيميل).
+- **الحذف النهائي للمالك/الأدمن فقط.** المحرر بيعمل حذف مبدئي (`deleted: true` + `last_change`) والمالك هو اللي يوافق.
+- **`last_change.updatedById` لازم يساوي مستخدم الطلب** — مفيش تزوير نسبة تعديل لحد تاني.
 
-- `npm run xlsx:pin` يحسب SHA-256 للملفات المثبَّتة فعليًا ويكتبها في `xlsx-integrity.json` (شغّلها مرة وأنت متصل بالإنترنت، ثم اعمل commit للملف).
-- التحقق يحصل تلقائيًا بعد أي `npm install` (عبر `postinstall`)، وبالتالي في الـ CI كمان. لو الملفات المثبتة لا تطابق المحفوظ، يفشل الـ install بدلًا من الاستمرار بصمت.
+### قبل النشر لأول مرة بعد التعديل ده
+1. **تأكد إن حساب الأدمن الأساسي إيميله مؤكَّد.** سجّل دخول من النسخة الجديدة: لو مش مؤكَّد هيبعتلك رابط تأكيد ويطلعك برا، افتحه وارجع سجّل دخول. لو نشرت القواعد قبل كده ومفيش حد مؤكَّد هتتقفل بره.
+2. الأعضاء (محررين/مشاهدين) اللي إيميلاتهم مش مؤكَّدة هيوصلهم رابط تأكيد أول ما يحاولوا يدخلوا.
+3. `config/admins` (الأدمنز) لسه بيقدر يقراه أي مستخدم مؤكَّد لأن الكلاينت بيحتاجه يعرف هو أدمن ولا لأ. لو عايز تخفيه تمامًا محتاج Custom Claims عبر Cloud Function.
+
+### اختبار القواعد
+```bash
+npm install --no-save @firebase/rules-unit-testing@^3 firebase-tools   # مرة واحدة
+npm run test:rules
+```
+بيشتغل كمان في GitHub Actions (`.github/workflows/test-rules.yml`) كل ما القواعد أو الاختبارات تتغيّر. التفاصيل في [`tests/rules/README.md`](./tests/rules/README.md).
+
+## حزمة xlsx وتثبيت سلامتها
+حزمة `xlsx` بتتنزّل من رابط CDN مباشر (`cdn.sheetjs.com`) بدل npm registry — الأسلوب الرسمي من SheetJS. `package-lock.json` بيسجّل لها `integrity` (SHA-512 للـ tarball)، وبالتالي `npm ci` (وكمان `npm install` مع وجود الـ lock) بيرفض أي ملف مش مطابق.
+
+فوق ده فيه فحص إضافي اختياري على الملفات المثبَّتة فعليًا:
+- `npm run xlsx:pin` يحسب SHA-256 للملفات المثبَّتة ويكتبها في `xlsx-integrity.json` (شغّلها مرة وأنت متصل بالإنترنت، ثم اعمل commit للملف).
+- التحقق يحصل تلقائيًا بعد أي install (عبر `postinstall`). بدون الملف ده بيطلع تحذير بس، والـ lock يفضل هو خط الدفاع الأساسي.
 - لو غيّرت نسخة `xlsx` في `package.json`، شغّل `npm run xlsx:pin` من جديد واعمل commit للملف المحدَّث.
 
 ## البناء والنشر
-- **ويب**: `npm run build` → مجلد `dist/`
-- **أندرويد**: `npm run android:setup` ثم `npm run android:open` لفتح المشروع في Android Studio. البناء التلقائي (APK) عبر GitHub Actions في `.github/workflows/build-apk.yml`.
-- **ويندوز**: `npm run electron:build` → مجلد `release/`. البناء التلقائي عبر `.github/workflows/build-windows.yml`.
+- **ويب**: `npm run build` → مجلد `dist/`. التطبيق PWA فعلًا: فيه `manifest.webmanifest` وservice worker (`public/sw.js`) بيخلّي الشل يفتح بدون نت. الاستراتيجية network-first، فأي نشر جديد بيوصل فورًا بدون مشاكل كاش قديم. الـ service worker مش بيتسجّل على أندرويد ولا ويندوز.
+- **أندرويد**: `npm run android:setup` ثم `npm run android:open` لفتح المشروع في Android Studio.
+- **ويندوز**: `npm run electron:build` → مجلد `release/`.
+
+### النشر التلقائي (GitHub Actions)
+- **أي push على `main`**: بيبني ويشغّل الـ lint والاختبارات ويحفظ الـ APK/المثبّت كـ artifact خاص (14 يوم). **مش بينشر Release.**
+- **Release أندرويد**: `git tag android-v1.2.0 && git push origin android-v1.2.0` (أو Run workflow واكتب الإصدار).
+- **Release ويندوز**: `git tag win-v1.2.0 && git push origin win-v1.2.0`. رقم الإصدار بيتاخد من الـ tag ويتكتب في `package.json` وقت البناء، وelectron-builder بينشر Release `v1.2.0` ومعاه `latest.yml` اللي بيقراه الـ auto-updater. (قبل كده الإصدار كان ثابت 1.0.0 فالتحديث التلقائي عمره ما كان بيشوف نسخة أحدث.)
+- **توقيع نسخة ويندوز** (اختياري، بيشيل تحذير SmartScreen): ضيف secrets `WIN_CSC_LINK` (ملف .pfx بصيغة base64) و`WIN_CSC_KEY_PASSWORD`.
+- الـ CI بيستخدم `npm ci`، فأي تعديل في `package.json` لازم يتعمله `npm install` محليًا و commit لـ `package-lock.json`.
+
+### الخط
+خط Tajawal بيتحمّل من Google Fonts. الـ PWA بيخزّنه بعد أول تحميل، لكن نسخ أندرويد وويندوز محتاجة نت أول مرة على الأقل. لتضمينه جوه التطبيق: `npm i @fontsource/tajawal` واستورد الأوزان (400/500/700/900) في `src/main.jsx` وشيل الـ `<link>` من `index.html`.
 
 ## الاختبارات
 ```bash
@@ -90,7 +121,7 @@ npm test              # تشغيل مرة واحدة
 npm run test:watch
 npm run test:coverage # + تقرير تغطية في coverage/index.html
 ```
-الاختبارات الحالية تغطي: صلاحيات الأدمن (`adminPermissions.test.js`)، حسابات لوحة التحكم (`dashboardCalculations.test.js`)، استيراد الإكسيل (`helpers.excelImport.test.js`)، دوال `helpers.js` الأخرى (`helpers.test.js`)، والتراجع عن آخر تعديل (`lastChange.test.js`) — كل دول pure functions.
+الاختبارات الحالية تغطي: تواريخ اليوم بالتوقيت المحلي وتعديل الحقول اللي اتغيّرت بس وتخطي المكرر في الاستيراد (`helpers.recordSafety.test.js`)، صلاحيات الأدمن (`adminPermissions.test.js`)، حسابات لوحة التحكم (`dashboardCalculations.test.js`)، استيراد الإكسيل (`helpers.excelImport.test.js`)، دوال `helpers.js` الأخرى (`helpers.test.js`)، والتراجع عن آخر تعديل (`lastChange.test.js`) — كل دول pure functions.
 
 بالإضافة لأول اختبارات hook/component في المشروع: فلترة القوائم واكتشاف
 التكرارات (`hooks/useFilteredData.test.js`، عبر `renderHook`) ومكوّن كارت

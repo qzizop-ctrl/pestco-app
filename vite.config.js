@@ -1,9 +1,18 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+
+// Only the version string is exposed to app code (see src/sentry.js). The
+// app used to `import pkg from "../package.json"`, which bundles the whole
+// file — every dependency, script and repo detail — into the public JS.
+const { version } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
 export default defineConfig({
   base: './',
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   // "test" is Vitest's config, read from this same file (its docs
   // recommend this over a separate vitest.config.js so there's only one
   // place resolving aliases/plugins for both dev and test).
@@ -17,6 +26,10 @@ export default defineConfig({
     // config by file and is not a noticeable slowdown at this suite size.
     environment: "jsdom",
     setupFiles: ["./src/test/setup.js"],
+    // Unit tests live under src/. tests/rules holds the Firestore security-
+    // rules tests, which need the Firebase emulator and run through
+    // `npm run test:rules` (vitest.rules.config.mjs) instead.
+    include: ["src/**/*.test.{js,jsx}"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
