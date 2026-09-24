@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -94,6 +94,11 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
+  // True while the register flow is in flight. Creating an account signs the
+  // person in (unverified) for a moment before this screen signs them back
+  // out; useWorkspace reacts to that moment with an "unverified" auth error,
+  // which must not be shown on top of the "verification email sent" message.
+  const registeringRef = useRef(false);
 
   const errMsg = (code) => t.errors[code] || t.errors.default;
 
@@ -104,7 +109,7 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
   // clear the flag so it doesn't resurface on an unrelated later attempt.
   useEffect(() => {
     if (authError === "unverified") {
-      setError(t.unverifiedError);
+      if (!registeringRef.current) setError(t.unverifiedError);
       onClearAuthError && onClearAuthError();
     } else if (authError) {
       setError(errMsg("auth/user-not-found"));
@@ -126,8 +131,22 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
     setBusy(true);
     try {
       if (mode === "login") {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        const loginCred = await signInWithEmailAndPassword(auth, email.trim(), password);
+        // The Firestore rules only accept a verified email, and useWorkspace
+        // signs an unverified account straight back out. Re-send the link so
+        // an account that never got (or lost) its first email — e.g. one an
+        // admin added by hand — isn't locked out with no way to verify.
+        if (!loginCred.user.emailVerified) {
+          try {
+            await sendEmailVerification(loginCred.user);
+          } catch (verifyError) {
+            // Most likely Firebase's own "too many requests" throttle — the
+            // earlier email is still valid, so just carry on.
+            console.warn("Could not re-send verification email:", verifyError?.code);
+          }
+        }
       } else if (mode === "register") {
+        registeringRef.current = true;
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
         // The signups/{uid} doc (which puts the account in the reviewer's
         // pending-accounts list) now requires a verified email address at
@@ -158,6 +177,7 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
     } catch (err) {
       setError(errMsg(err.code));
     } finally {
+      registeringRef.current = false;
       setBusy(false);
     }
   };

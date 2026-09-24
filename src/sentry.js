@@ -15,7 +15,6 @@
 
 import * as Sentry from "@sentry/react";
 import { Capacitor } from "@capacitor/core";
-import pkg from "../package.json";
 
 export function initErrorReporting() {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
@@ -23,7 +22,7 @@ export function initErrorReporting() {
 
   Sentry.init({
     dsn,
-    release: `pestco@${pkg.version}`,
+    release: `pestco@${__APP_VERSION__}`,
     environment: Capacitor.getPlatform(), // "web" | "android" | "electron" (via userAgent below)
     // Keep this lean on purpose — no session replay/performance tracing,
     // just error capture. Those add real bundle size and quota cost for a

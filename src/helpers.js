@@ -100,6 +100,85 @@ export function toISODate(str) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Today's date as yyyy-mm-dd in the user's LOCAL time zone.
+// Never build this from `new Date().toISOString().slice(0, 10)`: toISOString()
+// is UTC, so in Egypt (UTC+2/+3) anything logged between midnight and 2–3 AM
+// local time would be stamped with yesterday's date. Same convention as
+// toISODate() above, which already reads local getFullYear/getMonth/getDate.
+export function todayLocalISO(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function sameFieldValue(a, b) {
+  if (a === b) return true;
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return false;
+}
+
+// Returns only the fields of `data` whose value differs from `baseline`.
+// A missing/null/"" value on either side counts as empty; `defaults` (optional)
+// fills in a field the baseline object has never had.
+//
+// Why this exists: the edit form used to write the WHOLE document back on
+// save. If someone else pinned the customer, changed its stage, or
+// rescheduled a call while the form was open, saving silently put the
+// form's stale copy of those fields back. The right baseline is therefore
+// the form as it was when it was OPENED (not the live record, which may
+// already contain the other person's change): comparing against it yields
+// exactly the fields THIS person edited, and only those are sent.
+export function diffVisitFields(baseline, data, defaults = {}) {
+  const changed = {};
+  Object.keys(data).forEach((key) => {
+    const oldVal = baseline[key] !== undefined ? baseline[key] : defaults[key];
+    const newVal = data[key];
+    if (!sameFieldValue(oldVal ?? "", newVal ?? "")) changed[key] = newVal;
+  });
+  return changed;
+}
+
+// The fields to send when saving an EDIT of an existing customer: what the
+// person changed relative to the form as opened (see diffVisitFields), or
+// everything when there is no baseline. Rescheduling the follow-up call also
+// re-arms the in-app reminder — without resetting `notified`, a call that was
+// already reminded once would never fire again for its new date/time.
+export function buildVisitEditFields(baseline, data) {
+  if (!baseline) return { ...data };
+  const fields = diffVisitFields(baseline, data);
+  if (fields.callDateTime) fields.notified = false;
+  return fields;
+}
+
+// Splits Excel-import rows into ones worth writing and duplicates to skip.
+// A row is a duplicate when its phone (compared by corePhoneDigits, so
+// +20 / 0020 / leading-0 variants match) equals the phone of an existing
+// non-deleted record, or of an earlier row in the same file. Rows without a
+// phone are never treated as duplicates. This also makes re-running an
+// import that failed half way safe: rows already written are skipped.
+export function splitImportDuplicates(rows, existing, getPhone) {
+  const seen = new Set();
+  (existing || []).forEach((e) => {
+    if (e && !e.deleted) {
+      const key = corePhoneDigits(e.phone);
+      if (key) seen.add(key);
+    }
+  });
+  const kept = [];
+  let skipped = 0;
+  rows.forEach((row) => {
+    const key = corePhoneDigits(getPhone(row));
+    if (key && seen.has(key)) {
+      skipped += 1;
+      return;
+    }
+    if (key) seen.add(key);
+    kept.push(row);
+  });
+  return { kept, skipped };
+}
+
 // Normalizes an Excel cell (Date object or string) into a yyyy-mm-dd date string
 export function normalizeExcelDate(val) {
   if (!val) return "";
@@ -136,7 +215,7 @@ export function buildActivity(type, text) {
 export function buildVisitEntry(date) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    date: date || new Date().toISOString().slice(0, 10),
+    date: date || todayLocalISO(),
     at: new Date().toISOString(),
   };
 }

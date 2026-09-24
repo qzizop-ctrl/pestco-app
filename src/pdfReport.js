@@ -44,7 +44,7 @@
 import { Capacitor } from "@capacitor/core";
 import { stageColor, PRIMARY } from "./theme";
 import { STAGE_IDS, OFFER_STATUS_IDS } from "./domain";
-import { fmtMoney, fmtUnifiedOrSplit } from "./helpers";
+import { fmtMoney, fmtUnifiedOrSplit, todayLocalISO } from "./helpers";
 
 // The report always renders on a plain white/light background regardless of
 // the app's current theme (dark mode) — a report meant for printing/sharing
@@ -356,7 +356,7 @@ export async function generateDashboardPdf(opts) {
   // they're being rendered.
   await addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight });
 
-  const dateSuffix = new Date().toISOString().slice(0, 10);
+  const dateSuffix = todayLocalISO();
   const fileName = `pestco_report_${dateSuffix}.pdf`;
 
   if (Capacitor.isNativePlatform()) {

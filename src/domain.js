@@ -25,9 +25,10 @@ export const ACTIVITY_LOG_CAP = 50;
 // manual import; someone with more data should split the file.
 export const MAX_IMPORT_ROWS = 2000;
 
-// Firestore's writeBatch() hard limit is 500 operations; kept a bit under
-// that so a batch that also needed a stray extra write would still fit.
-export const IMPORT_BATCH_SIZE = 400;
+// Firestore's writeBatch() hard limit is 500 operations. Every imported row
+// is TWO writes now (the record + its audit-log entry), so 200 rows = 400
+// operations, leaving headroom under the limit.
+export const IMPORT_BATCH_SIZE = 200;
 
 export const ROLE_IDS = ["purchasing", "it", "technical", "other"];
 
