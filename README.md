@@ -93,7 +93,7 @@ npm run test:rules
 بيشتغل كمان في GitHub Actions (`.github/workflows/test-rules.yml`) كل ما القواعد أو الاختبارات تتغيّر. التفاصيل في [`tests/rules/README.md`](./tests/rules/README.md).
 
 ## حزمة xlsx وتثبيت سلامتها
-حزمة `xlsx` بتتنزّل من رابط CDN مباشر (`cdn.sheetjs.com`) بدل npm registry — الأسلوب الرسمي من SheetJS. `package-lock.json` بيسجّل لها `integrity` (SHA-512 للـ tarball)، وبالتالي `npm ci` (وكمان `npm install` مع وجود الـ lock) بيرفض أي ملف مش مطابق.
+حزمة `xlsx` بتتنزّل من رابط CDN مباشر (`cdn.sheetjs.com`) بدل npm registry — الأسلوب الرسمي من SheetJS. `package-lock.json` بيسجّل لها `integrity` (SHA-512 للـ tarball)، وبالتالي `npm install` و`npm ci` بيرفضوا أي ملف مش مطابق.
 
 فوق ده فيه فحص إضافي اختياري على الملفات المثبَّتة فعليًا:
 - `npm run xlsx:pin` يحسب SHA-256 للملفات المثبَّتة ويكتبها في `xlsx-integrity.json` (شغّلها مرة وأنت متصل بالإنترنت، ثم اعمل commit للملف).
@@ -110,7 +110,7 @@ npm run test:rules
 - **Release أندرويد**: `git tag android-v1.2.0 && git push origin android-v1.2.0` (أو Run workflow واكتب الإصدار).
 - **Release ويندوز**: `git tag win-v1.2.0 && git push origin win-v1.2.0`. رقم الإصدار بيتاخد من الـ tag ويتكتب في `package.json` وقت البناء، وelectron-builder بينشر Release `v1.2.0` ومعاه `latest.yml` اللي بيقراه الـ auto-updater. (قبل كده الإصدار كان ثابت 1.0.0 فالتحديث التلقائي عمره ما كان بيشوف نسخة أحدث.)
 - **توقيع نسخة ويندوز** (اختياري، بيشيل تحذير SmartScreen): ضيف secrets `WIN_CSC_LINK` (ملف .pfx بصيغة base64) و`WIN_CSC_KEY_PASSWORD`.
-- الـ CI بيستخدم `npm ci`، فأي تعديل في `package.json` لازم يتعمله `npm install` محليًا و commit لـ `package-lock.json`.
+- الـ CI بيستخدم `npm install` (مش `npm ci`) لأن `package-lock.json` الحالي مش متزامن مع `package.json` (ناقصه `jsdom` و`@testing-library/*` و`@vitest/coverage-v8`). لما تشغّل `npm install` محليًا وتعمل commit للـ lock المحدَّث تقدر ترجّع `npm ci`.
 
 ### الخط
 خط Tajawal بيتحمّل من Google Fonts. الـ PWA بيخزّنه بعد أول تحميل، لكن نسخ أندرويد وويندوز محتاجة نت أول مرة على الأقل. لتضمينه جوه التطبيق: `npm i @fontsource/tajawal` واستورد الأوزان (400/500/700/900) في `src/main.jsx` وشيل الـ `<link>` من `index.html`.

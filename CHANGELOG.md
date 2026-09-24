@@ -21,7 +21,7 @@
 - شاشة الخطأ الأولي بتستخدم `textContent` بدل `innerHTML`.
 
 ## البناء والنشر
-- الـ CI بيستخدم `npm ci`. الـ Release بقى بـ tag (`android-v*` / `win-v*`) أو بإدخال إصدار يدويًا، مش على كل push. إصدار ويندوز بيتاخد من الـ tag، وتم حذف الـ Release المكرر. `publish.releaseType = release`. دعم اختياري لتوقيع الكود.
+- الـ Release بقى بـ tag (`android-v*` / `win-v*`) أو بإدخال إصدار يدويًا، مش على كل push. إصدار ويندوز بيتاخد من الـ tag، وتم حذف الـ Release المكرر. `publish.releaseType = release`. دعم اختياري لتوقيع الكود.
 
 ---
 
