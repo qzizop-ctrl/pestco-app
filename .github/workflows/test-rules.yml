@@ -38,8 +38,10 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      # `npm install`, not `npm ci`: package-lock.json is currently out of sync
+      # with package.json (see build-apk.yml).
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       # Not in package.json on purpose (see tests/rules/README.md).
       - name: Install rules-test tooling

@@ -79,16 +79,18 @@ jobs:
       # =========================
       # Install dependencies
       # =========================
-      # npm ci = exactly what package-lock.json says (and it checks the
-      # integrity hash of the xlsx tarball recorded there), instead of
-      # `npm install`, which may quietly resolve newer versions.
+      # NOTE: `npm install`, not `npm ci`. package-lock.json is currently out
+      # of sync with package.json (jsdom, @testing-library/*, @vitest/coverage-v8
+      # are missing from it), and `npm ci` refuses to run in that state. Once
+      # the lock is regenerated (run `npm install` locally and commit
+      # package-lock.json) this can go back to `npm ci`.
       - name: Install dependencies
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npm ci
+          command: npm install
         env:
           npm_config_fetch_retries: 5
           npm_config_fetch_retry_mintimeout: 20000

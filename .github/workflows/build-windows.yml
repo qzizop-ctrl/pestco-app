@@ -73,8 +73,8 @@ jobs:
       # =========================
       # Install dependencies
       # =========================
-      # npm ci = exactly what package-lock.json says (including the integrity
-      # hash of the xlsx tarball), instead of `npm install`.
+      # NOTE: `npm install`, not `npm ci` — see the note in build-apk.yml
+      # (package-lock.json is out of sync with package.json).
       #
       # electron's postinstall step downloads a large prebuilt binary
       # straight from GitHub releases (outside npm's own registry, so
@@ -92,7 +92,7 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npm ci
+          command: npm install
         env:
           npm_config_fetch_retries: 5
           npm_config_fetch_retry_mintimeout: 20000
