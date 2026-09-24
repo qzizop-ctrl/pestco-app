@@ -156,6 +156,7 @@ export const EN = {
   importBtn: "Import from Excel file",
   importHint: "The file must use the same columns as the exported file (Company Name, Contact Person, etc). Rows will be added as new visits.",
   importSuccess: (n) => `Successfully imported ${n} visit${n === 1 ? "" : "s"}`,
+  importSkipped: (n) => ` — skipped ${n} duplicate${n === 1 ? "" : "s"} (same phone number already exists)`,
   importError: "Something went wrong reading the file, please check the file format",
   importPartialError: (n) => `Import stopped after an error — ${n} visit${n === 1 ? "" : "s"} were already saved before it failed.`,
   importing: "Importing...",
