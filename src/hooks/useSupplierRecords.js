@@ -1,9 +1,17 @@
-import { useState } from "react";
-import { collection, doc, addDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { useState, useRef } from "react";
+import { collection, doc, updateDoc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { emptySupplierForm } from "../domain";
-import { parseTagsCell } from "../helpers";
-import { logAudit } from "./useAuditLog";
+import { parseTagsCell, diffVisitFields } from "../helpers";
+import { queueAudit } from "./useAuditLog";
+import { useFlushOnHide } from "./useFlushOnHide";
+
+// Supplier form state -> the plain data object saveSupplierForm writes, so the
+// form as OPENED and as SAVED can be diffed field by field.
+function toSupplierData(f) {
+  const { id: _id, tagsInput, last_change: _last_change, ...rest } = f;
+  return { ...rest, tags: parseTagsCell(tagsInput) };
+}
 
 // Suppliers CRUD (simple contact records — no visits/pipeline/offers).
 // Split out of App.jsx; mirrors useCustomerRecords but for the much
@@ -16,9 +24,14 @@ export function useSupplierRecords({
   const [activeSupplierId, setActiveSupplierId] = useState(null);
   const [supplierErrors, setSupplierErrors] = useState({});
   const [pendingSupplierDelete, setPendingSupplierDelete] = useState(null); // { id, companyName, timeoutId }
+  const pendingSupplierDeleteRef = useRef(null); // see useFlushOnHide
+  // Supplier form as opened — saving sends only what was edited since (see
+  // diffVisitFields in helpers.js).
+  const supplierBaselineRef = useRef(null);
 
   const openNewSupplier = () => {
     if (!canEdit) return;
+    supplierBaselineRef.current = null;
     setSupplierForm(emptySupplierForm);
     setSupplierErrors({});
     setActiveSupplierId(null);
@@ -29,11 +42,13 @@ export function useSupplierRecords({
   // the form uses, the same way openEdit does for customer tags.
   const openEditSupplier = (supplier) => {
     if (!canEdit) return;
-    setSupplierForm({
+    const initialForm = {
       ...emptySupplierForm,
       ...supplier,
       tagsInput: (supplier.tags || []).join(", "),
-    });
+    };
+    supplierBaselineRef.current = initialForm;
+    setSupplierForm(initialForm);
     setSupplierErrors({});
     setActiveSupplierId(supplier.id);
     setScreen("supplier-form");
@@ -64,6 +79,13 @@ export function useSupplierRecords({
     const { id: _id, tagsInput, last_change: _last_change, ...rest } = supplierForm;
     const data = { ...rest, tags: parseTagsCell(tagsInput) };
     const original = activeSupplierId ? suppliers.find((s) => s.id === activeSupplierId) : null;
+    const baselineData =
+      activeSupplierId && supplierBaselineRef.current && supplierBaselineRef.current.id === activeSupplierId
+        ? toSupplierData(supplierBaselineRef.current)
+        : null;
+    // Only what this person changed since opening the form (whole form when
+    // creating / no baseline) — used for both the write and the audit trail.
+    const editFields = activeSupplierId && baselineData ? diffVisitFields(baselineData, data) : data;
 
     // Same audit-trail approach as saveForm for customers: diff the new data
     // against the record actually in Firestore (suppliers state) so
@@ -73,7 +95,7 @@ export function useSupplierRecords({
     const auditIgnoreKeys = ["tags", "createdAt", "updatedAt", "isPinned", "deleted"];
     const changes = {};
     if (original) {
-      Object.keys(data).forEach((key) => {
+      Object.keys(editFields).forEach((key) => {
         if (auditIgnoreKeys.includes(key)) return;
         const oldVal = original[key];
         const newVal = data[key];
@@ -94,26 +116,33 @@ export function useSupplierRecords({
 
     setIsSaving(true);
     try {
+      // Record write + audit entry in one batch (see queueAudit).
+      const batch = writeBatch(db);
       if (activeSupplierId) {
-        await updateDoc(doc(db, "users", ownerUid, "suppliers", activeSupplierId), {
-          ...data,
+        // Only the fields edited since the form was opened (see
+        // diffVisitFields) so a concurrent pin / edit by someone else isn't
+        // overwritten.
+        batch.update(doc(db, "users", ownerUid, "suppliers", activeSupplierId), {
+          ...editFields,
           last_change: lastChangeData,
         });
-        logAudit(ownerUid, {
+        queueAudit(batch, ownerUid, {
           entityType: "supplier", entityId: activeSupplierId, entityName: data.name,
           action: "update", changes, user, t,
         });
       } else {
-        const ref = await addDoc(collection(db, "users", ownerUid, "suppliers"), {
+        const ref = doc(collection(db, "users", ownerUid, "suppliers"));
+        batch.set(ref, {
           ...data,
           last_change: lastChangeData,
           createdAt: serverTimestamp(),
         });
-        logAudit(ownerUid, {
+        queueAudit(batch, ownerUid, {
           entityType: "supplier", entityId: ref.id, entityName: data.name,
           action: "create", user, t,
         });
       }
+      await batch.commit();
       setScreen("suppliers");
     } catch (e) {
       reportSaveError(e);
@@ -128,32 +157,50 @@ export function useSupplierRecords({
   // That's what lets it show up in the owner's pending-edits bell/sheet and
   // be approved (final delete) or rolled back (restored) from
   // SupplierFormScreen, mirroring the customer review flow.
+  const commitDeleteSupplier = async (id, name) => {
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "users", ownerUid, "suppliers", id), {
+        deleted: true,
+        last_change: {
+          type: "delete",
+          updatedBy: user?.displayName || user?.email || "موظف غير معروف",
+          updatedById: user?.uid || null,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      queueAudit(batch, ownerUid, {
+        entityType: "supplier", entityId: id, entityName: name,
+        action: "delete", user, t,
+      });
+      await batch.commit();
+    } catch (e) {
+      reportSaveError(e);
+    }
+    setPendingSupplierDelete((cur) => (cur && cur.id === id ? null : cur));
+  };
+
+  useFlushOnHide(() => {
+    const p = pendingSupplierDeleteRef.current;
+    if (!p) return;
+    clearTimeout(p.timeoutId);
+    pendingSupplierDeleteRef.current = null;
+    commitDeleteSupplier(p.id, p.companyName);
+  });
+
   const proceedDeleteSupplier = async (id) => {
     const supplier = suppliers.find((s) => s.id === id);
     setScreen("suppliers");
 
-    const timeoutId = setTimeout(async () => {
-      try {
-        await updateDoc(doc(db, "users", ownerUid, "suppliers", id), {
-          deleted: true,
-          last_change: {
-            type: "delete",
-            updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-            updatedById: user?.uid || null,
-            updatedAt: new Date().toISOString(),
-          },
-        });
-        logAudit(ownerUid, {
-          entityType: "supplier", entityId: id, entityName: supplier ? supplier.name : "",
-          action: "delete", user, t,
-        });
-      } catch (e) {
-        reportSaveError(e);
-      }
-      setPendingSupplierDelete((cur) => (cur && cur.id === id ? null : cur));
+    const companyName = supplier ? supplier.name : "";
+    const timeoutId = setTimeout(() => {
+      pendingSupplierDeleteRef.current = null;
+      commitDeleteSupplier(id, companyName);
     }, 5000);
 
-    setPendingSupplierDelete({ id, companyName: supplier ? supplier.name : "", timeoutId });
+    const pending = { id, companyName, timeoutId };
+    pendingSupplierDeleteRef.current = pending;
+    setPendingSupplierDelete(pending);
   };
 
   const deleteSupplier = (id) => {
@@ -168,6 +215,7 @@ export function useSupplierRecords({
   const undoSupplierDelete = () => {
     if (!pendingSupplierDelete) return;
     clearTimeout(pendingSupplierDelete.timeoutId);
+    pendingSupplierDeleteRef.current = null;
     setPendingSupplierDelete(null);
   };
 

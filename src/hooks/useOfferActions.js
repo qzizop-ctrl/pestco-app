@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, updateDoc, arrayUnion, runTransaction } from "firebase/firestore";
 import { db } from "../firebase";
-import { buildActivity, buildOffer } from "../helpers";
+import { buildActivity, buildOffer, todayLocalISO } from "../helpers";
 
 const emptyNewOffer = () => ({
   name: "", offerNumber: "", amount: "", currency: "EGP",
-  offerDate: new Date().toISOString().slice(0, 10), status: "pending",
+  offerDate: todayLocalISO(), status: "pending",
   supplierIds: [], supplierNames: [],
 });
 
@@ -26,6 +26,20 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
   // date-range filter (the Dashboard's existing period picker) checks
   // instead of offerDate, since an offer can be rejected well after it
   // was first created.
+  // Read-modify-write of a visit's offers array inside a transaction, so a
+  // change to ONE offer is applied to the latest server copy. Writing back
+  // an array built from the (possibly stale) local snapshot would erase an
+  // offer another user added, or a status change they made, in the meantime.
+  // arrayUnion (used when adding) is already safe; this covers edit/remove.
+  const mutateOffers = (visitId, mutate) =>
+    runTransaction(db, async (tx) => {
+      const ref = doc(db, "users", ownerUid, "visits", visitId);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error("visit-not-found");
+      const current = Array.isArray(snap.data().offers) ? snap.data().offers : [];
+      tx.update(ref, { offers: mutate(current) });
+    });
+
   const rejectionFields = ({ reasonId, label }) => ({
     rejectionReason: label,
     rejectionReasonId: reasonId,
@@ -91,19 +105,16 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
     if (newStatus === offer.status) return;
 
     const saveStatus = async (extraFields) => {
-      const updated = (visit.offers || []).map((o) =>
-        o.id === offer.id
-          ? {
-              ...o,
-              status: newStatus,
-              ...(newStatus === "rejected"
-                ? extraFields
-                : { rejectionReason: "", rejectionReasonId: "", rejectedBy: "", rejectedById: null, rejectedAt: "" }),
-            }
-          : o
-      );
+      const patch = {
+        status: newStatus,
+        ...(newStatus === "rejected"
+          ? extraFields
+          : { rejectionReason: "", rejectionReasonId: "", rejectedBy: "", rejectedById: null, rejectedAt: "" }),
+      };
       try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), { offers: updated });
+        await mutateOffers(visit.id, (current) =>
+          current.map((o) => (o.id === offer.id ? { ...o, ...patch } : o))
+        );
         await appendActivity(visit.id, buildActivity("offer", t.activityOfferStatus(offer.name, t.offerStatuses[newStatus] || newStatus)));
       } catch (e) {
         reportSaveError(e);
@@ -131,9 +142,7 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
     if (!requireOnline()) return;
     confirmAction(t.deleteOfferConfirm, async () => {
       try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
-          offers: arrayRemove(offer),
-        });
+        await mutateOffers(visit.id, (current) => current.filter((o) => o.id !== offer.id));
       } catch (e) {
         reportSaveError(e);
       }

@@ -1,12 +1,16 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
-  collection, doc, addDoc, updateDoc, serverTimestamp, arrayUnion,
+  collection, doc, updateDoc, writeBatch, serverTimestamp, arrayUnion,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { scheduleCallReminder, cancelCallReminder } from "../notifications";
 import { emptyForm } from "../domain";
-import { parseTagsCell, buildActivity, buildVisitEntry, corePhoneDigits, fmtReminder, toISODate } from "../helpers";
-import { logAudit } from "./useAuditLog";
+import {
+  parseTagsCell, buildActivity, buildVisitEntry, buildVisitEditFields, corePhoneDigits,
+  fmtReminder, toISODate, todayLocalISO,
+} from "../helpers";
+import { queueAudit } from "./useAuditLog";
+import { useFlushOnHide } from "./useFlushOnHide";
 
 // Everything to do with a single customer ("visit") record: the edit form,
 // opening/closing the detail screen, saving, soft-deleting, pinning,
@@ -16,6 +20,17 @@ import { logAudit } from "./useAuditLog";
 // `appendActivity` is passed in (from useActivityLog) rather than owned
 // here, since it's shared with the offers hook too — keeping one single
 // implementation instead of two copies that could drift apart.
+// Form state -> the plain data object saveForm writes (same field stripping
+// and tags parsing it applies), so the form as OPENED and the form as SAVED
+// can be diffed field by field.
+function toFormData(f) {
+  const {
+    id: _id, tagsInput, activityLog: _activityLog, offers: _offers, visitHistory: _visitHistory,
+    last_change: _last_change, originalCustomer: _originalCustomer, ...rest
+  } = f;
+  return { ...rest, tags: parseTagsCell(tagsInput) };
+}
+
 export function useCustomerRecords({
   ownerUid, user, visits, canEdit, requireOnline, confirmAction, reportSaveError,
   appendActivity, t, lang, setScreen, resetDetailPanels, setIsSaving,
@@ -24,9 +39,17 @@ export function useCustomerRecords({
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
   const [pendingDelete, setPendingDelete] = useState(null); // { id, companyName, timeoutId }
+  // Mirror of pendingDelete readable from event handlers (pagehide / visibility)
+  // without a stale closure — see useFlushOnHide.
+  const pendingDeleteRef = useRef(null);
+  // The form exactly as it was when the edit screen opened. Saving diffs
+  // against THIS (not the live record) so only the fields the person really
+  // edited are written — see diffVisitFields in helpers.js.
+  const editBaselineRef = useRef(null);
 
   const openNew = () => {
     if (!canEdit) return;
+    editBaselineRef.current = null;
     setForm(emptyForm);
     setErrors({});
     setScreen("form");
@@ -34,13 +57,15 @@ export function useCustomerRecords({
 
   const openEdit = (visit) => {
     if (!canEdit) return;
-    setForm({
+    const initialForm = {
       ...emptyForm,
       ...visit,
       stage: visit.stage || "",
       visitDate: toISODate(visit.visitDate),
       tagsInput: (visit.tags || []).join(", "),
-    });
+    };
+    editBaselineRef.current = initialForm;
+    setForm(initialForm);
     setErrors({});
     setScreen("form");
   };
@@ -98,14 +123,23 @@ export function useCustomerRecords({
       const { id, tagsInput, activityLog: _activityLog, offers: _offers, visitHistory: _visitHistory, last_change: _last_change, originalCustomer: _originalCustomer, ...rest } = form;
       const data = { ...rest, tags: parseTagsCell(tagsInput) };
       const original = id ? visits.find((v) => v.id === id) : null;
+      const baselineForm = id && editBaselineRef.current && editBaselineRef.current.id === id
+        ? editBaselineRef.current
+        : null;
+      const baselineData = baselineForm ? toFormData(baselineForm) : null;
+      // What this person actually changed (whole form when creating / when
+      // there is no baseline). Both the write and the audit trail use it, so
+      // a stale value for a field someone else changed meanwhile is neither
+      // written nor recorded as if this person had edited it.
+      const editFields = id ? buildVisitEditFields(baselineData, data) : data;
 
       // تجهيز كائن التتبع (Audit Log) — بيقارن كل حقل في البيانات الجديدة
       // بالسجل الأصلي الموجود فعليًا في Firestore (visits state)، عشان
       // القيم القديمة في last_change.changes تبقى حقيقية، مش "فارغ" لكل حقل.
-      const auditIgnoreKeys = ["tags", "createdAt", "updatedAt"];
+      const auditIgnoreKeys = ["tags", "createdAt", "updatedAt", "notified"];
       const changes = {};
       if (original) {
-        Object.keys(data).forEach((key) => {
+        Object.keys(editFields).forEach((key) => {
           if (auditIgnoreKeys.includes(key)) return;
           const oldVal = original[key];
           const newVal = data[key];
@@ -127,22 +161,31 @@ export function useCustomerRecords({
       setIsSaving(true);
       try {
         let savedId = id;
+        // Record write and its audit entry go in ONE batch, so they either
+        // both land or both fail (see queueAudit).
+        const batch = writeBatch(db);
         if (id) {
+          // Send only the fields this person actually changed since opening
+          // the form — writing the whole form back would overwrite a
+          // concurrent pin / stage change / reschedule made by someone else
+          // while it was open.
           const updatePayload = {
-            ...data,
+            ...editFields,
             last_change: lastChangeData,
             updatedAt: new Date().toISOString()
           };
           if (original && original.visitDate !== data.visitDate && data.visitDate) {
             updatePayload.visitHistory = arrayUnion(buildVisitEntry(data.visitDate));
           }
-          await updateDoc(doc(db, "users", ownerUid, "visits", id), updatePayload);
-          logAudit(ownerUid, {
+          batch.update(doc(db, "users", ownerUid, "visits", id), updatePayload);
+          queueAudit(batch, ownerUid, {
             entityType: "customer", entityId: id, entityName: data.companyName,
             action: "update", changes, user, t,
           });
         } else {
-          const ref = await addDoc(collection(db, "users", ownerUid, "visits"), {
+          const ref = doc(collection(db, "users", ownerUid, "visits"));
+          savedId = ref.id;
+          batch.set(ref, {
             ...data,
             last_change: lastChangeData,
             activityLog: [],
@@ -151,12 +194,12 @@ export function useCustomerRecords({
             createdAt: serverTimestamp(),
             updatedAt: new Date().toISOString()
           });
-          savedId = ref.id;
-          logAudit(ownerUid, {
+          queueAudit(batch, ownerUid, {
             entityType: "customer", entityId: savedId, entityName: data.companyName,
             action: "create", user, t,
           });
         }
+        await batch.commit();
 
         if (!id) {
           await appendActivity(savedId, buildActivity("created", t.activityCreated));
@@ -211,6 +254,41 @@ export function useCustomerRecords({
     checkDuplicateThenSave();
   };
 
+  // The actual (soft) delete write, plus its audit entry in the same batch.
+  const commitDeleteVisit = async (id, companyName) => {
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "users", ownerUid, "visits", id), {
+        deleted: true,
+        last_change: {
+          type: "delete",
+          updatedBy: user?.displayName || user?.email || "موظف غير معروف",
+          updatedById: user?.uid || null,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      queueAudit(batch, ownerUid, {
+        entityType: "customer", entityId: id, entityName: companyName,
+        action: "delete", user, t,
+      });
+      await batch.commit();
+      await cancelCallReminder(id);
+    } catch (e) {
+      reportSaveError(e);
+    }
+    setPendingDelete((cur) => (cur && cur.id === id ? null : cur));
+  };
+
+  // App backgrounded/closed inside the 5-second undo window: commit the
+  // delete now instead of losing it (see useFlushOnHide).
+  useFlushOnHide(() => {
+    const p = pendingDeleteRef.current;
+    if (!p) return;
+    clearTimeout(p.timeoutId);
+    pendingDeleteRef.current = null;
+    commitDeleteVisit(p.id, p.companyName);
+  });
+
   const proceedDeleteVisit = async (id) => {
     const visit = visits.find((v) => v.id === id);
     setScreen("list");
@@ -223,29 +301,15 @@ export function useCustomerRecords({
     // approved (final delete) or rolled back (restored) from CustomerDetail,
     // the same review flow edits already get. Only the owner's approval
     // actually calls deleteDoc.
-    const timeoutId = setTimeout(async () => {
-      try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", id), {
-          deleted: true,
-          last_change: {
-            type: "delete",
-            updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-            updatedById: user?.uid || null,
-            updatedAt: new Date().toISOString(),
-          },
-        });
-        await cancelCallReminder(id);
-        logAudit(ownerUid, {
-          entityType: "customer", entityId: id, entityName: visit ? visit.companyName : "",
-          action: "delete", user, t,
-        });
-      } catch (e) {
-        reportSaveError(e);
-      }
-      setPendingDelete((cur) => (cur && cur.id === id ? null : cur));
+    const companyName = visit ? visit.companyName : "";
+    const timeoutId = setTimeout(() => {
+      pendingDeleteRef.current = null;
+      commitDeleteVisit(id, companyName);
     }, 5000);
 
-    setPendingDelete({ id, companyName: visit ? visit.companyName : "", timeoutId });
+    const pending = { id, companyName, timeoutId };
+    pendingDeleteRef.current = pending;
+    setPendingDelete(pending);
   };
 
   const deleteVisit = (id) => {
@@ -263,6 +327,7 @@ export function useCustomerRecords({
   const undoDelete = () => {
     if (!pendingDelete) return;
     clearTimeout(pendingDelete.timeoutId);
+    pendingDeleteRef.current = null;
     setPendingDelete(null);
   };
 
@@ -307,7 +372,7 @@ export function useCustomerRecords({
   const logVisitToday = async (visit) => {
     if (!canEdit || !visit || !ownerUid) return;
     if (!requireOnline()) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalISO();
     try {
       await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
         visitDate: today,

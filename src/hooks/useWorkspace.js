@@ -191,6 +191,30 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
       return;
     }
 
+    // firestore.rules only honors an email once Firebase has VERIFIED it
+    // (hasEmail() requires email_verified), for admins, members and owners
+    // alike — email/password sign-up lets anyone register any address, so an
+    // unverified token must never carry access. An unverified account would
+    // just get permission-denied on every read/write, so end the session
+    // here with the same "please verify your email" message the no-access
+    // path uses. (AuthScreen re-sends the verification email on login.)
+    if (!user.emailVerified) {
+      setOwnerUid(null);
+      setMyRole(null);
+      setMyDashboardAccess(false);
+      setAvailableOwners([]);
+      previousResolvedOwnerRef.current = null;
+      setScreen("list");
+      setActiveId(null);
+      setPermissionLoading(false);
+      setAuthError("unverified");
+      signOut(auth).catch((e) => {
+        console.error("Sign-out for unverified account failed:", e);
+        reportException(e, { context: "Sign-out for unverified account failed" });
+      });
+      return;
+    }
+
     // Wait for the admin list before resolving anything — see the comment
     // on adminEmails above. permissionLoading stays true a moment longer
     // instead of risking a wrong (and disruptive) sign-out decision below.
@@ -447,10 +471,20 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
   useEffect(() => {
     if (!user) return;
     const ref = doc(db, "access", user.uid);
-    const unsub = onSnapshot(ref, (snap) => {
-      setMembers(snap.exists() ? snap.data().members || {} : {});
-      setDashboardAccessState(snap.exists() ? snap.data().dashboardAccess || {} : {});
-    });
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        setMembers(snap.exists() ? snap.data().members || {} : {});
+        setDashboardAccessState(snap.exists() ? snap.data().dashboardAccess || {} : {});
+      },
+      () => {
+        // Only admins may read access/{uid} (firestore.rules) — for a
+        // member (editor/viewer) this is expected to be denied and there is
+        // simply no members list to show. Not an error worth reporting.
+        setMembers({});
+        setDashboardAccessState({});
+      }
+    );
     return () => unsub();
   }, [user]);
 

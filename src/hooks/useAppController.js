@@ -203,7 +203,7 @@ export function useAppController() {
     fileInputRef, supplierFileInputRef, importing, importingSuppliers,
     importProgress, supplierImportProgress,
     triggerImportPicker, handleImportFile, triggerSupplierImportPicker, handleImportSupplierFile,
-  } = useExcelImport({ ownerUid, user, canEdit, requireOnline, t, showAlert, appendActivity });
+  } = useExcelImport({ ownerUid, user, visits, suppliers, canEdit, requireOnline, t, showAlert, appendActivity });
 
   const {
     visibleVisits, dueReminders, staleOffers, staleCustomers,

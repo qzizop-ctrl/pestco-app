@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, doc, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { buildAuditEntry } from "../auditLog";
 import { reportException } from "../sentry";
@@ -41,6 +41,19 @@ export function logAudit(ownerUid, params) {
 // workspace — only subscribed while `enabled` (the Audit Log screen is
 // actually open, and the viewer is owner/reviewer per firestore.rules), so
 // it doesn't cost every session a listener it'll almost never use.
+// Adds the audit entry to a Firestore WriteBatch so it commits (or fails)
+// together with the record write it describes. logAudit() above is
+// fire-and-forget: if the connection dropped between the record write and
+// the audit write, the change existed but its trail entry never did. Used
+// for create / update / delete of customers and suppliers, and for Excel
+// import. (approve / rollback / restore still use logAudit — they are owner
+// actions that run through useLastChangeActions.)
+export function queueAudit(batch, ownerUid, params) {
+  if (!ownerUid) return;
+  const ref = doc(collection(db, "users", ownerUid, "auditLog"));
+  batch.set(ref, { ...buildAuditEntry(params), at: serverTimestamp() });
+}
+
 export function useAuditLogFeed({ ownerUid, enabled }) {
   const [entries, setEntries] = useState([]);
   const [loaded, setLoaded] = useState(false);

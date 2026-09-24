@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { todayLocalISO } from "../helpers";
 
 // Excel export for customers and suppliers, extracted out of App.jsx (it
 // was one of the larger self-contained chunks in there — pure functions of
@@ -55,7 +56,7 @@ export function useExcelExport({ t, canEdit }) {
     const ws = XLSX.utils.json_to_sheet(visitsToRows(rows));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Visits");
-    const fileName = `pestco_visits_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const fileName = `pestco_visits_${filenameSuffix}_${todayLocalISO()}.xlsx`;
 
     if (Capacitor.isNativePlatform()) {
       // XLSX.writeFile() is a plain browser Blob download under the hood,
@@ -92,7 +93,7 @@ export function useExcelExport({ t, canEdit }) {
     const ws = XLSX.utils.json_to_sheet(suppliersToRows(rows));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Suppliers");
-    const fileName = `pestco_suppliers_${filenameSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const fileName = `pestco_suppliers_${filenameSuffix}_${todayLocalISO()}.xlsx`;
 
     if (Capacitor.isNativePlatform()) {
       const { saveFileNative } = await import("../nativeFileSave");
@@ -126,7 +127,7 @@ export function useExcelExport({ t, canEdit }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(visitsToRows(visits)), "Visits");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(suppliersToRows(suppliers)), "Suppliers");
-    const fileName = `pestco_backup_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const fileName = `pestco_backup_${todayLocalISO()}.xlsx`;
 
     if (Capacitor.isNativePlatform()) {
       const { saveFileNative } = await import("../nativeFileSave");
