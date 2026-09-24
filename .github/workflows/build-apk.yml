@@ -1,9 +1,26 @@
 name: Build Android APK
 
+# When this runs:
+#   - every push to main: build + test, and keep the APK as a (private)
+#     workflow artifact. NOT published anywhere.
+#   - push a tag like  android-v1.2.0   -> also publishes a GitHub Release.
+#   - "Run workflow" with a version filled in -> same as pushing that tag.
+# (Before, EVERY push to main published a public release: release spam, and
+# the app was downloadable by anyone if the repository is public.)
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Publish a GitHub Release with this version (e.g. 1.2.0). Leave empty to only build."
+        required: false
+        type: string
   push:
     branches: [main]
+    tags: ["android-v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -40,15 +57,38 @@ jobs:
           java-version: "17"
 
       # =========================
+      # Release version (empty = build only)
+      # =========================
+      - name: Work out release version
+        id: meta
+        shell: bash
+        run: |
+          VERSION=""
+          if [[ "$GITHUB_REF" == refs/tags/android-v* ]]; then
+            VERSION="${GITHUB_REF_NAME#android-v}"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            VERSION="$INPUT_VERSION"
+          fi
+          if [[ -n "$VERSION" && ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must look like 1.2.3 (got '$VERSION')"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+
+      # =========================
       # Install dependencies
       # =========================
+      # npm ci = exactly what package-lock.json says (and it checks the
+      # integrity hash of the xlsx tarball recorded there), instead of
+      # `npm install`, which may quietly resolve newer versions.
       - name: Install dependencies
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npm install
+          command: npm ci
         env:
           npm_config_fetch_retries: 5
           npm_config_fetch_retry_mintimeout: 20000
@@ -131,13 +171,24 @@ jobs:
           ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
 
       # =========================
-      # GitHub Release
+      # Keep the APK (private, 14 days)
+      # =========================
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pest-android-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+
+      # =========================
+      # GitHub Release (tags / manual version only)
       # =========================
       - name: Create GitHub Release with APK
+        if: ${{ steps.meta.outputs.version != '' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v1.0.${{ github.run_number }}"
-          name: "Release v1.0.${{ github.run_number }}"
+          tag_name: "android-v${{ steps.meta.outputs.version }}"
+          name: "Android v${{ steps.meta.outputs.version }}"
           files: android/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
