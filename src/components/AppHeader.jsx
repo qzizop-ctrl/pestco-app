@@ -11,7 +11,7 @@ import { PRIMARY } from "../theme";
 // Pure presentational + the sign-out action itself (self-contained, not
 // part of the app's core state) — everything else is driven by props.
 export default function AppHeader({
-  isRootScreen, screen, formId, activeSupplierId, setScreen,
+  isRootScreen, screen, formId, activeSupplierId, setScreen, detailBackTarget,
   isOnline, darkMode, setDarkMode, lang, setLang, t,
 }) {
   return (
@@ -23,7 +23,7 @@ export default function AppHeader({
         <button
           onClick={() => setScreen(
             screen === "form" && formId ? "detail" :
-            screen === "detail" ? "list" :
+            screen === "detail" ? detailBackTarget :
             screen === "supplier-form" ? "suppliers" :
             screen === "audit-log" ? "settings" :
             "list"

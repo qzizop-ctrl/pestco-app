@@ -269,6 +269,7 @@ export default function AppScreens({
         openEdit={openEdit}
         deleteVisit={deleteVisit}
         setScreen={setScreen}
+        showAlert={showAlert}
       />
     )}
 
@@ -311,6 +312,7 @@ export default function AppScreens({
         user={user}
         isOwnerAccount={isOwnerAccount}
         setScreen={setScreen}
+        showAlert={showAlert}
       />
     )}
 
