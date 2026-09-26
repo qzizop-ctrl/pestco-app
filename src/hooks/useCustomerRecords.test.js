@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { STRINGS } from "../i18n";
 import { emptyForm } from "../domain";
-import { todayLocalISO } from "../helpers";
+import { todayLocalISO } from "../dateUtils";
 
 // Firestore, the native reminder module and the audit helper are mocked, so
 // these tests pin down WHAT the hook decides to write (which document, which

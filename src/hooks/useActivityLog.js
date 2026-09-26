@@ -1,6 +1,6 @@
 import { doc, runTransaction, updateDoc, arrayRemove } from "firebase/firestore";
 import { db } from "../firebase";
-import { buildActivity } from "../helpers";
+import { buildActivity } from "../activityHelpers";
 import { ACTIVITY_LOG_CAP } from "../domain";
 
 // A visit's activity timeline is written to from several places (customer

@@ -3,7 +3,7 @@ import { collection, doc, addDoc, query, orderBy, limit, onSnapshot, serverTimes
 import { db } from "../firebase";
 import { buildAuditEntry } from "../auditLog";
 import { reportException } from "../sentry";
-import { toJsDate } from "../helpers";
+import { toJsDate } from "../dateUtils";
 
 // How many recent entries the Audit Log screen loads. The log is
 // append-only and can grow indefinitely, so this is a live query, not the

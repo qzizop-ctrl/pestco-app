@@ -1,5 +1,6 @@
 import { STAGE_IDS } from "../domain";
-import { parseVisitDate, fmtUnifiedOrSplit, sumOffersByCurrency } from "../helpers";
+import { parseVisitDate } from "../dateUtils";
+import { fmtUnifiedOrSplit, sumOffersByCurrency } from "../offerHelpers";
 
 // ---------------------------------------------------------------------------
 // Extracted from App.jsx. Pure derived state for whichever customer's detail

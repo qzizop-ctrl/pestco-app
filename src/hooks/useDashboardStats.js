@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { SUCCESS, DASH_NEGATIVE, DASH_PENDING } from "../theme";
-import { parseVisitDate, fmtUnifiedOrSplit, sumOffersByCurrency, toJsDate } from "../helpers";
+import { parseVisitDate, toJsDate } from "../dateUtils";
+import { fmtUnifiedOrSplit, sumOffersByCurrency } from "../offerHelpers";
 import {
   resolvePeriod, computeAvgDealSizeForCurrency, computeWinRate,
   computeDecidedCount, buildOfferBreakdown, computePeriodStats,

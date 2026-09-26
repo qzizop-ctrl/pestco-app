@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { todayLocalISO } from "../helpers";
+import { todayLocalISO } from "../dateUtils";
 import { neutralizeFormulas } from "../excelSafety";
 
 // Excel export for customers and suppliers, extracted out of App.jsx (it

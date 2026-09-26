@@ -1,6 +1,9 @@
 import { useEffect, useMemo } from "react";
 import { SECTOR_IDS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS } from "../domain";
-import { parseVisitDate, visitStatus, fmtReminder, findDuplicateGroups, isStaleCustomer, collectSupplierTags, collectSupplierCategories, getVisitEvents, toJsDate } from "../helpers";
+import { visitStatus, getVisitEvents } from "../activityHelpers";
+import { findDuplicateGroups, isStaleCustomer } from "../customerDuplicates";
+import { parseVisitDate, fmtReminder, toJsDate } from "../dateUtils";
+import { collectSupplierTags, collectSupplierCategories } from "../tagsAndLinks";
 
 // Every derived/filtered list the list & dashboard screens read — customer
 // search/sector/stage/tag/date filters, reminders, stale offers/customers,

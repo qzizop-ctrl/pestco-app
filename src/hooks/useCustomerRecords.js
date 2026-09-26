@@ -5,10 +5,11 @@ import {
 import { db } from "../firebase";
 import { scheduleCallReminder, cancelCallReminder } from "../notifications";
 import { emptyForm } from "../domain";
-import {
-  parseTagsCell, buildActivity, buildVisitEntry, buildVisitEditFields, corePhoneDigits,
-  fmtReminder, toISODate, todayLocalISO,
-} from "../helpers";
+import { buildActivity, buildVisitEntry } from "../activityHelpers";
+import { corePhoneDigits } from "../customerDuplicates";
+import { fmtReminder, toISODate, todayLocalISO } from "../dateUtils";
+import { buildVisitEditFields } from "../formHelpers";
+import { parseTagsCell } from "../tagsAndLinks";
 import { queueAudit } from "./useAuditLog";
 import { useFlushOnHide } from "./useFlushOnHide";
 

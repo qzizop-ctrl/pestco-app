@@ -2,7 +2,8 @@ import { useState, useRef } from "react";
 import { collection, doc, updateDoc, writeBatch, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { emptySupplierForm } from "../domain";
-import { parseTagsCell, diffVisitFields } from "../helpers";
+import { diffVisitFields } from "../formHelpers";
+import { parseTagsCell } from "../tagsAndLinks";
 import { queueAudit } from "./useAuditLog";
 import { useFlushOnHide } from "./useFlushOnHide";
 

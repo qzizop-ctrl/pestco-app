@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { doc, updateDoc, arrayUnion, runTransaction } from "firebase/firestore";
 import { db } from "../firebase";
-import { buildActivity, buildOffer, todayLocalISO } from "../helpers";
+import { buildActivity } from "../activityHelpers";
+import { todayLocalISO } from "../dateUtils";
+import { buildOffer } from "../offerHelpers";
 
 const emptyNewOffer = () => ({
   name: "", offerNumber: "", amount: "", currency: "EGP",
