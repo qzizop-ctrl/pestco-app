@@ -32,8 +32,10 @@
 
 ## إضافة اختبارات
 
-لو بتضيف منطق جديد في ملفات pure functions (زي `helpers.js`،
-`dashboardCalculations.js`، `adminPermissions.js`)، ضيف اختبار مقابل له في
+لو بتضيف منطق جديد في ملفات pure functions (زي `dateUtils.js`،
+`formatMoney.js`، `offerHelpers.js`، `activityHelpers.js`، `customerDuplicates.js`،
+`excelImportHelpers.js`، `formHelpers.js`، `tagsAndLinks.js`، `dashboardCalculations.js`،
+`adminPermissions.js`)، ضيف اختبار مقابل له في
 ملف `*.test.js` جنبه — الأسلوب المتبع في المشروع إن كل ملف منطق ليه ملف
 اختبار بنفس الاسم.
 
@@ -56,8 +58,11 @@
 لو لقيت نفسك بتضيف مية سطر جديدة لملف React شاشة كبير، فكّر هل الإضافة دي
 "قسم واجهة مستقل" ممكن يتحط في مكون منفصل (زي `components/settings/` أو
 `components/customer-detail/`) بدل ما يكبّر الملف الأصلي أكتر. مش كل ملف
-لازم يتقسم — ملفات زي `helpers.js` أو `pdfReport.js` متعمدة تفضل واحدة لأنها
-منطق متماسك، مش كسل تنظيم.
+لازم يتقسم — ملفات زي `pdfReport.js` متعمدة تفضل واحدة لأنها منطق متماسك،
+مش كسل تنظيم. (كان فيه ملف `helpers.js` كبير بيجمع مواضيع مختلفة تمامًا —
+تواريخ، عروض، استيراد Excel، تكرار عملاء — واتقسّم لملفات منفصلة كل واحد
+بمسؤولية واحدة؛ لو محتاج تضيف دالة جديدة، حطها في الملف اللي يناسب موضوعها
+مش في ملف "عام" جديد.)
 
 ## الإبلاغ عن مشاكل
 
