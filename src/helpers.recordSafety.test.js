@@ -1,11 +1,8 @@
 import { describe, it, expect } from "vitest";
-import {
-  todayLocalISO,
-  diffVisitFields,
-  buildVisitEditFields,
-  splitImportDuplicates,
-  buildVisitEntry,
-} from "./helpers";
+import { buildVisitEntry } from "./activityHelpers";
+import { todayLocalISO } from "./dateUtils";
+import { splitImportDuplicates } from "./excelImportHelpers";
+import { diffVisitFields, buildVisitEditFields } from "./formHelpers";
 
 describe("todayLocalISO", () => {
   it("formats the LOCAL calendar date, zero-padded", () => {

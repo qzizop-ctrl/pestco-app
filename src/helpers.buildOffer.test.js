@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildOffer } from "./helpers";
+import { buildOffer } from "./offerHelpers";
 
 describe("buildOffer — rejection details", () => {
   const rejection = {

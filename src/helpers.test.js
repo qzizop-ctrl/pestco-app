@@ -1,18 +1,9 @@
 import { describe, it, expect } from "vitest";
-import {
-  collectSupplierTags,
-  collectSupplierCategories,
-  buildOffer,
-  sumOffersByCurrency,
-  fmtOffersTotals,
-  visitStatus,
-  fmtMoney,
-  corePhoneDigits,
-  buildWhatsAppLink,
-  findDuplicateGroups,
-  isStaleCustomer,
-  getVisitEvents,
-} from "./helpers";
+import { visitStatus, getVisitEvents } from "./activityHelpers";
+import { corePhoneDigits, findDuplicateGroups, isStaleCustomer } from "./customerDuplicates";
+import { fmtMoney } from "./formatMoney";
+import { buildOffer, sumOffersByCurrency, fmtOffersTotals } from "./offerHelpers";
+import { collectSupplierTags, collectSupplierCategories, buildWhatsAppLink } from "./tagsAndLinks";
 import { STRINGS } from "./i18n";
 
 // findSectorId/findRoleId/findStageId/parseTagsCell/parseVisitDate/toISODate/

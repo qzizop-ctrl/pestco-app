@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { findSectorId, findRoleId, findStageId, parseTagsCell, normalizeExcelDate, normalizeExcelDateTime, parseVisitDate, toISODate } from "./helpers";
+import { parseVisitDate, toISODate } from "./dateUtils";
+import { findSectorId, findRoleId, findStageId, normalizeExcelDate, normalizeExcelDateTime } from "./excelImportHelpers";
+import { parseTagsCell } from "./tagsAndLinks";
 
 // These back the Excel import path touched in useExcelImport.js: a bug here
 // silently mis-files or mis-dates an imported row rather than throwing, so

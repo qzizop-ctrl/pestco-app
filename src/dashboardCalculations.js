@@ -1,5 +1,7 @@
 import { STAGE_IDS, OFFER_STATUS_IDS, CURRENCY_IDS, SECTOR_IDS } from "./domain";
-import { parseVisitDate, sumOffersByCurrency, getVisitEvents, toJsDate } from "./helpers";
+import { getVisitEvents } from "./activityHelpers";
+import { parseVisitDate, toJsDate } from "./dateUtils";
+import { sumOffersByCurrency } from "./offerHelpers";
 
 // Pure calculation logic for the Dashboard screen — period resolution
 // (turning a { mode, year, ... } selection into a concrete date range),
