@@ -25,6 +25,13 @@ export default [
       "android/**",
       "node_modules/**",
       "src-tauri/**",
+      // TypeScript — this project has no @typescript-eslint parser
+      // configured (everything else here is plain JS/JSX), so ESLint's
+      // default parser can't read the `import type`/type-annotation
+      // syntax in this file and fails with a parsing error. It's a
+      // static declarative config object with nothing for a linter to
+      // usefully check anyway.
+      "capacitor.config.ts",
     ],
   },
 
@@ -37,7 +44,8 @@ export default [
       ecmaVersion: 2022,
       sourceType: "module",
       parserOptions: { ecmaFeatures: { jsx: true } },
-      globals: { ...globals.browser },
+      // __APP_VERSION__ is injected at build time by vite.config.js#define.
+      globals: { ...globals.browser, __APP_VERSION__: "readonly" },
     },
     plugins: {
       react,
@@ -77,7 +85,6 @@ export default [
       "vite.config.js",
       "tailwind.config.js",
       "postcss.config.js",
-      "capacitor.config.ts",
     ],
     languageOptions: {
       ecmaVersion: 2022,
@@ -93,6 +100,24 @@ export default [
       ecmaVersion: 2022,
       sourceType: "commonjs",
       globals: { ...globals.node },
+    },
+  },
+
+  // --- Firestore rules tests + service worker (public/sw.js) ---------------
+  {
+    files: ["tests/**/*.{js,mjs}"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
+  },
+  {
+    files: ["public/sw.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "script",
+      globals: { ...globals.serviceworker },
     },
   },
 

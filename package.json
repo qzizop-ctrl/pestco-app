@@ -2,6 +2,7 @@
   "name": "pestco-app",
   "version": "1.0.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "تطبيق متابعة زيارات عملاء PEST",
   "main": "electron.js",
   "scripts": {
@@ -10,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -23,6 +25,7 @@
     "android:patch": "node scripts/patch-android-storage.cjs",
     "android:setup": "npm run build && (test -d android || npx cap add android) && npm run android:patch && npx cap sync android",
     "firebase:deploy-rules": "firebase deploy --only firestore:rules",
+    "test:rules": "firebase emulators:exec --only firestore --project pestco-rules-test \"vitest run --config vitest.rules.config.mjs\"",
     "postinstall": "node scripts/verify-xlsx-integrity.cjs",
     "xlsx:pin": "node scripts/pin-xlsx-integrity.cjs",
     "xlsx:verify": "node scripts/verify-xlsx-integrity.cjs"
@@ -48,7 +51,10 @@
   "devDependencies": {
     "@capacitor/cli": "^6.1.2",
     "@eslint/js": "^9.9.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.1",
     "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/coverage-v8": "^2.1.9",
     "autoprefixer": "^10.4.19",
     "eslint": "^9.9.1",
     "eslint-plugin-react": "^7.35.0",
@@ -56,6 +62,7 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
+    "jsdom": "^25.0.1",
     "prettier": "^3.3.3",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
@@ -84,7 +91,8 @@
       "allowToChangeInstallationDirectory": true
     },
     "publish": {
-      "provider": "github"
+      "provider": "github",
+      "releaseType": "release"
     }
   }
 }
