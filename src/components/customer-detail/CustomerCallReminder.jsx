@@ -1,6 +1,6 @@
 import { Bell } from "lucide-react";
 import { PRIMARY_MID, MUTED, STATUS_COLORS } from "../../theme";
-import { fmtReminder } from "../../helpers";
+import { fmtReminder } from "../../dateUtils";
 
 export default function CustomerCallReminder({ t, active, canEdit, clearCallReminder }) {
   if (!active.callDateTime) return null;

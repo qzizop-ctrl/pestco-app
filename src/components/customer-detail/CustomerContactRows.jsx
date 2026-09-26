@@ -1,6 +1,8 @@
 import { Phone, MessageCircle, Mail, Calendar, Clock, History } from "lucide-react";
 import { PRIMARY_MID, TEXT, MUTED, LINE, SURFACE_SUBTLE } from "../../theme";
-import { getVisitEvents, fmtCreatedAt, buildWhatsAppLink } from "../../helpers";
+import { getVisitEvents } from "../../activityHelpers";
+import { fmtCreatedAt } from "../../dateUtils";
+import { buildWhatsAppLink } from "../../tagsAndLinks";
 import { openWhatsApp } from "../../nativeWhatsApp";
 
 export default function CustomerContactRows({ t, active, canEdit, logVisitToday }) {

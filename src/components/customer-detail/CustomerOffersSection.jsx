@@ -2,7 +2,7 @@ import { Wallet, Trash2, Truck } from "lucide-react";
 import { TagChip } from "../Shared";
 import { PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE, offerStatusColor } from "../../theme";
 import { CURRENCY_IDS, OFFER_STATUS_IDS } from "../../domain";
-import { fmtMoney } from "../../helpers";
+import { fmtMoney } from "../../formatMoney";
 
 export default function CustomerOffersSection({
   t,

@@ -1,6 +1,6 @@
 import { Clock, Trash2 } from "lucide-react";
 import { PRIMARY_MID, TEXT, MUTED, DANGER, LINE, ACTIVITY_COLORS } from "../../theme";
-import { fmtActivityDate } from "../../helpers";
+import { fmtActivityDate } from "../../dateUtils";
 
 export default function CustomerActivitySection({
   t,

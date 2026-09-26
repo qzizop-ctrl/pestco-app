@@ -3,7 +3,7 @@ import { Star, User } from "lucide-react";
 import { TagChip } from "../Shared";
 import { MUTED, GOLD, STATUS_COLORS, stageColor } from "../../theme";
 import { STAGE_IDS } from "../../domain";
-import { visitStatus } from "../../helpers";
+import { visitStatus } from "../../activityHelpers";
 
 export default function CustomerHeaderCard({ t, active, canEdit, togglePin, activeStageIdx, changeStage }) {
   return (
