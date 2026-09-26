@@ -31,7 +31,7 @@ export function useNavRestore({
     if (screen === "detail" && !activeId) return;
     try {
       localStorage.setItem(NAV_RESTORE_KEY, JSON.stringify({ screen, activeId, activeSupplierId }));
-    } catch (e) {
+    } catch {
       // Storage can be unavailable (private mode, quota, etc.) — losing the
       // "resume where I left off" convenience is fine; nothing else here
       // depends on this succeeding.
@@ -44,7 +44,7 @@ export function useNavRestore({
     let saved = null;
     try {
       saved = JSON.parse(localStorage.getItem(NAV_RESTORE_KEY) || "null");
-    } catch (e) {
+    } catch {
       saved = null;
     }
     if (!saved || !RESTORABLE_SCREENS.includes(saved.screen)) {

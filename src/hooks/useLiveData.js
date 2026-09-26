@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
-import { reportException } from "../sentry";
+import { reportException, reportWarning } from "../sentry";
+import { applySnapshot } from "../snapshotCache";
 
 // Real-time Firestore listeners for the current workspace's customers
 // (visits) and suppliers. Both collections load in full (no pagination) —
@@ -19,13 +20,23 @@ import { reportException } from "../sentry";
 // The warning below just flags when it's worth actually doing that.
 const LARGE_COLLECTION_WARNING_THRESHOLD = 2000;
 
+// Warned once per session per collection (this runs on every snapshot, so an
+// unconditional warn would flood the console) and also sent to Sentry, so the
+// team finds out the day a workspace crosses the line instead of when phones
+// start to struggle.
+const warnedLabels = new Set();
+
 function warnIfLarge(label, count) {
-  if (count >= LARGE_COLLECTION_WARNING_THRESHOLD) {
-    console.warn(
-      `[useLiveData] ${label} collection has ${count} documents (>= ${LARGE_COLLECTION_WARNING_THRESHOLD}). ` +
-        "This is still loaded in full on every client — worth revisiting pagination/architecture soon."
-    );
-  }
+  if (count < LARGE_COLLECTION_WARNING_THRESHOLD || warnedLabels.has(label)) return;
+  warnedLabels.add(label);
+  console.warn(
+    `[useLiveData] ${label} collection has ${count} documents (>= ${LARGE_COLLECTION_WARNING_THRESHOLD}). ` +
+      "This is still loaded in full on every client — worth revisiting pagination/architecture soon."
+  );
+  reportWarning(`Large collection loaded in full: ${label}`, {
+    count,
+    threshold: LARGE_COLLECTION_WARNING_THRESHOLD,
+  });
 }
 
 export function useLiveData(user, ownerUid) {
@@ -46,11 +57,15 @@ export function useLiveData(user, ownerUid) {
     setLoaded(false);
     setVisitsError(null);
     const ref = collection(db, "users", ownerUid, "visits");
+    // Per-listener cache: unchanged documents keep the same object between
+    // snapshots (see snapshotCache.js). Discarded with the effect on
+    // workspace change.
+    const cache = new Map();
     const unsub = onSnapshot(
       ref,
       (snap) => {
         warnIfLarge("visits", snap.size);
-        setVisits(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setVisits(applySnapshot(cache, snap));
         setLoaded(true);
       },
       (error) => {
@@ -79,11 +94,12 @@ export function useLiveData(user, ownerUid) {
     setSuppliersLoaded(false);
     setSuppliersError(null);
     const ref = collection(db, "users", ownerUid, "suppliers");
+    const cache = new Map();
     const unsub = onSnapshot(
       ref,
       (snap) => {
         warnIfLarge("suppliers", snap.size);
-        setSuppliers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setSuppliers(applySnapshot(cache, snap));
         setSuppliersLoaded(true);
       },
       (error) => {

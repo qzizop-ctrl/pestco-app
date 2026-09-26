@@ -4,7 +4,10 @@ import { db } from "../firebase";
 import { scheduleCallReminder } from "../notifications";
 import { STRINGS } from "../i18n";
 import { MAX_IMPORT_ROWS, IMPORT_BATCH_SIZE } from "../domain";
-import { parseTagsCell, findSectorId, findRoleId, findStageId, normalizeExcelDate, normalizeExcelDateTime, buildActivity } from "../helpers";
+import { parseTagsCell, findSectorId, findRoleId, findStageId, normalizeExcelDate, normalizeExcelDateTime, buildActivity, splitImportDuplicates } from "../helpers";
+import { queueAudit } from "./useAuditLog";
+import { reportException } from "../sentry";
+import { stripFormulaGuard } from "../excelSafety";
 
 // Excel *import* only — export lives in useExcelExport.js (the write side
 // uses a very different shape, so keeping them apart avoids one bloated
@@ -20,7 +23,7 @@ import { parseTagsCell, findSectorId, findRoleId, findStageId, normalizeExcelDat
 // updateDoc() call afterward. MAX_IMPORT_ROWS caps a single import so an
 // oversized or wrong file fails fast with a clear message rather than
 // churning through thousands of rows silently.
-export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, showAlert, appendActivity }) {
+export function useExcelImport({ ownerUid, user, visits, suppliers, canEdit, requireOnline, t, showAlert, appendActivity: _appendActivity }) {
   const fileInputRef = useRef(null);
   const supplierFileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
@@ -44,6 +47,11 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
     if (!file || !user || !ownerUid) return;
 
     setImporting(true);
+    // Declared outside the try so a batch failure partway through (see the
+    // catch block below) can still report how many rows were committed
+    // before it, instead of just "something went wrong" with no way to
+    // tell whether 0 rows or 450 rows actually landed in Firestore.
+    let count = 0;
     try {
       const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
@@ -78,7 +86,7 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
 
       const getField = (row, key) => {
         for (const candidate of headerMap[key]) {
-          if (row[candidate] !== undefined && row[candidate] !== "") return row[candidate];
+          if (row[candidate] !== undefined && row[candidate] !== "") return stripFormulaGuard(row[candidate]);
         }
         return "";
       };
@@ -114,13 +122,27 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         pending.push({ ref: doc(visitsCollection), visitData, companyName, contactName, callDateTime });
       }
 
+      // Skip rows whose phone already belongs to an existing customer (or to
+      // an earlier row of this same file). Without this, importing the same
+      // sheet twice silently doubled every customer — and it makes it safe to
+      // re-run an import that stopped half way: rows already saved are skipped.
+      const { kept, skipped } = splitImportDuplicates(pending, visits, (p) => p.visitData.phone);
+      pending.length = 0;
+      pending.push(...kept);
+
       setImportProgress({ done: 0, total: pending.length });
 
-      let count = 0;
       for (let i = 0; i < pending.length; i += IMPORT_BATCH_SIZE) {
         const chunk = pending.slice(i, i + IMPORT_BATCH_SIZE);
         const batch = writeBatch(db);
-        chunk.forEach(({ ref, visitData }) => batch.set(ref, visitData));
+        chunk.forEach(({ ref, visitData, companyName }) => {
+          batch.set(ref, visitData);
+          // Imported records used to leave no trace in the audit log.
+          queueAudit(batch, ownerUid, {
+            entityType: "customer", entityId: ref.id, entityName: companyName,
+            action: "create", user, t,
+          });
+        });
         await batch.commit();
 
         for (const { ref, companyName, contactName, callDateTime } of chunk) {
@@ -136,9 +158,16 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         count += chunk.length;
         setImportProgress({ done: count, total: pending.length });
       }
-      showAlert(t.importSuccess(count));
+      showAlert(t.importSuccess(count) + (skipped ? t.importSkipped(skipped) : ""));
     } catch (err) {
-      showAlert(t.importError);
+      // Was a bare `catch { showAlert(t.importError) }` — swallowed the
+      // real error (no console.error, no reportException, unlike every
+      // other Firestore write path in this app) and always showed the same
+      // generic message even when `count` rows had already committed in
+      // earlier batches before this one failed.
+      console.error("Excel import failed:", err);
+      reportException(err, { context: "Excel import failed", ownerUid, partiallyImported: count });
+      showAlert(count > 0 ? t.importPartialError(count) : t.importError);
     } finally {
       setImporting(false);
       setImportProgress(null);
@@ -159,6 +188,7 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
     if (!file || !user || !ownerUid) return;
 
     setImportingSuppliers(true);
+    let count = 0;
     try {
       const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
@@ -186,7 +216,7 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
 
       const getField = (row, key) => {
         for (const candidate of headerMap[key]) {
-          if (row[candidate] !== undefined && row[candidate] !== "") return row[candidate];
+          if (row[candidate] !== undefined && row[candidate] !== "") return stripFormulaGuard(row[candidate]);
         }
         return "";
       };
@@ -213,20 +243,32 @@ export function useExcelImport({ ownerUid, user, canEdit, requireOnline, t, show
         pending.push({ ref: doc(suppliersCollection), supplierData });
       }
 
+      // Same duplicate-phone skip as the customer import above.
+      const { kept, skipped } = splitImportDuplicates(pending, suppliers, (p) => p.supplierData.phone);
+      pending.length = 0;
+      pending.push(...kept);
+
       setSupplierImportProgress({ done: 0, total: pending.length });
 
-      let count = 0;
       for (let i = 0; i < pending.length; i += IMPORT_BATCH_SIZE) {
         const chunk = pending.slice(i, i + IMPORT_BATCH_SIZE);
         const batch = writeBatch(db);
-        chunk.forEach(({ ref, supplierData }) => batch.set(ref, supplierData));
+        chunk.forEach(({ ref, supplierData }) => {
+          batch.set(ref, supplierData);
+          queueAudit(batch, ownerUid, {
+            entityType: "supplier", entityId: ref.id, entityName: supplierData.name,
+            action: "create", user, t,
+          });
+        });
         await batch.commit();
         count += chunk.length;
         setSupplierImportProgress({ done: count, total: pending.length });
       }
-      showAlert(t.importSuppliersSuccess(count));
+      showAlert(t.importSuppliersSuccess(count) + (skipped ? t.importSkipped(skipped) : ""));
     } catch (err) {
-      showAlert(t.importSuppliersError);
+      console.error("Excel supplier import failed:", err);
+      reportException(err, { context: "Excel supplier import failed", ownerUid, partiallyImported: count });
+      showAlert(count > 0 ? t.importSuppliersPartialError(count) : t.importSuppliersError);
     } finally {
       setImportingSuppliers(false);
       setSupplierImportProgress(null);

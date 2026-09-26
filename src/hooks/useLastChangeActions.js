@@ -36,16 +36,24 @@ import { reportException } from "../sentry";
 // hook is deliberately entity-agnostic (customer vs supplier) and has no
 // entityType/entityName/ownerUid of its own — the caller (CustomerDetail.jsx
 // / SupplierFormScreen) already has all of that.
+//
+// showAlert: the app's in-app alert modal (see useDialogState.js /
+// ConfirmModal.jsx) — NOT window.alert(). window.alert()/confirm() hang the
+// Android WebView (see ConfirmModal.jsx's own comment on this), which is
+// exactly why that modal was built; this hook previously called the native
+// alert() directly on every branch below, defeating that fix for every
+// approve/rollback/delete/restore flow. Required (not optional) so a call
+// site can't silently fall back to the native dialog by omitting it.
 export function useLastChangeActions({
   getDocRef, isOwnerAccount, lastChange, t, onFinally, onDeleteSuccess,
-  deleteSuccessMsg, restoreSuccessMsg, onAudit,
+  deleteSuccessMsg, restoreSuccessMsg, onAudit, showAlert,
 }) {
   const [loadingAction, setLoadingAction] = useState(false);
 
   const run = async (action) => {
     const docRef = getDocRef();
     if (!docRef) {
-      alert(t.workspaceResolveError);
+      showAlert(t.workspaceResolveError);
       return;
     }
     setLoadingAction(true);
@@ -62,12 +70,12 @@ export function useLastChangeActions({
       if (!isOwnerAccount) return;
       try {
         await updateDoc(docRef, { last_change: deleteField() });
-        alert(t.approveSuccessMsg);
+        showAlert(t.approveSuccessMsg);
         onAudit && onAudit("approve");
       } catch (err) {
         console.error("last_change approve failed:", err);
         reportException(err, { context: "last_change approve failed" });
-        alert(t.approveErrorMsg(err.message));
+        showAlert(t.approveErrorMsg(err.message));
       }
     });
 
@@ -78,12 +86,12 @@ export function useLastChangeActions({
         const rollbackPayload = computeRollbackFields(lastChange);
         rollbackPayload.last_change = deleteField();
         await updateDoc(docRef, rollbackPayload);
-        alert(t.rollbackSuccessMsg);
+        showAlert(t.rollbackSuccessMsg);
         onAudit && onAudit("rollback");
       } catch (err) {
         console.error("last_change rollback failed:", err);
         reportException(err, { context: "last_change rollback failed" });
-        alert(t.rollbackErrorMsg(err.message));
+        showAlert(t.rollbackErrorMsg(err.message));
       }
     });
 
@@ -92,13 +100,17 @@ export function useLastChangeActions({
       if (!isOwnerAccount) return;
       try {
         await deleteDoc(docRef);
-        if (deleteSuccessMsg) alert(deleteSuccessMsg);
-        onAudit && onAudit("approve");
+        if (deleteSuccessMsg) showAlert(deleteSuccessMsg);
+        // Was onAudit("approve") — a permanent delete confirmation was being
+        // logged in the audit trail as an "approve", indistinguishable from
+        // handleApprove()'s own entry above. "delete" is one of the actions
+        // buildAuditEntry() (auditLog.js) documents and expects.
+        onAudit && onAudit("delete");
         onDeleteSuccess && onDeleteSuccess();
       } catch (err) {
         console.error("last_change confirm-delete failed:", err);
         reportException(err, { context: "last_change confirm-delete failed" });
-        alert(t.deleteFinalErrorMsg(err.message));
+        showAlert(t.deleteFinalErrorMsg(err.message));
       }
     });
 
@@ -107,12 +119,12 @@ export function useLastChangeActions({
       if (!isOwnerAccount) return;
       try {
         await updateDoc(docRef, { deleted: deleteField(), last_change: deleteField() });
-        if (restoreSuccessMsg) alert(restoreSuccessMsg);
+        if (restoreSuccessMsg) showAlert(restoreSuccessMsg);
         onAudit && onAudit("restore");
       } catch (err) {
         console.error("last_change restore failed:", err);
         reportException(err, { context: "last_change restore failed" });
-        alert(t.restoreErrorMsg(err.message));
+        showAlert(t.restoreErrorMsg(err.message));
       }
     });
 

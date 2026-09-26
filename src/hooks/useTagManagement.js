@@ -17,7 +17,6 @@ async function batchRenameTag(collectionName, ownerUid, records, oldTag, newTag)
       const nextTags = Array.from(new Set((r.tags || []).map((tag) => (tag === oldTag ? newTag : tag))));
       batch.update(doc(db, "users", ownerUid, collectionName, r.id), { tags: nextTags });
     });
-    // eslint-disable-next-line no-await-in-loop
     await batch.commit();
   }
   return affected.length;
