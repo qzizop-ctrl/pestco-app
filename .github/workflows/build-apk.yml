@@ -1,9 +1,26 @@
 name: Build Android APK
 
+# When this runs:
+#   - every push to main: build + test, and keep the APK as a (private)
+#     workflow artifact. NOT published anywhere.
+#   - push a tag like  android-v1.2.0   -> also publishes a GitHub Release.
+#   - "Run workflow" with a version filled in -> same as pushing that tag.
+# (Before, EVERY push to main published a public release: release spam, and
+# the app was downloadable by anyone if the repository is public.)
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Publish a GitHub Release with this version (e.g. 1.2.0). Leave empty to only build."
+        required: false
+        type: string
   push:
     branches: [main]
+    tags: ["android-v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -11,6 +28,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HAS_RELEASE_KEYSTORE: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 != '' }}
 
     steps:
       # =========================
@@ -38,31 +57,54 @@ jobs:
           java-version: "17"
 
       # =========================
+      # Release version (empty = build only)
+      # =========================
+      - name: Work out release version
+        id: meta
+        shell: bash
+        run: |
+          VERSION=""
+          if [[ "$GITHUB_REF" == refs/tags/android-v* ]]; then
+            VERSION="${GITHUB_REF_NAME#android-v}"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            VERSION="$INPUT_VERSION"
+          fi
+          if [[ -n "$VERSION" && ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must look like 1.2.3 (got '$VERSION')"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+
+      # =========================
       # Install dependencies
       # =========================
-      # Same reasoning as build-windows.yml's install step: a transient
-      # runner-network blip (ECONNRESET etc.) mid-download shouldn't fail
-      # the whole build, so retry the step itself a few times rather than
-      # relying only on npm's own registry-level retry config.
+      # `npm ci`: installs exactly what package-lock.json pins, so a release
+      # build can never silently pick up a newer dependency than the one the
+      # tests ran against. If you change package.json, run `npm install`
+      # locally and commit the updated lock (or run the "Sync
+      # package-lock.json" workflow) — `npm ci` fails loudly when they drift.
       - name: Install dependencies
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npm install
+          command: npm ci
         env:
           npm_config_fetch_retries: 5
           npm_config_fetch_retry_mintimeout: 20000
           npm_config_fetch_retry_maxtimeout: 120000
 
       # =========================
+      # Lint
+      # =========================
+      - name: Run lint
+        run: npm run lint
+
+      # =========================
       # Run tests
       # =========================
-      # Blocking on purpose: this covers the business-logic tests
-      # (permissions, dashboard calculations, etc.) — a red test here
-      # means the build below would ship a real regression, not just a
-      # style nit, so it should stop the release.
       - name: Run tests
         run: npm run test
 
@@ -83,14 +125,11 @@ jobs:
       # Add Android
       # =========================
       - name: Add Android platform
-        run: rm -rf android && npx cap add android
+        run: npx cap add android
 
       # =========================
       # Android Storage Access
       # =========================
-      # Uses the same script as local dev (`npm run android:patch`) instead
-      # of duplicating the manifest/plugin patching inline here — see
-      # scripts/patch-android-storage.cjs.
       - name: Setup Android storage access
         run: npm run android:patch
 
@@ -107,22 +146,13 @@ jobs:
         run: npx cap sync android
 
       # =========================
-      # Debug keystore (persisted across runs)
+      # Release keystore
       # =========================
-      # Without this, Gradle auto-generates a brand-new random debug
-      # keystore on every fresh runner, so each build's APK is signed
-      # with a different certificate. Android then refuses to install a
-      # new APK over an already-installed one with a different signature
-      # (silently, or with "App not installed") — the old app just stays
-      # in place, which looks exactly like "the fix never took effect"
-      # even though the build was correct. Caching the same keystore
-      # file across runs keeps every build signed identically, so
-      # updates install over the previous version normally.
-      - name: Restore/cache debug keystore
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: android-debug-keystore
+      - name: Decode release keystore
+        if: ${{ env.HAS_RELEASE_KEYSTORE == 'true' }}
+        run: echo "$ANDROID_RELEASE_KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.keystore"
+        env:
+          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
 
       # =========================
       # Gradle permission
@@ -133,18 +163,34 @@ jobs:
       # =========================
       # Build APK
       # =========================
-      - name: Build debug APK
+      - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease
+        env:
+          ANDROID_RELEASE_KEYSTORE_PATH: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 != '' && format('{0}/release.keystore', runner.temp) || '' }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
 
       # =========================
-      # GitHub Release
+      # Keep the APK (private, 14 days)
+      # =========================
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pest-android-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+
+      # =========================
+      # GitHub Release (tags / manual version only)
       # =========================
       - name: Create GitHub Release with APK
+        if: ${{ steps.meta.outputs.version != '' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v1.0.${{ github.run_number }}"
-          name: "Release v1.0.${{ github.run_number }}"
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: "android-v${{ steps.meta.outputs.version }}"
+          name: "Android v${{ steps.meta.outputs.version }}"
+          files: android/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

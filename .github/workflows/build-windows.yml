@@ -1,9 +1,31 @@
 name: Build Windows Desktop App
 
+# When this runs:
+#   - every push to main: build + test, installer kept as a (private)
+#     workflow artifact. NOT published.
+#   - push a tag like  win-v1.2.0   -> builds AND publishes a GitHub Release
+#     v1.2.0 with the installer + latest.yml (what the in-app auto-updater
+#     reads).
+#   - "Run workflow" with a version filled in -> same as pushing that tag.
+#
+# The version in package.json used to stay 1.0.0 forever, so installed apps
+# could never see a "newer" release and auto-update never triggered (and the
+# separate softprops release below, tagged win-v1.0.N, carried no
+# latest.yml). The version is now taken from the tag.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Publish a GitHub Release with this version (e.g. 1.2.0). Leave empty to only build."
+        required: false
+        type: string
   push:
     branches: [main]
+    tags: ["win-v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -29,8 +51,30 @@ jobs:
           cache: "npm"
 
       # =========================
+      # Release version (empty = build only)
+      # =========================
+      - name: Work out release version
+        id: meta
+        shell: bash
+        run: |
+          VERSION=""
+          if [[ "$GITHUB_REF" == refs/tags/win-v* ]]; then
+            VERSION="${GITHUB_REF_NAME#win-v}"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            VERSION="$INPUT_VERSION"
+          fi
+          if [[ -n "$VERSION" && ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must look like 1.2.3 (got '$VERSION')"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+
+      # =========================
       # Install dependencies
       # =========================
+      # `npm ci` — see the note in build-apk.yml.
+      #
       # electron's postinstall step downloads a large prebuilt binary
       # straight from GitHub releases (outside npm's own registry, so
       # npm's registry-level retry logic doesn't cover it), which is what
@@ -47,11 +91,31 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: npm install
+          command: npm ci
         env:
           npm_config_fetch_retries: 5
           npm_config_fetch_retry_mintimeout: 20000
           npm_config_fetch_retry_maxtimeout: 120000
+
+      # =========================
+      # Lint
+      # =========================
+      # Blocking, same as the tests step below: `npm run lint` was defined
+      # in package.json but never actually wired into either workflow, so
+      # style/correctness issues it would catch (unused vars, hook-deps
+      # mistakes, etc.) could merge to main unnoticed. Runs before tests so
+      # a lint failure is reported first/fastest.
+      - name: Run lint
+        run: npm run lint
+
+      # =========================
+      # Stamp the release version (before the web build so the app itself
+      # reports it, and before packaging so latest.yml carries it)
+      # =========================
+      - name: Set package version
+        if: ${{ steps.meta.outputs.version != '' }}
+        shell: bash
+        run: npm pkg set version="${{ steps.meta.outputs.version }}"
 
       # =========================
       # Run tests
@@ -77,35 +141,61 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
       # =========================
+      # Code signing (only if the secrets exist)
+      # =========================
+      # Passing `CSC_LINK: ${{ secrets.WIN_CSC_LINK }}` straight into the
+      # packaging step defines CSC_LINK as an EMPTY string when the secret is
+      # missing, and electron-builder then fails with "Env WIN_CSC_LINK is not
+      # correct, cannot resolve ... not a file". So the variables are only
+      # exported when the secret has a value; otherwise the build simply
+      # isn't signed (as before).
+      - name: Enable code signing (if configured)
+        shell: bash
+        run: |
+          if [[ -n "$CERT_B64" ]]; then
+            echo "CSC_LINK=$(printf %s "$CERT_B64" | tr -d '\r\n')" >> "$GITHUB_ENV"
+            echo "CSC_KEY_PASSWORD=$CERT_PASSWORD" >> "$GITHUB_ENV"
+            echo "Code signing enabled."
+          else
+            echo "No WIN_CSC_LINK secret - building unsigned."
+          fi
+        env:
+          CERT_B64: ${{ secrets.WIN_CSC_LINK }}
+          CERT_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      # =========================
       # Package Windows App
       # =========================
-      # --publish always is what electron.js's initAutoUpdate() needs:
-      # electron-builder itself creates/updates a GitHub Release (tagged
-      # v<package.json version>, standard behavior for the "github" publish
-      # provider already configured in package.json's "build" block) AND
-      # uploads latest.yml alongside the installer — that file is what
-      # autoUpdater.checkForUpdatesAndNotify() actually reads to know a
-      # newer version exists. With --publish never, the installer builds
-      # but latest.yml is never produced, so every already-installed
-      # Windows client's update check silently fails (caught by the
-      # .on('error') handler, logged to console, never shown to the user).
-      # GH_TOKEN is electron-builder's expected env var name for this
-      # (falls back to GITHUB_TOKEN too); the default Actions token already
-      # has the "contents: write" permission this workflow declares above.
-      - name: Package Windows App (Electron Builder)
+      # Without a version: build the installer only (nothing is published).
+      # With a version: --publish always is what electron.js's
+      # initAutoUpdate() needs — electron-builder creates the GitHub Release
+      # (tag v<version>, published rather than draft: see package.json >
+      # build.publish.releaseType) and uploads latest.yml next to the
+      # installer; that file is what autoUpdater reads to learn a newer
+      # version exists.
+      #
+      # Code signing is optional: add repository secrets WIN_CSC_LINK (base64
+      # .pfx) and WIN_CSC_KEY_PASSWORD and electron-builder signs the
+      # installer automatically. Unsigned builds work but Windows SmartScreen
+      # warns on install, and updates can't be tied to a publisher.
+      - name: Package Windows App (build only)
+        if: ${{ steps.meta.outputs.version == '' }}
+        run: npx electron-builder --win --publish never
+
+      - name: Package and publish Windows App
+        if: ${{ steps.meta.outputs.version != '' }}
         run: npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # =========================
-      # GitHub Release for Windows
+      # Keep the installer (private, 14 days)
       # =========================
-      - name: Create GitHub Release with Windows App
-        uses: softprops/action-gh-release@v2
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: "win-v1.0.${{ github.run_number }}"
-          name: "Windows Release v1.0.${{ github.run_number }}"
-          files: |
+          name: pest-windows-installer
+          path: |
             release/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            release/latest.yml
+          retention-days: 14
