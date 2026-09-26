@@ -99,6 +99,8 @@ export const AR = {
   signOut: "تسجيل الخروج",
   reminderTitle: "تذكير متابعة:",
   reminderBody: (contact) => `موعد متابعة ${contact} حان الآن`,
+  remindersMissedTitle: "مواعيد متابعة فاتت",
+  remindersMissedBody: (n) => `عندك ${n} موعد متابعة فات ميعاده — راجع التنبيهات`,
   settingsTitle: "الإعدادات",
   manageAccess: "إدارة المشاركة",
   membersTitle: "الأشخاص الذين لديهم صلاحية الوصول",
@@ -160,7 +162,9 @@ export const AR = {
   importBtn: "استيراد من ملف إكسيل",
   importHint: "الملف لازم يكون بنفس أعمدة ملف التصدير (اسم الشركة، الشخص المسؤول، إلخ). الصفوف هتتضاف كزيارات جديدة.",
   importSuccess: (n) => `تم استيراد ${n} زيارة بنجاح`,
+  importSkipped: (n) => ` — اتخطينا ${n} سجل مكرر (نفس رقم التليفون موجود قبل كده)`,
   importError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+  importPartialError: (n) => `توقف الاستيراد بسبب خطأ — اتحفظ ${n} زيارة قبل ما يحصل الخطأ.`,
   importing: "جارِ الاستيراد...",
   importProgress: (done, total) => `جارِ الاستيراد... (${done}/${total})`,
   importTooLarge: (max) => `الملف فيه أكتر من ${max} صف. قسّم الملف لأجزاء أصغر وحاول تاني.`,
@@ -228,6 +232,7 @@ export const AR = {
   importSuppliersHint: "الملف لازم يكون بنفس أعمدة ملف تصدير الموردين (اسم المورد، نوع البضاعة، إلخ). الصفوف هتتضاف كموردين جدد.",
   importSuppliersSuccess: (n) => `تم استيراد ${n} مورد بنجاح`,
   importSuppliersError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+  importSuppliersPartialError: (n) => `توقف الاستيراد بسبب خطأ — اتحفظ ${n} مورد قبل ما يحصل الخطأ.`,
   importSuppliersProgress: (done, total) => `جارِ استيراد الموردين... (${done}/${total})`,
   importSuppliersTooLarge: (max) => `الملف فيه أكتر من ${max} صف. قسّم الملف لأجزاء أصغر وحاول تاني.`,
 
@@ -517,6 +522,12 @@ export const AR = {
   auditLogFilterTo: "إلى تاريخ",
   auditLogFilterAll: "الكل",
   auditLogClearFilters: "مسح الفلاتر",
+  // Shown when the screen has loaded the maximum number of recent entries
+  // (see AUDIT_LOG_LIMIT in useAuditLog.js) — warns that filtering by an
+  // older "from" date, or by a user who only shows up further back, may
+  // miss entries that exist but weren't loaded, instead of that silently
+  // looking like "no results".
+  auditLogLimitedHint: "بيتم عرض أحدث 500 عملية بس — الفلاتر (خصوصًا \"من تاريخ\" لفترة أقدم) ممكن متطلعش كل النتائج الفعلية.",
   auditLogEntityCustomer: "عميل",
   auditLogEntitySupplier: "مورد",
   auditLogActions: {

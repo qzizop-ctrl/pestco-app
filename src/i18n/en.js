@@ -99,6 +99,8 @@ export const EN = {
   signOut: "Sign Out",
   reminderTitle: "Follow-up reminder:",
   reminderBody: (contact) => `It's time to follow up with ${contact}`,
+  remindersMissedTitle: "Missed follow-ups",
+  remindersMissedBody: (n) => `${n} follow-up reminder(s) came due while you were away — check Alerts`,
   settingsTitle: "Settings",
   manageAccess: "Manage Access",
   membersTitle: "People with access",
@@ -156,7 +158,9 @@ export const EN = {
   importBtn: "Import from Excel file",
   importHint: "The file must use the same columns as the exported file (Company Name, Contact Person, etc). Rows will be added as new visits.",
   importSuccess: (n) => `Successfully imported ${n} visit${n === 1 ? "" : "s"}`,
+  importSkipped: (n) => ` — skipped ${n} duplicate${n === 1 ? "" : "s"} (same phone number already exists)`,
   importError: "Something went wrong reading the file, please check the file format",
+  importPartialError: (n) => `Import stopped after an error — ${n} visit${n === 1 ? "" : "s"} were already saved before it failed.`,
   importing: "Importing...",
   importProgress: (done, total) => `Importing... (${done}/${total})`,
   importTooLarge: (max) => `The file has more than ${max} rows. Split it into smaller files and try again.`,
@@ -216,6 +220,7 @@ export const EN = {
   importSuppliersHint: "The file must use the same columns as the exported suppliers file (Supplier Name, Goods/Service Type, etc). Rows will be added as new suppliers.",
   importSuppliersSuccess: (n) => `Successfully imported ${n} supplier${n === 1 ? "" : "s"}`,
   importSuppliersError: "Something went wrong reading the file, please check the file format",
+  importSuppliersPartialError: (n) => `Import stopped after an error — ${n} supplier${n === 1 ? "" : "s"} were already saved before it failed.`,
   importSuppliersProgress: (done, total) => `Importing suppliers... (${done}/${total})`,
   importSuppliersTooLarge: (max) => `The file has more than ${max} rows. Split it into smaller files and try again.`,
 
@@ -505,6 +510,12 @@ export const EN = {
   auditLogFilterTo: "To",
   auditLogFilterAll: "All",
   auditLogClearFilters: "Clear filters",
+  // Shown when the screen has loaded the maximum number of recent entries
+  // (see AUDIT_LOG_LIMIT in useAuditLog.js) — warns that filtering by an
+  // older "from" date, or by a user who only shows up further back, may
+  // miss entries that exist but weren't loaded, instead of that silently
+  // looking like "no results".
+  auditLogLimitedHint: "Showing only the most recent 500 entries — filters (especially an older \"from\" date) may not return every matching entry.",
   auditLogEntityCustomer: "Customer",
   auditLogEntitySupplier: "Supplier",
   auditLogActions: {
