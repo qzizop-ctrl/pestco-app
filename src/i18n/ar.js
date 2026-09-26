@@ -1,0 +1,533 @@
+// ============================================================================
+// Arabic UI strings. Split out of the old i18n.js (which held both languages
+// in one file) for readability; imported by i18n/index.js.
+// ============================================================================
+import { STALE_OFFER_DAYS } from "../domain";
+
+export const AR = {
+  dir: "rtl",
+  locale: "ar-EG",
+  titleEdit: "تعديل العميل",
+  titleNew: "عميل جديد",
+  titleDetail: "تفاصيل العميل",
+  titleDashboard: "Dashboard",
+  back: "رجوع",
+  langToggle: "English",
+  dueCalls: (n) => `عندك ${n} متابعة مستحقة`,
+  searchPlaceholder: "ابحث بالشركة أو المسؤول أو الرقم أو الملاحظات أو التاريخ",
+  loading: "جارِ التحميل...",
+  noVisits: "لا توجد زيارات بعد",
+  noVisitsHint: 'اضغط على "عميل جديد" لإضافة أول عميل',
+  newVisit: "عميل جديد",
+  noCompanyName: "بدون اسم شركة",
+  noContactName: "بدون اسم",
+  companyLabel: "اسم الشركة *",
+  companyPlaceholder: "مثال: شركة النور للصناعات",
+  companyError: "اكتب اسم الشركة",
+  contactLabel: "اسم الشخص المسؤول *",
+  contactPlaceholder: "مثال: أحمد محمد",
+  contactError: "اكتب اسم الشخص المسؤول",
+  roleLabel: "الجهة / المسمى الوظيفي",
+  phoneLabel: "رقم الهاتف",
+  phonePlaceholder: "01xxxxxxxxx",
+  emailLabel: "البريد الإلكتروني",
+  emailPlaceholder: "name@company.com",
+  formSectionBasic: "بيانات أساسية",
+  formSectionClassification: "التصنيف",
+  formSectionContact: "التواصل",
+  formSectionSchedule: "الجدولة",
+  formSectionNotes: "ملاحظات",
+  visitDateLabel: "تاريخ الزيارة",
+  visitDateHint: "اسيبه فاضي لو لسه ما حصلتش الزيارة، وحددّه بس لما تكون فعلاً زرت العميل.",
+  noVisitYet: "لسه ما حصلتش زيارة",
+  dateAddedRow: "تاريخ إضافة العميل",
+
+  // Missing-data filter
+  missingDataFilter: "بيانات ناقصة",
+  noVisitsYetFilter: "بدون زيارات",
+  dateAddedFilterLabel: "تاريخ إضافة العميل",
+  dateAddedAllOption: "كل الفترات",
+  missingPhoneBadge: "بدون رقم",
+  missingEmailBadge: "بدون إيميل",
+
+  // Duplicate detection
+  duplicatesTitle: "عملاء محتمل تكرارهم",
+  duplicatesHint: "عملاء بنفس رقم الهاتف أو اسم شركة متشابه جدًا",
+  noDuplicatesFound: "مفيش أي تكرار محتمل حاليًا",
+  duplicatesBtn: "فحص التكرارات",
+  samePhoneReason: "نفس رقم الهاتف",
+  similarNameReason: "اسم شركة متشابه",
+
+  // Stale / inactive customer indicator
+  staleBadge: "متوقف النشاط",
+  staleHint: (days) => `مفيش أي نشاط من ${days} يوم`,
+
+  // Pin / favorite
+  pinBtn: "تفضيل",
+  unpinBtn: "إلغاء التفضيل",
+  pinnedLabel: "مثبّت",
+  callDateLabel: "موعد المتابعة القادم (اختياري)",
+  callDateHint: "في نسخة الأندرويد: التطبيق هيبعتلك تنبيه حقيقي في المعاد ده حتى لو التطبيق مقفول. في نسخة المتصفح: لازم التطبيق يكون شغال.",
+  notesLabel: "ملاحظات الزيارة",
+  notesPlaceholder: "تفاصيل الزيارة، المطلوب متابعته، إلخ",
+  save: "حفظ العميل",
+  saving: "جاري الحفظ...",
+  phoneRow: "رقم الهاتف",
+  emailRow: "البريد الإلكتروني",
+  visitDateRow: "تاريخ الزيارة",
+  callDueLabel: "موعد المتابعة:",
+  callDone: "تم الاتصال ✓",
+  notesRow: "ملاحظات",
+  edit: "تعديل",
+  delete: "حذف",
+  roles: {
+    purchasing: "مسؤول المشتريات",
+    it: "تقنية المعلومات",
+    technical: "المكتب الفني",
+    other: "أخرى",
+  },
+  sectorLabel: "القطاع *",
+  sectorPlaceholder: "اختر القطاع",
+  sectorError: "اختر قطاع العميل",
+  sectorAll: "الكل",
+  sectors: {
+    construction: "قطاع المقاولات",
+    education: "قطاع التعليم",
+    consultants: "قطاع الاستشاريين",
+    private: "شركات خاصة",
+  },
+  signOut: "تسجيل الخروج",
+  reminderTitle: "تذكير متابعة:",
+  reminderBody: (contact) => `موعد متابعة ${contact} حان الآن`,
+  settingsTitle: "الإعدادات",
+  manageAccess: "إدارة المشاركة",
+  membersTitle: "الأشخاص الذين لديهم صلاحية الوصول",
+  addMemberEmail: "البريد الإلكتروني",
+  addMemberRole: "الصلاحية",
+  roleEditor: "يشوف ويعدل",
+  roleViewer: "يشوف فقط",
+  addMemberBtn: "إضافة",
+  noMembers: "لا يوجد أشخاص مضافين بعد",
+  pendingSignupsTitle: "حسابات جديدة محتاجة مراجعة",
+  pendingSignupsHint: "دي كل الحسابات اللي اتعملت على التطبيق ولسه معندهاش صلاحية. امنحها الدور المناسب أو تجاهلها.",
+  noPendingSignups: "لا يوجد حسابات جديدة محتاجة مراجعة حاليًا",
+  grantEditorBtn: "امنح صلاحية محرر",
+  grantViewerBtn: "امنح صلاحية مشاهد",
+  adminsTitle: "المسؤولون (Admins)",
+  adminsHint: "المسؤولون بيقدروا يراجعوا الحسابات الجديدة ويضيفوا مسؤولين تانيين. بس المسؤول الرئيسي بس هو اللي يقدر يشيل مسؤولين.",
+  addAdminPlaceholder: "إيميل المسؤول الجديد",
+  addAdminBtn: "إضافة",
+  lastAdminHint: "لازم يفضل مسؤول واحد على الأقل.",
+  removeAdminConfirm: "تشيل صلاحية المسؤول من الإيميل ده؟",
+  primaryAdminBadge: "المسؤول الرئيسي",
+  primaryAdminHint: "المسؤول الرئيسي محمي ومينفعش يتشال، وهو الوحيد اللي يقدر يشيل مسؤولين تانيين.",
+  primaryAdminHiddenNote: "إيميل المسؤول الرئيسي متخفي عنك.",
+  autoBackupDone: "تم عمل نسخة احتياطية أسبوعية تلقائيًا وحُفظت على الجهاز.",
+  autoBackupPrompt: "عدّى أسبوع من آخر نسخة احتياطية. عايز تعمل نسخة دلوقتي وتتحفظ على الجهاز؟",
+  autoBackupFailed: "حصل خطأ أثناء عمل النسخة الاحتياطية. هيتم السؤال تاني المرة الجاية.",
+  dismissSignupConfirm: "تجاهل الحساب ده من القائمة من غير ما تديله أي صلاحية؟",
+  removeConfirm: "هل تريد إلغاء صلاحية هذا الشخص؟",
+  dashboardAccessLabel: "Dashboard",
+  dashboardAccessHint: "متاح بس لمين تفعّله له",
+  dashboardAccessOn: "مفعّل",
+  dashboardAccessOff: "متعطل",
+  statusOverdue: "متأخرة",
+  statusToday: "اليوم",
+  statusUpcoming: "قادمة",
+  statusNone: "بدون تذكير",
+  whatsapp: "واتساب",
+  tagManagementTitle: "إدارة التاجز",
+  tagManagementHint: "عدّل اسم أي تاج عشان يتغيّر في كل اللي بيحمله دفعة واحدة. لو كتبت اسم تاج موجود بالفعل، الاتنين هيندمجوا في واحد.",
+  tagTabCustomers: "العملاء",
+  tagTabSuppliers: "الموردين",
+  tagsEmpty: "مفيش تاجز مضافة لحد دلوقتي",
+  tagSearchPlaceholder: "دوّر على تاج...",
+  noTagSearchResults: "مفيش تاج بالاسم ده",
+  tagRenameBtn: "حفظ",
+  cancelBtn: "إلغاء",
+  tagRenameConfirm: (oldTag, newTag, count, entityType) => {
+    const nouns =
+      entityType === "supplier"
+        ? { one: "مورد واحد", two: "موردين", many: (n) => `${n} موردين` }
+        : { one: "عميل واحد", two: "عميلين", many: (n) => `${n} عملاء` };
+    const who = count === 1 ? nouns.one : count === 2 ? nouns.two : nouns.many(count);
+    return `هيتغيّر التاج "${oldTag}" إلى "${newTag}" في ${who}. تأكيد؟`;
+  },
+  exchangeRateLabel: "دولار إلى جنيه",
+  unifyCurrencyToggle: "توحيد العملة في الداشبورد",
+  excelTitle: "استيراد / تصدير إكسيل",
+  exportBtn: "تصدير كل الزيارات (إكسيل)",
+  importBtn: "استيراد من ملف إكسيل",
+  importHint: "الملف لازم يكون بنفس أعمدة ملف التصدير (اسم الشركة، الشخص المسؤول، إلخ). الصفوف هتتضاف كزيارات جديدة.",
+  importSuccess: (n) => `تم استيراد ${n} زيارة بنجاح`,
+  importError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+  importing: "جارِ الاستيراد...",
+  importProgress: (done, total) => `جارِ الاستيراد... (${done}/${total})`,
+  importTooLarge: (max) => `الملف فيه أكتر من ${max} صف. قسّم الملف لأجزاء أصغر وحاول تاني.`,
+  duplicatePhoneWarning: (company) => `رقم الهاتف ده مسجل بالفعل عند "${company}". هل تريد الإضافة برضو؟`,
+  pipelineLabel: "مرحلة المشروع",
+  pipelineAll: "كل المراحل",
+  stages: {
+    survey: "معاينة",
+    quote: "عرض سعر",
+    install: "تركيب",
+    maintenance: "صيانة",
+  },
+  stageNone: "بدون مرحلة",
+  tagsLabel: "الوسوم (Tags)",
+  tagsPlaceholder: "افصل بينهم بفاصلة، مثال: VIP, يحتاج عرض سعر",
+  tagsAll: "كل الوسوم",
+  noTags: "بدون وسوم",
+  activityLabel: "سجل النشاط",
+  addActivityPlaceholder: "أضف ملاحظة أو نشاط جديد...",
+  addActivityBtn: "إضافة",
+  noActivity: "لا يوجد نشاط مسجل بعد",
+  activityCreated: "تم إنشاء العميل",
+  activityStageChanged: (stage) => `تم تغيير مرحلة المشروع إلى: ${stage}`,
+  activityStageCleared: "تم إلغاء مرحلة المشروع",
+  activityCallSet: (date) => `تم تحديد موعد متابعة: ${date}`,
+  activityCallDone: "تم الاتصال ✓",
+  offlineBanner: "غير متصل بالإنترنت - لازم يكون فيه نت عشان تقدر تحفظ أي تعديل",
+  requireOnlineMsg: "لازم يكون فيه اتصال بالإنترنت عشان تقدر تحفظ",
+  deleteActivityConfirm: "هل تريد حذف هذا النشاط؟",
+  totalCustomersLabel: "إجمالي العملاء",
+  // Used only on the Dashboard's customer list, which is filtered by the
+  // selected year/month/sector — kept separate from totalCustomersLabel
+  // (the true, unfiltered count shown on the customer list screen) so
+  // renaming one never mislabels the other.
+  dashPeriodCustomersLabel: "عملاء الفترة المختارة",
+  dashNewCustomersLabel: "عملاء جداد",
+  // Dynamic label for the "customers added" card: the wording changes
+  // with the selected filter so it never implies a "new vs previous
+  // period" comparison when it's actually a cumulative count for
+  // whatever range (a whole year, or one month) is currently selected.
+  dashCustomersAddedLabel: (rangeLabel) => `عملاء تم إضافتهم: ${rangeLabel}`,
+
+  // Dark mode
+  darkModeToggle: "الوضع الليلي",
+  lightModeToggle: "الوضع النهاري",
+
+  // Undo delete
+  deletedUndoMsg: (name) => `تم حذف ${name}`,
+  undoBtn: "تراجع",
+
+  // Phone warning
+  phoneMissingWarning: "العميل ده متسجلش له رقم تليفون. هل تريد الحفظ برضو؟",
+
+  // Export
+  exportAllBtn: "تصدير كل العملاء (إكسيل)",
+  exportFilteredBtn: (n) => `تصدير النتائج المفلترة حاليًا (${n})`,
+
+  // Export/import tabs (customers vs suppliers) in Settings
+  exportTabCustomers: "العملاء",
+  exportTabSuppliers: "الموردين",
+  exportSuppliersAllBtn: "تصدير كل الموردين (إكسيل)",
+  exportSuppliersFilteredBtn: (n) => `تصدير الموردين المفلترين حاليًا (${n})`,
+  importSuppliersBtn: "استيراد موردين من ملف إكسيل",
+  importingSuppliers: "جارِ استيراد الموردين...",
+  importSuppliersHint: "الملف لازم يكون بنفس أعمدة ملف تصدير الموردين (اسم المورد، نوع البضاعة، إلخ). الصفوف هتتضاف كموردين جدد.",
+  importSuppliersSuccess: (n) => `تم استيراد ${n} مورد بنجاح`,
+  importSuppliersError: "حصل خطأ أثناء قراءة الملف، تأكد من صيغة الملف",
+  importSuppliersProgress: (done, total) => `جارِ استيراد الموردين... (${done}/${total})`,
+  importSuppliersTooLarge: (max) => `الملف فيه أكتر من ${max} صف. قسّم الملف لأجزاء أصغر وحاول تاني.`,
+
+  // Member invite hint
+  memberInviteHint: "لو الشخص ده لسه معملش حساب على التطبيق بنفس الإيميل ده، الصلاحية هتتفعل تلقائيًا أول ما يعمل تسجيل.",
+
+  // Visit history / logging a new visit
+  visitCountLabel: (n) => `عدد الزيارات: ${n}`,
+  logVisitBtn: "تسجيل زيارة اليوم",
+  activityVisitLogged: (date) => `تم تسجيل زيارة جديدة بتاريخ: ${date}`,
+
+  // Stale offers follow-up
+  staleOffersBanner: (n) => `عندك ${n} أوفر "قيد المتابعة" من غير رد من أكتر من ${STALE_OFFER_DAYS} يوم`,
+
+  // Offer rejection reason
+  offerRejectionReasonLabel: "سبب الرفض (اختياري)",
+  offerRejectionReasonPrompt: "اكتب سبب رفض الأوفر (اختياري):",
+  rejectionModalTitle: "سبب الرفض",
+  rejectionModalPlaceholder: "اكتب السبب هنا (اختياري)...",
+  rejectionModalReasonLabel: "سبب الرفض",
+  rejectionModalReasonPlaceholder: "اختر السبب",
+  rejectionModalOtherLabel: "اكتب السبب بالتفصيل",
+  rejectionModalConfirm: "تأكيد الرفض",
+  rejectionModalCancel: "إلغاء",
+  // Predefined rejection reasons — see domain.js#REJECTION_REASON_IDS.
+  rejectionReasons: {
+    price: "السعر أعلى من المنافس",
+    timing: "التوقيت غير مناسب",
+    chose_other_supplier: "العميل اختار مورد آخر",
+    project_postponed: "تأجيل المشروع",
+    not_needed_now: "عدم الحاجة حاليًا",
+    payment_terms: "شروط الدفع",
+    other: "سبب آخر",
+  },
+  confirmModalConfirm: "تأكيد",
+  confirmModalCancel: "إلغاء",
+  confirmModalOk: "حسنًا",
+  rejectionReasonRow: "سبب الرفض:",
+  changeStatusLabel: "تغيير حالة الأوفر:",
+
+  // Bottom navigation
+  navDashboard: "Dashboard",
+  navCustomers: "العملاء",
+  navSuppliers: "الموردين",
+  navSettings: "الإعدادات",
+
+  // Suppliers
+  suppliersTitle: "الموردين",
+  titleNewSupplier: "مورد جديد",
+  titleEditSupplier: "تعديل المورد",
+  supplierNameLabel: "اسم المورد *",
+  supplierNamePlaceholder: "مثال: شركة الفا للتوريدات",
+  supplierNameError: "اكتب اسم المورد",
+  supplierContactLabel: "الشخص المسؤول",
+  supplierContactPlaceholder: "مثال: محمد علي",
+  supplierCategoryLabel: "نوع البضاعة / الخدمة",
+  supplierCategoryPlaceholder: "مثال: ماركة باير",
+  supplierCategoryAll: "كل الأنواع",
+  saveSupplier: "حفظ مورد",
+  supplierNotesLabel: "ملاحظات",
+  newSupplierBtn: "مورد جديد",
+  noSuppliers: "لا يوجد موردين بعد",
+  noSuppliersHint: 'اضغط على "مورد جديد" لإضافة أول مورد',
+  noSupplierName: "بدون اسم مورد",
+  deleteSupplierConfirm: "هل أنت متأكد من حذف هذا المورد؟",
+  searchSuppliersPlaceholder: "ابحث بالاسم أو الرقم أو نوع البضاعة",
+
+  // Supplier tags (product names supplied)
+  supplierTagsLabel: "المنتجات (Tags)",
+  supplierTagsPlaceholder: "افصل بينهم بفاصلة، مثال: كاميرات، كابلات، أجهزة إنذار",
+  supplierTagsAll: "كل المنتجات",
+  noSupplierTags: "بدون منتجات مسجلة",
+
+  // Offers
+  offersLabel: "الأوفرات",
+  offerNameLabel: "اسم الأوفر",
+  offerNamePlaceholder: "مثال: عرض توريد كاميرات",
+  offerNumberLabel: "رقم الأوفر (اختياري)",
+  offerAmountLabel: "المبلغ",
+  offerDateLabel: "تاريخ الأوفر",
+  offerStatusLabel: "الحالة",
+  addOfferBtn: "إضافة أوفر",
+  noOffers: "لا يوجد أوفرات مسجلة بعد",
+  deleteOfferConfirm: "هل تريد حذف هذا الأوفر؟",
+  offerStatuses: {
+    pending: "قيد المتابعة",
+    purchased: "تم الشراء",
+    rejected: "مرفوض",
+    installed: "تم التركيب",
+  },
+
+  // Offer suppliers (many-to-many link between an offer and suppliers)
+  offerSuppliersBtn: "اختيار الموردين",
+  offerSuppliersSheetTitle: "اختيار الموردين",
+  offerSuppliersDone: "تم",
+  offerSuppliersNone: "بدون مورد محدد",
+  offerSuppliersLabel: "الموردين",
+  offerSuppliersCount: (n) => (n === 1 ? "مورد واحد" : `موردين (${n})`),
+  noSuppliersToPick: "لسه معندكش موردين مسجلين",
+  pickSupplierSearchPlaceholder: "ابحث عن مورد بالاسم",
+  noSupplierSearchResults: "مفيش مورد بالاسم ده",
+  activityOfferAdded: (name) => `تم إضافة أوفر جديد: ${name}`,
+  activityOfferStatus: (name, status) => `تم تغيير حالة الأوفر "${name}" إلى: ${status}`,
+
+  // Dashboard
+  dashYear: "السنة",
+  dashPeriodLabel: "الفترة",
+  dashPeriodCurrentMonth: "الشهر الحالي",
+  dashPeriodLast3: "آخر 3 شهور",
+  dashPeriodLast6: "آخر 6 شهور",
+  dashPeriodWholeYear: "كل السنة",
+  dashPeriodCustom: "تحديد يدوي",
+  dashPeriodCustomSingle: "شهر واحد",
+  dashPeriodCustomRange: "فترة",
+  dashPeriodChoose: "اختر الفترة",
+  dashPeriodApply: "تطبيق",
+  dashPeriodTo: "إلى",
+  dashSector: "القطاع",
+  dashAllSectors: "كل القطاعات",
+  dashTabOverview: "نظرة عامة",
+  dashTabSales: "المبيعات",
+  dashTabCustomers: "العملاء والأوفرات",
+  dashCardVisits: "إجمالي الزيارات",
+  dashCardOffersCount: "عدد الأوفرات",
+  dashCardOffersValue: "إجمالي قيمة الأوفرات",
+  dashOffersConverted: "اتحول لبيع",
+  dashOffersSection: "الأوفرات",
+  dashOffersTotalLabel: "عدد الأوفرات",
+  dashOffersTotalValueLabel: "إجمالي قيمة الأوفرات",
+  dashPipeline: "مسار المبيعات (Pipeline)",
+  dashSalesPerformance: "أداء المبيعات",
+  // Rejection-reasons analytics report (Dashboard)
+  dashRejectionReport: "تحليل أسباب رفض العروض",
+  dashRejectionReportHint: "أكثر أسباب رفض العروض تكرارًا خلال الفترة المحددة",
+  dashRejectionReportEmpty: "لا يوجد عروض مرفوضة في هذه الفترة",
+  dashRejectionReportByRep: "مقارنة أسباب الرفض بين المندوبين",
+  dashRejectionReportPct: (n) => `${n}% من إجمالي المرفوض`,
+  dashAvgDealSize: "متوسط قيمة الصفقة",
+  dashWinRate: "نسبة الفوز",
+  dashWinRateSample: (n) => `من ${n} صفقة محسومة`,
+  dashPointsSuffix: "نقطة",
+  dashNoOffersYet: "لا توجد أوفرات كافية للحساب",
+  dashCompareToggle: "مقارنة بالشهر السابق",
+  dashNoComparisonData: "لا توجد بيانات للمقارنة",
+  dashNoVisitsInPeriod: "لا توجد زيارات خلال هذه الفترة",
+  dashOfferFilterAll: "الكل",
+  dashLastVisit: "آخر زيارة:",
+  dashCurrency: "EG",
+  currencies: { EGP: "EG", USD: "$" },
+  currencyLabel: "العملة",
+  months: [
+    "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+  ],
+
+  // Alerts center (collapsible banner group on the customer list)
+  alertsCenterTitle: "التنبيهات",
+  noAlertsHint: "لا توجد تنبيهات حاليًا",
+
+  // Filter bottom sheet
+  filtersBtn: "فلاتر",
+  filtersTitle: "الفلاتر",
+  otherFiltersLabel: "فلاتر أخرى",
+  applyFiltersBtn: "تطبيق",
+  clearFiltersBtn: "مسح الكل",
+
+  // Pending edits notification (owner-only "last_change" review queue)
+  pendingEditsBtn: "تعديلات",
+  pendingEditsTitle: "تعديلات بانتظار المراجعة",
+  pendingEditsEmpty: "لا توجد تعديلات بانتظار المراجعة",
+  pendingEditsBy: (name, date) => `بواسطة ${name} • ${date}`,
+  pendingDeleteLabel: "حذف",
+  pendingEditsKindSupplier: "مورد",
+
+  // Delete-approval banner in CustomerDetail (owner-only)
+  deletePendingTitle: "طلب حذف عميل (خاص بك)",
+  deletePendingBy: (name) => `قام المستخدم ${name} بحذف هذا العميل. هل تريد اعتماد الحذف نهائيًا أم استرجاع العميل؟`,
+  confirmDeleteFinalBtn: "اعتماد الحذف نهائيًا",
+  restoreCustomerBtn: "استرجاع العميل",
+  deleteApprovedMsg: "تم حذف العميل نهائيًا.",
+  deleteRestoredMsg: "تم استرجاع العميل بنجاح.",
+
+  // Delete-approval banner in SupplierFormScreen (owner-only)
+  deletePendingTitleSupplier: "طلب حذف مورد (خاص بك)",
+  deletePendingBySupplier: (name) => `قام المستخدم ${name} بحذف هذا المورد. هل تريد اعتماد الحذف نهائيًا أم استرجاع المورد؟`,
+  restoreSupplierBtn: "استرجاع المورد",
+  deleteApprovedMsgSupplier: "تم حذف المورد نهائيًا.",
+  deleteRestoredMsgSupplier: "تم استرجاع المورد بنجاح.",
+
+  // Edit-approval banner — shared between CustomerDetail and the supplier
+  // form (see useLastChangeActions.js). titleCustomer/titleSupplier let
+  // one shared <PendingChangeBanner> pick the right heading.
+  pendingEditTitleCustomer: "تنبيه تعديل بيانات (خاص بك)",
+  pendingEditTitleSupplier: "تنبيه تعديل بيانات مورد (خاص بك)",
+  pendingEditBy: (name) => `قام المستخدم ${name} بتعديل البيانات التالية:`,
+  approveEditBtn: "اعتماد (تنظيف المساحة)",
+  rollbackEditBtn: "تراجع عن التعديل",
+  genericEditNote: "تعديلات عامة على السجل",
+  editNoDetailsNote: "تم إجراء تعديل على بيانات السجل (بدون تفاصيل قيم قديمة)",
+  unknownUser: "غير معروف",
+
+  // Generic outcome messages for the approve/rollback/delete/restore
+  // actions on a pending last_change (customer or supplier alike).
+  workspaceResolveError: "تعذّر تحديد مساحة العمل الحالية.",
+  approveSuccessMsg: "تم اعتماد البيانات وتنظيف المساحة بنجاح.",
+  approveErrorMsg: (msg) => `حدث خطأ أثناء الاعتماد: ${msg}`,
+  rollbackSuccessMsg: "تم التراجع عن التعديلات وإعادة البيانات بنجاح.",
+  rollbackErrorMsg: (msg) => `حدث خطأ أثناء التراجع: ${msg}`,
+  deleteFinalErrorMsg: (msg) => `حدث خطأ أثناء اعتماد الحذف: ${msg}`,
+  restoreErrorMsg: (msg) => `حدث خطأ أثناء الاسترجاع: ${msg}`,
+
+  // Field labels shown inside the edit-approval banner's diff list.
+  customerChangeFieldLabels: {
+    companyName: "اسم الشركة",
+    contactName: "الشخص المسؤول",
+    phone: "رقم الهاتف",
+    email: "البريد الإلكتروني",
+    notes: "الملاحظات",
+    sector: "القطاع",
+    stage: "مرحلة المشروع",
+    visitDate: "تاريخ الزيارة",
+    callDateTime: "موعد التذكير",
+  },
+  supplierChangeFieldLabels: {
+    name: "اسم المورد",
+    contactName: "الشخص المسؤول",
+    phone: "رقم الهاتف",
+    email: "البريد الإلكتروني",
+    category: "نوع الخدمة/المنتج",
+    notes: "الملاحظات",
+  },
+
+  // PDF report export
+  dashExportPdfBtn: "تصدير تقرير PDF",
+  dashPdfGenerating: "جارِ تجهيز التقرير...",
+  dashPdfReportTitle: "تقرير الأداء",
+  dashPdfGeneratedAt: (date) => `تاريخ إصدار التقرير: ${date}`,
+  dashPdfPeriod: (label) => `الفترة: ${label}`,
+  dashPdfSectorLine: (sector) => `القطاع: ${sector}`,
+  dashPdfSummarySection: "ملخص الأداء",
+  dashPdfPipelineSection: "توزيع مسار المبيعات",
+  dashPdfOffersListSection: "تفاصيل الأوفرات",
+  dashPdfCustomersSection: "العملاء المُضافون خلال الفترة",
+  dashPdfNoOffers: "لا توجد أوفرات في هذه الفترة",
+  dashPdfNoCustomers: "لا يوجد عملاء جدد في هذه الفترة",
+  dashPdfFooterNote: "تم إصدار هذا التقرير تلقائيًا من تطبيق PEST",
+  dashPdfError: "حصل خطأ أثناء إنشاء ملف PDF",
+  dashPdfShareTitle: "حفظ أو مشاركة التقرير",
+  dashPdfColCompany: "الشركة",
+  dashPdfColOffer: "الأوفر",
+  dashPdfColAmount: "القيمة",
+  dashPdfColStatus: "الحالة",
+  dashPdfColDate: "التاريخ",
+  dashPdfColSector: "القطاع",
+  dashPdfColStage: "المرحلة",
+  dashPdfPageOf: (page, total) => `صفحة ${page} من ${total}`,
+
+  // Top clients (Dashboard) — ranked list of the highest-value customers
+  // in the selected period, shown as a tab inside SalesAnalysisCard.
+  dashTopClients: "أفضل العملاء",
+  dashTopClientsEmpty: "لا توجد أوفرات كافية لعرض ترتيب العملاء في هذه الفترة",
+  dashTopClientsOffersCount: (n) => `${n} أوفر`,
+
+  // Sector breakdown (Dashboard) — side-by-side comparison of every
+  // sector's numbers, shown only when "كل القطاعات" is selected.
+  dashSectorBreakdown: "مقارنة القطاعات",
+  dashSectorBreakdownHint: "أداء كل قطاع خلال نفس الفترة المحددة فوق",
+  dashSectorBreakdownEmpty: "لا يوجد نشاط في أي قطاع خلال هذه الفترة",
+
+  // Stale (in-progress) offers surfaced directly on the Dashboard — same
+  // definition/source as the Alerts Center on the customer list screen
+  // (see useFilteredData.js), just scoped by the Dashboard's own sector
+  // filter for consistency with everything else on the page.
+  dashStaleOffersTitle: "أوفرات محتاجة متابعة",
+
+  // Unified Admin Audit Log (owner/reviewer only) — see AuditLog.jsx and
+  // src/hooks/useAuditLog.js.
+  auditLogTitle: "سجل النشاط",
+  auditLogBtn: "سجل النشاط",
+  auditLogHint: "كل التعديلات على بيانات العملاء والموردين في مكان واحد",
+  auditLogEmpty: "لا يوجد نشاط مسجل بعد",
+  auditLogLoadError: "حصل خطأ أثناء تحميل سجل النشاط",
+  auditLogFilterUser: "المستخدم",
+  auditLogFilterAction: "نوع العملية",
+  auditLogFilterEntity: "النوع",
+  auditLogFilterFrom: "من تاريخ",
+  auditLogFilterTo: "إلى تاريخ",
+  auditLogFilterAll: "الكل",
+  auditLogClearFilters: "مسح الفلاتر",
+  auditLogEntityCustomer: "عميل",
+  auditLogEntitySupplier: "مورد",
+  auditLogActions: {
+    create: "إنشاء",
+    update: "تعديل",
+    delete: "حذف",
+    restore: "استرجاع",
+    approve: "اعتماد تعديل",
+    rollback: "تراجع عن تعديل",
+  },
+  auditLogOldValue: "قديم",
+  auditLogNewValue: "جديد",
+  auditLogNoDetails: "بدون تفاصيل قيم",
+};

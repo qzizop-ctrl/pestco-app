@@ -1,0 +1,150 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # =========================
+      # Checkout
+      # =========================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # =========================
+      # Node.js
+      # =========================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      # =========================
+      # JDK
+      # =========================
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # =========================
+      # Install dependencies
+      # =========================
+      # Same reasoning as build-windows.yml's install step: a transient
+      # runner-network blip (ECONNRESET etc.) mid-download shouldn't fail
+      # the whole build, so retry the step itself a few times rather than
+      # relying only on npm's own registry-level retry config.
+      - name: Install dependencies
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: npm install
+        env:
+          npm_config_fetch_retries: 5
+          npm_config_fetch_retry_mintimeout: 20000
+          npm_config_fetch_retry_maxtimeout: 120000
+
+      # =========================
+      # Run tests
+      # =========================
+      # Blocking on purpose: this covers the business-logic tests
+      # (permissions, dashboard calculations, etc.) — a red test here
+      # means the build below would ship a real regression, not just a
+      # style nit, so it should stop the release.
+      - name: Run tests
+        run: npm run test
+
+      # =========================
+      # Build Web App
+      # =========================
+      - name: Build web app
+        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+      # =========================
+      # Add Android
+      # =========================
+      - name: Add Android platform
+        run: npx cap add android
+
+      # =========================
+      # Android Storage Access
+      # =========================
+      # Uses the same script as local dev (`npm run android:patch`) instead
+      # of duplicating the manifest/plugin patching inline here — see
+      # scripts/patch-android-storage.cjs.
+      - name: Setup Android storage access
+        run: npm run android:patch
+
+      # =========================
+      # Generate Icons
+      # =========================
+      - name: Generate Android app icons
+        run: npx @capacitor/assets generate --android
+
+      # =========================
+      # Capacitor Sync
+      # =========================
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      # =========================
+      # Debug keystore (persisted across runs)
+      # =========================
+      # Without this, Gradle auto-generates a brand-new random debug
+      # keystore on every fresh runner, so each build's APK is signed
+      # with a different certificate. Android then refuses to install a
+      # new APK over an already-installed one with a different signature
+      # (silently, or with "App not installed") — the old app just stays
+      # in place, which looks exactly like "the fix never took effect"
+      # even though the build was correct. Caching the same keystore
+      # file across runs keeps every build signed identically, so
+      # updates install over the previous version normally.
+      - name: Restore/cache debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore
+
+      # =========================
+      # Gradle permission
+      # =========================
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      # =========================
+      # Build APK
+      # =========================
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      # =========================
+      # GitHub Release
+      # =========================
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "Release v1.0.${{ github.run_number }}"
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
