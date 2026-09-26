@@ -16,7 +16,11 @@ describe("buildAuditEntry", () => {
     expect(entry.changes).toBeUndefined();
     expect(entry.changedBy).toBe("Ali Rep");
     expect(entry.changedById).toBe("uid123");
-    expect(typeof entry.at).toBe("string");
+    // `at` is deliberately NOT set here — it's stamped with
+    // serverTimestamp() by useAuditLog.js#logAudit right before the write,
+    // so firestore.rules can require at == request.time. See the comment
+    // on buildAuditEntry in auditLog.js.
+    expect(entry.at).toBeUndefined();
   });
 
   it("keeps real field diffs and strips metadata keys out of `changes`", () => {

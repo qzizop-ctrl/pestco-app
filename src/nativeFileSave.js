@@ -28,7 +28,7 @@ export async function saveFileNative(fileName, base64Data, mimeType = "applicati
         mimeType,
       });
       return { uri: result.uri, savedToDownloads: true };
-    } catch (e) {
+    } catch {
       // Falls through to the cache + share-sheet path below.
     }
   }
@@ -44,7 +44,7 @@ export async function saveFileNative(fileName, base64Data, mimeType = "applicati
 
   try {
     await Share.share({ title: fileName, url: written.uri });
-  } catch (e) {
+  } catch {
     // The file was still created in cache; this only means the share sheet
     // was dismissed or unavailable.
   }

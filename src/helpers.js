@@ -82,7 +82,7 @@ export function parseVisitDate(str) {
     const d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
     return isNaN(d) ? null : d;
   }
-  const dmy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (dmy) {
     const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
     return isNaN(d) ? null : d;
@@ -98,6 +98,85 @@ export function toISODate(str) {
   if (!d) return "";
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Today's date as yyyy-mm-dd in the user's LOCAL time zone.
+// Never build this from `new Date().toISOString().slice(0, 10)`: toISOString()
+// is UTC, so in Egypt (UTC+2/+3) anything logged between midnight and 2–3 AM
+// local time would be stamped with yesterday's date. Same convention as
+// toISODate() above, which already reads local getFullYear/getMonth/getDate.
+export function todayLocalISO(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function sameFieldValue(a, b) {
+  if (a === b) return true;
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+  return false;
+}
+
+// Returns only the fields of `data` whose value differs from `baseline`.
+// A missing/null/"" value on either side counts as empty; `defaults` (optional)
+// fills in a field the baseline object has never had.
+//
+// Why this exists: the edit form used to write the WHOLE document back on
+// save. If someone else pinned the customer, changed its stage, or
+// rescheduled a call while the form was open, saving silently put the
+// form's stale copy of those fields back. The right baseline is therefore
+// the form as it was when it was OPENED (not the live record, which may
+// already contain the other person's change): comparing against it yields
+// exactly the fields THIS person edited, and only those are sent.
+export function diffVisitFields(baseline, data, defaults = {}) {
+  const changed = {};
+  Object.keys(data).forEach((key) => {
+    const oldVal = baseline[key] !== undefined ? baseline[key] : defaults[key];
+    const newVal = data[key];
+    if (!sameFieldValue(oldVal ?? "", newVal ?? "")) changed[key] = newVal;
+  });
+  return changed;
+}
+
+// The fields to send when saving an EDIT of an existing customer: what the
+// person changed relative to the form as opened (see diffVisitFields), or
+// everything when there is no baseline. Rescheduling the follow-up call also
+// re-arms the in-app reminder — without resetting `notified`, a call that was
+// already reminded once would never fire again for its new date/time.
+export function buildVisitEditFields(baseline, data) {
+  if (!baseline) return { ...data };
+  const fields = diffVisitFields(baseline, data);
+  if (fields.callDateTime) fields.notified = false;
+  return fields;
+}
+
+// Splits Excel-import rows into ones worth writing and duplicates to skip.
+// A row is a duplicate when its phone (compared by corePhoneDigits, so
+// +20 / 0020 / leading-0 variants match) equals the phone of an existing
+// non-deleted record, or of an earlier row in the same file. Rows without a
+// phone are never treated as duplicates. This also makes re-running an
+// import that failed half way safe: rows already written are skipped.
+export function splitImportDuplicates(rows, existing, getPhone) {
+  const seen = new Set();
+  (existing || []).forEach((e) => {
+    if (e && !e.deleted) {
+      const key = corePhoneDigits(e.phone);
+      if (key) seen.add(key);
+    }
+  });
+  const kept = [];
+  let skipped = 0;
+  rows.forEach((row) => {
+    const key = corePhoneDigits(getPhone(row));
+    if (key && seen.has(key)) {
+      skipped += 1;
+      return;
+    }
+    if (key) seen.add(key);
+    kept.push(row);
+  });
+  return { kept, skipped };
 }
 
 // Normalizes an Excel cell (Date object or string) into a yyyy-mm-dd date string
@@ -136,7 +215,7 @@ export function buildActivity(type, text) {
 export function buildVisitEntry(date) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    date: date || new Date().toISOString().slice(0, 10),
+    date: date || todayLocalISO(),
     at: new Date().toISOString(),
   };
 }
@@ -151,8 +230,11 @@ export function getVisitEvents(visit) {
 }
 
 // Builds a unique offer entry for a customer's offers list
-export function buildOffer({ name, offerNumber, amount, offerDate, status, currency, supplierIds, supplierNames }) {
-  return {
+export function buildOffer({
+  name, offerNumber, amount, offerDate, status, currency, supplierIds, supplierNames,
+  rejectionReason, rejectionReasonId, rejectedBy, rejectedById, rejectedAt,
+}) {
+  const offer = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: name || "",
     offerNumber: offerNumber || "",
@@ -169,6 +251,20 @@ export function buildOffer({ name, offerNumber, amount, offerDate, status, curre
     supplierNames: Array.isArray(supplierNames) ? supplierNames : [],
     createdAt: new Date().toISOString(),
   };
+  // An offer created directly as "rejected" (the new-offer form allows it)
+  // carries the reason the rep just picked in the rejection modal. These
+  // fields used to be silently dropped here, so such offers were saved with
+  // no reason and fell out of the Dashboard's rejection-reasons report.
+  // Same field names updateOfferStatus stamps when rejecting an existing
+  // offer; only ever kept for status "rejected".
+  if (offer.status === "rejected") {
+    offer.rejectionReason = rejectionReason || "";
+    if (rejectionReasonId) offer.rejectionReasonId = rejectionReasonId;
+    if (rejectedBy) offer.rejectedBy = rejectedBy;
+    if (rejectedById) offer.rejectedById = rejectedById;
+    if (rejectedAt) offer.rejectedAt = rejectedAt;
+  }
+  return offer;
 }
 
 // Sums a list of offers per currency, e.g. { EGP: 12000, USD: 500 }.
@@ -251,7 +347,7 @@ export function fmtReminder(dt, locale) {
   try {
     const d = new Date(dt);
     return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
-  } catch (e) {
+  } catch {
     return dt;
   }
 }
@@ -272,7 +368,7 @@ export function fmtCreatedAt(ts, locale) {
   if (!d) return "";
   try {
     return d.toLocaleString(locale, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
-  } catch (e) {
+  } catch {
     return "";
   }
 }
@@ -281,7 +377,7 @@ export function fmtActivityDate(dt, locale) {
   try {
     const d = new Date(dt);
     return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
-  } catch (e) {
+  } catch {
     return dt;
   }
 }
@@ -302,7 +398,7 @@ export function fmtActivityDate(dt, locale) {
 // comma, period — nothing else) sidesteps ICU/locale behavior altogether
 // and guarantees the same output on every device. The `locale` param is
 // kept for call-site compatibility but no longer affects the output.
-export function fmtMoney(n, locale) {
+export function fmtMoney(n, _locale) {
   try {
     let num = Number(n);
     if (!isFinite(num)) num = 0;
@@ -313,7 +409,7 @@ export function fmtMoney(n, locale) {
     const [intPart, decPart] = num.toString().split(".");
     const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return (negative ? "-" : "") + withThousands + (decPart ? "." + decPart : "");
-  } catch (e) {
+  } catch {
     return String(n || 0);
   }
 }

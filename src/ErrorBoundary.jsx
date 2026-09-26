@@ -25,7 +25,7 @@ function getLang() {
   try {
     const saved = localStorage.getItem("pestco_lang");
     return saved === "en" ? "en" : "ar";
-  } catch (e) {
+  } catch {
     return "ar";
   }
 }

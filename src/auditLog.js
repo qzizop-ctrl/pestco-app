@@ -41,6 +41,17 @@ function cleanChanges(changes) {
 // meaningful diff (create/delete/restore/approve with nothing to show) omit
 // the field entirely rather than writing an empty object.
 //
+// Deliberately does NOT set `at` here: this file stays free of Firebase
+// (see the file-level comment above) so it's easy to unit-test, but the
+// audit log is read ordered by `at` and firestore.rules now requires
+// `at == request.time` on create — i.e. it has to be the server's own
+// clock, not a value computed on the client ahead of time. So the caller
+// (useAuditLog.js#logAudit) stamps `at: serverTimestamp()` itself right
+// before the write, once this function has built everything else. Writing
+// a client-computed timestamp here would either mismatch request.time and
+// get rejected, or (if it happened to match) reopen the exact
+// backdating/future-dating gap that rule exists to close.
+//
 // entityType: "customer" | "supplier"
 // action: "create" | "update" | "delete" | "restore" | "approve" | "rollback"
 export function buildAuditEntry({ entityType, entityId, entityName, action, changes, user, t }) {
@@ -53,6 +64,5 @@ export function buildAuditEntry({ entityType, entityId, entityName, action, chan
     ...(cleaned ? { changes: cleaned } : {}),
     changedBy: user?.displayName || user?.email || (t ? t.unknownUser : ""),
     changedById: user?.uid || null,
-    at: new Date().toISOString(),
   };
 }

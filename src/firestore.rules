@@ -11,9 +11,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // An email-based identity only counts once Firebase has verified it.
+    // email/password sign-up lets anyone register ANY address (verified or
+    // not) straight through the public Auth REST API, so without this
+    // check a stranger could register a teammate's address before the
+    // teammate does and inherit whatever access the owner had already
+    // granted to that address (members map / admins list). Every rule that
+    // resolves access by email goes through this function.
     function hasEmail() {
       return isSignedIn()
-        && request.auth.token.email != null;
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
     }
 
     function myEmail() {
@@ -39,9 +47,17 @@ service cloud.firestore {
         && myEmail() == get(/databases/$(database)/documents/config/admins).data.primaryEmail.lower();
     }
 
+    // A workspace owner is always an admin (this is a single-owner app:
+    // the client only ever provisions users/{uid} for accounts listed in
+    // config/admins). Requiring isReviewer() here means a random signed-in
+    // user can no longer create and fill their own users/{uid}/... tree —
+    // that would let anyone who sign up through the (public) API key burn
+    // this project's Firestore quota, and it was the only thing standing
+    // behind the client-side "waiting for approval" gate.
     function isOwner(ownerUid) {
       return isSignedIn()
-        && request.auth.uid == ownerUid;
+        && request.auth.uid == ownerUid
+        && isReviewer();
     }
 
     // The owner-maintained access document.
@@ -85,6 +101,21 @@ service cloud.firestore {
       return isOwner(ownerUid) || isReviewer();
     }
 
+    // True when this update sets a NEW last_change value (or adds one).
+    function isSettingLastChange() {
+      return request.resource.data.keys().hasAny(['last_change'])
+        && (!resource.data.keys().hasAny(['last_change'])
+            || request.resource.data.last_change != resource.data.last_change);
+    }
+
+    // The pending-change record must be attributed to whoever actually
+    // wrote it. Without this an editor could stamp someone else's uid on
+    // an edit (or hand-craft a last_change that looks like an approved
+    // owner edit) straight through the SDK.
+    function lastChangeIsMine() {
+      return request.resource.data.last_change.updatedById == request.auth.uid;
+    }
+
 
     // ============================================================
     // USERS / VISITS
@@ -94,12 +125,19 @@ service cloud.firestore {
 
       allow read: if canRead(ownerUid);
 
-      allow create: if canWrite(ownerUid);
+      allow create: if canWrite(ownerUid)
+        && (!request.resource.data.keys().hasAny(['last_change'])
+            || lastChangeIsMine());
 
       allow update: if canWrite(ownerUid)
-        && (!isClearingLastChange() || canClearLastChange(ownerUid));
+        && (!isClearingLastChange() || canClearLastChange(ownerUid))
+        && (!isSettingLastChange() || lastChangeIsMine());
 
-      allow delete: if canWrite(ownerUid);
+      // Editors "delete" by flagging the record (soft delete + last_change,
+      // see useCustomerRecords.js). Removing the document for good is the
+      // owner's approval step, so only the owner/admin may do it — previously
+      // any editor could call deleteDoc() directly and skip that review.
+      allow delete: if canClearLastChange(ownerUid);
     }
 
 
@@ -111,7 +149,10 @@ service cloud.firestore {
 
       allow read: if canRead(ownerUid);
 
-      allow create, update, delete: if canWrite(ownerUid);
+      allow create, update: if canWrite(ownerUid);
+
+      // Same as visits: permanent removal is the owner's approval step.
+      allow delete: if canClearLastChange(ownerUid);
     }
 
 
@@ -119,20 +160,38 @@ service cloud.firestore {
     // USERS / AUDIT LOG
     // ============================================================
     // Immutable history of customer/supplier create/update/delete/restore/
-    // approve/rollback operations — written by useAuditLog.js#logAudit
-    // right after each of those succeeds. Read is owner/reviewer only
+    // approve/rollback operations — written by useAuditLog.js (queueAudit,
+    // in the same batch as the record write, or logAudit right after it
+    // for approve/rollback/restore). Read is owner/reviewer only
     // (same as the Settings screen this is reached from), matching the
     // "مركزي للأدمن" (admin-only, central) shape it was asked for as.
     // Any editor who can write the underlying customer/supplier record can
     // also append its audit entry — canWrite(ownerUid) already covers
     // owner + reviewer + editor. Entries can never be edited or deleted by
     // any client once written, so the trail can't be quietly tampered with.
+    //
+    // Beyond the identity check (changedById must be the caller — already
+    // in place), this also now constrains the shape of what can be
+    // written, closing two gaps a compromised/malicious editor account
+    // could otherwise use to pollute a supposedly-trustworthy admin trail:
+    //   - `action` must be one of the actual known actions (matches
+    //     AUDIT_ACTION_IDS in src/domain.js) rather than an arbitrary
+    //     string, since entries can never be corrected afterward.
+    //   - `at` must equal request.time (the server's own clock) instead of
+    //     a client-supplied ISO string — the log is read ordered by `at`
+    //     (see useAuditLog.js), so a caller no longer gets to backdate or
+    //     future-date an entry to reorder it or push real entries out of
+    //     the most-recent-500 window the Audit Log screen loads.
     match /users/{ownerUid}/auditLog/{entryId} {
 
       allow read: if isOwner(ownerUid) || isReviewer();
 
       allow create: if canWrite(ownerUid)
-        && request.resource.data.changedById == request.auth.uid;
+        && request.resource.data.changedById == request.auth.uid
+        && request.resource.data.action in
+             ['create', 'update', 'delete', 'restore', 'approve', 'rollback']
+        && request.resource.data.entityType in ['customer', 'supplier']
+        && request.resource.data.at == request.time;
 
       allow update, delete: if false;
     }
@@ -142,9 +201,12 @@ service cloud.firestore {
     // ACCESS
     // ============================================================
 
+    // Only admins hand out access, so only admins touch these documents.
+    // (Members never read this doc: rules resolve their role server-side
+    // via roleOn(), and the client reads access_by_email instead.)
     match /access/{ownerUid} {
 
-      allow read, write: if isOwner(ownerUid) || isReviewer();
+      allow read, write: if isReviewer();
     }
 
 
@@ -164,7 +226,11 @@ service cloud.firestore {
       // same as `owners`, because a plain editor/viewer is only allowed to
       // read their OWN access_by_email doc, never the owner's access/
       // {ownerUid} doc directly.
-      allow create: if hasEmail()
+      // Writes are admin-only: the owner is always an admin, and letting
+      // any signed-in user write to ANY email's document allowed planting
+      // a phantom workspace in another user's workspace picker, or making
+      // an unapproved account look like an owner to the client.
+      allow create: if isReviewer()
         && request.resource.data.keys().hasOnly(['owners', 'dashboardAccess'])
         && request.resource.data.owners is map
         && request.resource.data.owners.keys().hasOnly([
@@ -175,7 +241,7 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(['dashboardAccess'])
             || request.resource.data.dashboardAccess is bool);
 
-      allow update: if hasEmail()
+      allow update: if isReviewer()
         && request.resource.data.keys().hasOnly(['owners', 'dashboardAccess'])
         && request.resource.data.owners
              .diff(resource.data.owners)
@@ -203,7 +269,15 @@ service cloud.firestore {
 
       allow read, delete: if isReviewer();
 
+      // email_verified is a claim Firebase itself sets on the ID token
+      // only after the user clicks the link in a real verification email
+      // — the client can't forge it. Requiring it here means a signup
+      // can't reach the reviewer's pending-accounts list (and so can't be
+      // approved) on an email the registrant doesn't actually control,
+      // closing the impersonation gap where anyone could type in a
+      // teammate's address and hope the reviewer approves on sight.
       allow create: if hasEmail()
+        && request.auth.token.email_verified == true
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['email', 'createdAt'])
         && request.resource.data.email == myEmail();
@@ -229,7 +303,17 @@ service cloud.firestore {
     // silently handing "primary" to the wrong account).
     match /config/admins {
 
-      allow read: if hasEmail();
+      // Admin-only. isReviewer() itself does get(/config/admins) to check
+      // membership — that internal get() is a rules-engine read (evaluated
+      // server-side against the real document) and is unrelated to this
+      // allow/deny decision, so this isn't circular: it's the standard
+      // "a document lists who may read it" pattern. Before this, any
+      // signed-in, verified user — admin or not — could read the full
+      // admin email list here (this was the fix noted as still owed in
+      // the README/CHANGELOG). A non-admin's read now simply fails, which
+      // the client already treats as "not an admin" (see the onSnapshot
+      // error handler in src/hooks/useAdminConfig.js).
+      allow read: if isReviewer();
 
       // The document itself has to already exist for isReviewer()/
       // isPrimaryAdmin() to resolve, so both the first `emails` entry and
