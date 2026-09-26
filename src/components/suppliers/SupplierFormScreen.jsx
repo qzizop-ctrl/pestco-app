@@ -11,7 +11,7 @@ import { TagChip } from "../Shared";
 import { FormSection, IconField } from "../CustomerForm";
 import PendingChangeBanner from "../PendingChangeBanner";
 import { PRIMARY, DANGER, LINE, SURFACE } from "../../theme";
-import { parseTagsCell } from "../../helpers";
+import { parseTagsCell } from "../../tagsAndLinks";
 import { db } from "../../firebase";
 import { doc } from "firebase/firestore";
 import { useLastChangeActions } from "../../hooks/useLastChangeActions";

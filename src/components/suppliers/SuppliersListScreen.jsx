@@ -12,7 +12,7 @@ import { TagChip, SkeletonList } from "../Shared";
 import SupplierFilterSheet from "../SupplierFilterSheet";
 import PendingEditsSheet from "../PendingEditsSheet";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD, GOLD_SOFT, LINE, SURFACE } from "../../theme";
-import { buildWhatsAppLink } from "../../helpers";
+import { buildWhatsAppLink } from "../../tagsAndLinks";
 import { openWhatsApp } from "../../nativeWhatsApp";
 import { useIncrementalReveal } from "../../hooks/useIncrementalReveal";
 
