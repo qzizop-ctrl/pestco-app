@@ -2,10 +2,12 @@
 // ============================================================================
 // Patches the Capacitor-generated android/ project (created fresh by
 // `npx cap add android`) with:
-//   - two native plugins: StorageAccess (save-to-Downloads / All-Files-Access
-//     permission) and WhatsApp (open a chat, preferring WhatsApp Business)
-//   - the AndroidManifest.xml permissions/queries/largeHeap those plugins need
+//   - two native plugins: StorageAccess (save-to-Downloads) and WhatsApp
+//     (open a chat, preferring WhatsApp Business)
+//   - the AndroidManifest.xml queries/largeHeap those plugins need
 //   - a MainActivity.java that registers both plugins
+//   - a real release signingConfig + minification on build.gradle, sourced
+//     from CI env vars (see patchBuildGradle() below and build-apk.yml)
 //
 // This has to run every time android/ is (re)generated, since `cap add
 // android` scaffolds a fresh, unpatched project each time — hence it being
@@ -35,17 +37,16 @@ const path = require("path");
 const ROOT = path.join(__dirname, "..");
 const PACKAGE_DIR = path.join(ROOT, "android", "app", "src", "main", "java", "com", "pestco", "app");
 const MANIFEST_PATH = path.join(ROOT, "android", "app", "src", "main", "AndroidManifest.xml");
+const BUILD_GRADLE_PATH = path.join(ROOT, "android", "app", "build.gradle");
 
 const STORAGE_ACCESS_PLUGIN_JAVA = `package com.pestco.app;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
-import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
-import android.provider.Settings;
 import android.util.Base64;
 
 import java.io.File;
@@ -57,6 +58,16 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+// NOTE: this plugin deliberately does NOT request
+// android.permission.MANAGE_EXTERNAL_STORAGE ("All files access"). That's
+// Android's most sensitive storage permission — Play Store review requires
+// a separate declaration/justification for it, and it grants far more than
+// this app needs. On Android 10+ (Build.VERSION_CODES.Q and up),
+// saveToDownloads() below writes through MediaStore, which needs no
+// storage permission at all. Only the legacy pre-Android-10 fallback path
+// touches the public Downloads folder directly, and that only ever needed
+// the (much narrower, and now largely deprecated) WRITE_EXTERNAL_STORAGE
+// permission — never MANAGE_EXTERNAL_STORAGE.
 @CapacitorPlugin(name = "StorageAccess")
 public class StorageAccessPlugin extends Plugin {
 
@@ -132,43 +143,6 @@ public class StorageAccessPlugin extends Plugin {
             call.reject("Failed to save file to Downloads", e);
         }
     }
-
-    @com.getcapacitor.PluginMethod
-    public void checkAllFilesAccess(PluginCall call) {
-        boolean granted;
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            granted = Environment.isExternalStorageManager();
-        } else {
-            granted = true;
-        }
-
-        JSObject ret = new JSObject();
-        ret.put("granted", granted);
-        call.resolve(ret);
-    }
-
-    @com.getcapacitor.PluginMethod
-    public void requestAllFilesAccess(PluginCall call) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                Intent intent = new Intent(
-                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
-                );
-                intent.setData(Uri.parse("package:" + getContext().getPackageName()));
-                getActivity().startActivity(intent);
-            }
-            call.resolve();
-        } catch (Exception e) {
-            try {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                getActivity().startActivity(intent);
-                call.resolve();
-            } catch (Exception e2) {
-                call.reject("Unable to open storage access settings", e2);
-            }
-        }
-    }
 }
 `;
 
@@ -236,6 +210,7 @@ public class WhatsAppPlugin extends Plugin {
 const MAIN_ACTIVITY_JAVA = `package com.pestco.app;
 
 import android.os.Bundle;
+import android.webkit.WebSettings;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -246,6 +221,21 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(StorageAccessPlugin.class);
         registerPlugin(WhatsAppPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // Capacitor serves the app's own files (index.html, its JS/CSS)
+        // from a fixed local URL on every launch. Android's WebView caches
+        // that like it would any website, so after installing an updated
+        // build over an older one, it could keep serving a stale cached
+        // copy of index.html instead of what's actually in the new APK —
+        // which is what force-clearing the app's storage from Android
+        // Settings used to fix. Clearing the WebView cache on every cold
+        // start, and telling it not to trust its cache for this session,
+        // makes every launch load whatever build is actually installed,
+        // without anyone ever having to clear it by hand again.
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().clearCache(true);
+            getBridge().getWebView().getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+        }
     }
 }
 `;
@@ -260,16 +250,17 @@ function patchManifest() {
 
   let manifest = fs.readFileSync(MANIFEST_PATH, "utf8");
 
-  // 1) MANAGE_EXTERNAL_STORAGE permission, right before <application ...>.
-  if (!manifest.includes("android.permission.MANAGE_EXTERNAL_STORAGE")) {
-    manifest = manifest.replace(
-      /(\s*)(<application)/,
-      `$1<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />$1$2`
-    );
-  }
+  // Deliberately does NOT add android.permission.MANAGE_EXTERNAL_STORAGE —
+  // see the note on StorageAccessPlugin above. If an older patched
+  // android/ project still has it from before, remove it too so re-running
+  // this script actually cleans it up instead of just never re-adding it.
+  manifest = manifest.replace(
+    /\s*<uses-permission android:name="android\.permission\.MANAGE_EXTERNAL_STORAGE"\s*\/>/,
+    ""
+  );
 
-  // 2) <queries> block for WhatsApp / WhatsApp Business package visibility,
-  // also right before <application ...>.
+  // 1) <queries> block for WhatsApp / WhatsApp Business package visibility,
+  // right before <application ...>.
   if (!manifest.includes("com.whatsapp.w4b")) {
     manifest = manifest.replace(
       /(\s*)(<application)/,
@@ -277,7 +268,7 @@ function patchManifest() {
     );
   }
 
-  // 3) android:largeHeap="true" on the <application> tag itself.
+  // 2) android:largeHeap="true" on the <application> tag itself.
   if (!manifest.includes('android:largeHeap="true"')) {
     manifest = manifest.replace(
       /<application/,
@@ -286,6 +277,71 @@ function patchManifest() {
   }
 
   fs.writeFileSync(MANIFEST_PATH, manifest);
+}
+
+// Adds a real release signingConfig (sourced from CI-provided environment
+// variables — see .github/workflows/build-apk.yml — never a committed
+// keystore/password) and turns minification back on for the release build
+// type. Capacitor's scaffolded build.gradle leaves both of those at their
+// unsigned/unminified defaults, which is what let build-apk.yml silently
+// ship `assembleDebug` output (debug-signed, debuggable, unminified) as a
+// public "release" for a long time — that half of the fix is the workflow
+// switching to `assembleRelease`; this half is what makes that command
+// actually produce something real instead of a build.gradle error.
+//
+// If the env vars aren't set (e.g. a local `assembleRelease` run with no
+// release keystore around), signingConfig is simply left off the release
+// buildType — Gradle then fails that build outright rather than silently
+// falling back to a debug-signed "release" APK.
+function patchBuildGradle() {
+  if (!fs.existsSync(BUILD_GRADLE_PATH)) {
+    console.error(
+      `android/app/build.gradle not found at ${BUILD_GRADLE_PATH} — run \`npx cap add android\` (or \`npm run android:add\`) first.`
+    );
+    process.exit(1);
+  }
+
+  let gradle = fs.readFileSync(BUILD_GRADLE_PATH, "utf8");
+
+  if (!gradle.includes("signingConfigs {")) {
+    gradle = gradle.replace(
+      /android\s*\{/,
+      `android {
+    signingConfigs {
+        release {
+            def ksPath = System.getenv("ANDROID_RELEASE_KEYSTORE_PATH")
+            if (ksPath != null && file(ksPath).exists()) {
+                storeFile file(ksPath)
+                storePassword System.getenv("ANDROID_RELEASE_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_RELEASE_KEY_PASSWORD")
+            }
+        }
+    }`
+    );
+  }
+
+  gradle = gradle.replace(
+    /(buildTypes\s*\{\s*release\s*\{)([\s\S]*?)(\n\s*\}\s*\n\s*\})/,
+    (fullMatch, head, body, tail) => {
+      let newBody = body;
+      if (!newBody.includes("signingConfig")) {
+        newBody += `
+            if (System.getenv("ANDROID_RELEASE_KEYSTORE_PATH") != null) {
+                signingConfig signingConfigs.release
+            }`;
+      }
+      newBody = newBody.includes("minifyEnabled")
+        ? newBody.replace(/minifyEnabled\s+false/, "minifyEnabled true")
+        : `${newBody}\n            minifyEnabled true`;
+      if (!newBody.includes("shrinkResources")) {
+        newBody += `\n            shrinkResources true`;
+      }
+      return `${head}${newBody}${tail}`;
+    }
+  );
+
+  fs.writeFileSync(BUILD_GRADLE_PATH, gradle);
 }
 
 function writeJavaFiles() {
@@ -297,8 +353,11 @@ function writeJavaFiles() {
 
 function main() {
   patchManifest();
+  patchBuildGradle();
   writeJavaFiles();
-  console.log("Patched AndroidManifest.xml and wrote StorageAccessPlugin.java, WhatsAppPlugin.java, MainActivity.java.");
+  console.log(
+    "Patched AndroidManifest.xml and build.gradle, and wrote StorageAccessPlugin.java, WhatsAppPlugin.java, MainActivity.java."
+  );
 }
 
 main();
