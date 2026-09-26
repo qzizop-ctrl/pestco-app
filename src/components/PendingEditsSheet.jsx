@@ -7,7 +7,7 @@
 
 import { Bell, ChevronRight } from "lucide-react";
 import { TEXT, MUTED, LINE, SURFACE, GOLD } from "../theme";
-import { fmtActivityDate } from "../helpers";
+import { fmtActivityDate } from "../dateUtils";
 
 export default function PendingEditsSheet({ t, open, onClose, pendingEdits, onOpenItem }) {
   if (!open) return null;

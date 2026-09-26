@@ -1,6 +1,7 @@
 import { Calendar, Users, FileText, Wallet, Percent, DollarSign } from "lucide-react";
 import { MUTED, LINE, SURFACE } from "../theme";
-import { fmtMoney, fmtUnifiedOrSplit } from "../helpers";
+import { fmtMoney } from "../formatMoney";
+import { fmtUnifiedOrSplit } from "../offerHelpers";
 import { pctChange } from "../dashboardCalculations";
 import StaleOffersCard from "./StaleOffersCard";
 import SummaryCard from "./SummaryCard";

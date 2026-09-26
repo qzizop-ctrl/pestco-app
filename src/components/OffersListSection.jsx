@@ -1,6 +1,7 @@
 import { offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, SURFACE } from "../theme";
 import { OFFER_STATUS_IDS } from "../domain";
-import { fmtMoney, fmtUnifiedOrSplit } from "../helpers";
+import { fmtMoney } from "../formatMoney";
+import { fmtUnifiedOrSplit } from "../offerHelpers";
 
 // The "Offers" section of the Dashboard: status filter tabs + the list of
 // offers in the selected period/status, plus the running total footer.

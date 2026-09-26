@@ -16,7 +16,7 @@ import { useMemo, useState } from "react";
 import { History, ChevronDown, ChevronUp, ChevronRight, Building2, Truck } from "lucide-react";
 import { TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE, PRIMARY, DANGER, SUCCESS } from "../theme";
 import { AUDIT_ACTION_IDS } from "../domain";
-import { fmtActivityDate } from "../helpers";
+import { fmtActivityDate } from "../dateUtils";
 import { useAuditLogFeed, AUDIT_LOG_LIMIT } from "../hooks/useAuditLog";
 import { SkeletonList } from "./Shared";
 

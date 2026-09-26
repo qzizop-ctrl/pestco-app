@@ -2,7 +2,7 @@ import { useState, Fragment } from "react";
 import { ChevronLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE, SUCCESS, DASH_NEGATIVE } from "../theme";
 import { STAGE_IDS, OFFER_STATUS_IDS } from "../domain";
-import { fmtUnifiedOrSplit } from "../helpers";
+import { fmtUnifiedOrSplit } from "../offerHelpers";
 import { pctChange, computeStageConversionRates } from "../dashboardCalculations";
 
 // Merges what used to be three separate full-width cards on the Dashboard

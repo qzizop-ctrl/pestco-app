@@ -1,5 +1,5 @@
 import { sectorColor, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
-import { fmtUnifiedOrSplit } from "../helpers";
+import { fmtUnifiedOrSplit } from "../offerHelpers";
 
 // `breakdown` is the array computeSectorBreakdown() returns — one entry
 // per SECTOR_IDS value, each already computed with the same

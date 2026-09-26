@@ -12,7 +12,10 @@ import {
 } from "lucide-react";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, DANGER, GOLD, GOLD_SOFT, LINE, SURFACE, STATUS_COLORS, stageColor } from "../theme";
 import { STALE_ACTIVITY_DAYS } from "../domain";
-import { visitStatus, fmtReminder, isStaleCustomer, buildWhatsAppLink } from "../helpers";
+import { visitStatus } from "../activityHelpers";
+import { isStaleCustomer } from "../customerDuplicates";
+import { fmtReminder } from "../dateUtils";
+import { buildWhatsAppLink } from "../tagsAndLinks";
 import { openWhatsApp } from "../nativeWhatsApp";
 
 // Loading placeholder shown instead of a plain "loading..." line while
