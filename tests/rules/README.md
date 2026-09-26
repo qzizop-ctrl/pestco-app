@@ -32,7 +32,14 @@ src/
   Dashboard.jsx         شاشة لوحة التحكم (رسوم بيانية، تحمّل lazy)
   AuthScreen.jsx        شاشة الدخول
   domain.js             الثوابت الأساسية (المراحل، القطاعات، حدود الاستيراد...)
-  helpers.js             دوال منطقية (تنسيق تواريخ/فلوس، كشف تكرار العملاء...)
+  dateUtils.js            تحليل/تنسيق التواريخ
+  formatMoney.js          تنسيق الأرقام المالية
+  offerHelpers.js         بناء العروض وإجمالياتها بالعملات
+  activityHelpers.js      سجل النشاط وحالة المكالمة/الزيارة
+  customerDuplicates.js   كشف تكرار العملاء والعملاء الخاملين
+  excelImportHelpers.js   مطابقة/تطبيع خلايا استيراد Excel
+  formHelpers.js          الفرق بين الفورم والداتا الأصلية عند الحفظ
+  tagsAndLinks.js         الوسوم (tags) وروابط واتساب
   firestore.rules        قواعد أمان قاعدة البيانات (المصدر الوحيد لها)
   hooks/                 كل منطق التطبيق (workspace، عملاء، موردين، عروض...) كـ hooks منفصلة
   components/            مكونات الواجهة (شاشات، قوائم، bottom sheets...)
