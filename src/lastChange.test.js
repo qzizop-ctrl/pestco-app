@@ -59,6 +59,17 @@ describe("computeRollbackFields", () => {
     expect(computeRollbackFields(lastChange)).toEqual({ companyName: "Old Co" });
   });
 
+  it("excludes `type` when falling back to last_change itself (pending-delete shape)", () => {
+    // A pending-delete's last_change has no `changes`/`details` sub-object
+    // (see useCustomerRecords.js's commitDeleteVisit), so this falls through
+    // to reading last_change itself — `type: "delete"` must not leak through
+    // as a field to restore.
+    const lastChange = {
+      type: "delete", updatedBy: "a@b.com", updatedById: "uid123", updatedAt: "2026-01-01",
+    };
+    expect(computeRollbackFields(lastChange)).toEqual({});
+  });
+
   it("returns an empty object for a missing or empty last_change", () => {
     expect(computeRollbackFields(null)).toEqual({});
     expect(computeRollbackFields(undefined)).toEqual({});

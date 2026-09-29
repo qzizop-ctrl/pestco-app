@@ -11,9 +11,17 @@
 // ============================================================================
 
 // Metadata keys that describe the change itself, never a field to restore.
+// Includes "type" (e.g. "delete" on a pending-delete's last_change, set by
+// useCustomerRecords.js/useSupplierRecords.js) — without it, calling this on
+// a pending-delete's last_change (which has no `changes`/`details` sub-object,
+// so it falls through to reading last_change itself) would return
+// `{ type: "delete" }` and a caller that then wrote that back would leave a
+// stray `type` field on the record. Today's UI never reaches this path (see
+// PendingChangeBanner.jsx: a pending delete only offers confirm/restore, no
+// rollback), but the pure function itself should never produce that field.
 export const IGNORED_LAST_CHANGE_KEYS = [
   "changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt",
-  "changes", "details",
+  "changes", "details", "type",
 ];
 
 // Given a visit's `last_change` object, returns the plain field -> value map
