@@ -1,0 +1,51 @@
+name: Pin xlsx integrity checksum
+
+# One-off manual step, same idea as "Sync package-lock.json": pins the
+# checksum of the CDN-installed `xlsx` package into xlsx-integrity.json
+# (see scripts/pin-xlsx-integrity.cjs and verify-xlsx-integrity.cjs) without
+# needing a local terminal. Trigger it from the Actions tab (or the GitHub
+# mobile app: repo -> Actions -> "Pin xlsx integrity checksum" -> Run
+# workflow) once now, and again whenever the xlsx version in package.json
+# changes.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to update"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  pin-xlsx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Pin xlsx integrity checksum
+        run: npm run xlsx:pin
+
+      - name: Commit xlsx-integrity.json
+        run: |
+          if git diff --quiet -- xlsx-integrity.json; then
+            echo "xlsx-integrity.json already up to date — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add xlsx-integrity.json
+          git commit -m "chore: pin xlsx integrity checksum"
+          git push origin HEAD:${{ inputs.branch }}
