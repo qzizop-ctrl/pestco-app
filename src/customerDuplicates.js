@@ -51,19 +51,44 @@ function normalizeCompanyName(name) {
     .join(" ");
 }
 
+// Per-record cache for the derived values below. Records coming from
+// useLiveData keep the SAME object between snapshots unless that document
+// changed (see snapshotCache.js), so keying a WeakMap on the object means only
+// edited records are re-derived; everything else is a lookup. Entries vanish
+// with the object, and a changed record is a new object, so nothing can go
+// stale. Records are never mutated in place (React state).
+function memoByObject(fn) {
+  const cache = new WeakMap();
+  return (obj) => {
+    if (obj === null || typeof obj !== "object") return fn(obj);
+    let hit = cache.get(obj);
+    if (hit === undefined) {
+      hit = fn(obj);
+      cache.set(obj, hit);
+    }
+    return hit;
+  };
+}
+
+const duplicateKeys = memoByObject((v) => ({
+  phone: corePhoneDigits(v.phone),
+  name: normalizeCompanyName(v.companyName),
+}));
+
 // Groups customers that share a phone number or a near-identical company
 // name, so they can be reviewed and merged/cleaned up in one place.
 export function findDuplicateGroups(visits) {
-  const phoneGroups = {};
-  const nameGroups = {};
+  // Null-prototype maps: a company literally named "constructor" or
+  // "__proto__" must not collide with Object.prototype members.
+  const phoneGroups = Object.create(null);
+  const nameGroups = Object.create(null);
 
   visits.forEach((v) => {
-    const phone = corePhoneDigits(v.phone);
+    const { phone, name } = duplicateKeys(v);
     if (phone) {
       if (!phoneGroups[phone]) phoneGroups[phone] = [];
       phoneGroups[phone].push(v);
     }
-    const name = normalizeCompanyName(v.companyName);
     if (name) {
       if (!nameGroups[name]) nameGroups[name] = [];
       nameGroups[name].push(v);
@@ -81,32 +106,30 @@ export function findDuplicateGroups(visits) {
 }
 
 // The most recent moment of any recorded activity on a customer: a visit,
-// a scheduled call, a logged activity entry, or the record's creation.
-function lastActivityDate(visit) {
-  const dates = [];
-  const vd = parseVisitDate(visit.visitDate);
-  if (vd) dates.push(vd);
-  if (visit.callDateTime) {
-    const cd = new Date(visit.callDateTime);
-    if (!isNaN(cd)) dates.push(cd);
-  }
+// a scheduled call, a logged activity entry, or the record's creation —
+// as epoch milliseconds, or null if there is none. Cached per record (it
+// parses every activity entry, and the list recomputes on every snapshot).
+const lastActivityMs = memoByObject((visit) => {
+  let max = null;
+  const take = (d) => {
+    if (!d) return;
+    const ms = d.getTime();
+    if (!isNaN(ms) && (max === null || ms > max)) max = ms;
+  };
+  take(parseVisitDate(visit.visitDate));
+  if (visit.callDateTime) take(new Date(visit.callDateTime));
   (visit.activityLog || []).forEach((entry) => {
-    if (entry.at) {
-      const d = new Date(entry.at);
-      if (!isNaN(d)) dates.push(d);
-    }
+    if (entry.at) take(new Date(entry.at));
   });
-  const created = toJsDate(visit.createdAt);
-  if (created) dates.push(created);
-  if (dates.length === 0) return null;
-  return new Date(Math.max(...dates.map((d) => d.getTime())));
-}
+  take(toJsDate(visit.createdAt));
+  return max;
+});
 
 // True if a customer has had no recorded activity in over `days` days
 // (or never had any activity at all).
 export function isStaleCustomer(visit, days) {
-  const last = lastActivityDate(visit);
-  if (!last) return true;
-  const diffDays = (Date.now() - last.getTime()) / (1000 * 3600 * 24);
+  const last = lastActivityMs(visit);
+  if (last === null) return true;
+  const diffDays = (Date.now() - last) / (1000 * 3600 * 24);
   return diffDays > days;
 }
