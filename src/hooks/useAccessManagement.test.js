@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook } from "@testing-library/react";
 
 // useAccessManagement is the "write side" of the permission system: it is
 // what actually changes who can see the workspace (grant/revoke, Dashboard
@@ -9,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // (in particular that one member's change never wipes another's settings).
 //
 // The hook contains no React state or effects (it only returns closures),
-// so it is called directly instead of through renderHook.
+// so a single renderHook call is enough to get its API.
 //
 // Firestore is mocked. `tx` stands in for a transaction: get() returns the
 // "server copy" of access/{ownerUid} (set per test), set() records what
@@ -55,7 +56,8 @@ function makeHook(overrides = {}) {
     reportError: vi.fn(),
     ...overrides,
   };
-  return { api: useAccessManagement(props), props };
+  const { result } = renderHook(() => useAccessManagement(props));
+  return { api: result.current, props };
 }
 
 const ACCESS = { path: "access/owner1" };
