@@ -1,3 +1,12 @@
+# عزل الأدمنز عن workspaces بعض + اختبارات الصلاحيات
+
+- `firestore.rules`: `canRead` / `canWrite` / `canClearLastChange` مبقوش بيشملوا `isReviewer()`. الأدمن بيقرا ويكتب في workspace هو مالكها أو اتمنحله فيها دور بس، والموافقة والحذف النهائي للمالك فقط. `access/{ownerUid}` و`auditLog` (قراءة) بقوا للمالك بس.
+- الكلاينت اتوافق مع القواعد: شاشة الـ audit log ورابطها للمالك فقط.
+- اختبارات قواعد جديدة (`admins are isolated...`) واختبارات وحدة جديدة لـ `useAccessResolution` و`useWorkspace`.
+- README: اتصلّح سطر `config/admins` (كان قديم، القواعد أصلًا بتمنع القراءة لغير الأدمن).
+
+---
+
 # تنضيف: أندرويد وويندوز فقط
 
 - مجلد `android/` بقى مرفوع في الريبو (اتولّد مرة واحدة)، واتمسح `scripts/patch-android-storage.cjs` وأوامر `android:add/patch/setup` و`bootstrap-android.yml`. `build-apk.yml` بيبني من المجلد المرفوع.
