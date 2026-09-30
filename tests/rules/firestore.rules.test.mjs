@@ -97,11 +97,21 @@ describe("only admins own workspaces (regression: any signed-in user could fill 
 });
 
 describe("roles", () => {
-  it("editor can create and edit customers", async () => {
+  it("editor can create (with a pending change) and edit customers through review", async () => {
     const fs = as(EDITOR);
-    await assertSucceeds(setDoc(doc(fs, `users/${ADMIN.uid}/visits/e1`), { companyName: "E" }));
-    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { notes: "hello" }));
+    await assertSucceeds(
+      setDoc(doc(fs, `users/${ADMIN.uid}/visits/e1`), { companyName: "E", last_change: PENDING })
+    );
+    await assertSucceeds(
+      updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { notes: "hello", last_change: PENDING })
+    );
+  });
+
+  it("editor can use the quick actions (offers, stage, pin) without a review", async () => {
+    const fs = as(EDITOR);
     await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { offers: arrayUnion({ id: "o1" }) }));
+    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { stage: "quote" }));
+    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { isPinned: true }));
   });
 
   it("viewer can read but not write", async () => {
@@ -164,6 +174,74 @@ describe("pending changes (last_change)", () => {
 
   it("editor can still make an update that leaves last_change untouched (pin, stage)", async () => {
     await assertSucceeds(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { isPinned: true }));
+  });
+});
+
+describe("review workflow can't be bypassed through the SDK (regression)", () => {
+  it("editor can't change reviewed fields without raising a last_change", async () => {
+    const fs = as(EDITOR);
+    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { companyName: "Hacked" }));
+    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { notes: "silent edit" }));
+    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { name: "Hacked" }));
+  });
+
+  it("editor can't un-delete or delete a record silently", async () => {
+    const fs = as(EDITOR);
+    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { deleted: true }));
+    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { deleted: false }));
+  });
+
+  it("editor can't edit reviewed fields on a record with someone else's pending change unless they raise their own", async () => {
+    await assertFails(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { notes: "x" }));
+    await assertSucceeds(
+      updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { notes: "x", last_change: PENDING })
+    );
+  });
+
+  it("a last_change can't be used to smuggle in createdAt or unknown fields", async () => {
+    const fs = as(EDITOR);
+    await assertFails(
+      updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { createdAt: new Date(0), last_change: PENDING })
+    );
+    await assertFails(
+      updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { isAdmin: true, last_change: PENDING })
+    );
+  });
+
+  it("an editor can't create a customer or supplier without a last_change", async () => {
+    const fs = as(EDITOR);
+    await assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/visits/nolc`), { companyName: "x" }));
+    await assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/suppliers/nolc`), { name: "x" }));
+  });
+
+  it("an editor's create can't carry unknown fields", async () => {
+    await assertFails(
+      setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/extra`), {
+        companyName: "x", last_change: PENDING, junk: "y",
+      })
+    );
+  });
+
+  it("suppliers: reviewed edit and pin work, arbitrary fields don't", async () => {
+    const fs = as(EDITOR);
+    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { name: "New", last_change: PENDING }));
+    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { isPinned: true }));
+    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { role: "x", last_change: PENDING }));
+  });
+
+  it("the admin is not restricted (import, tag rename, rollback)", async () => {
+    const fs = as(ADMIN);
+    await assertSucceeds(setDoc(doc(fs, `users/${ADMIN.uid}/visits/imp`), { companyName: "Imported", createdAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { tags: ["a"], companyName: "Renamed" }));
+  });
+
+  it("audit entries can't carry unknown fields", async () => {
+    await assertFails(
+      setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/junk`), {
+        entityType: "customer", entityId: "v2", entityName: "Beta", action: "update",
+        changedBy: "x", changedById: EDITOR.uid, at: serverTimestamp(), payload: "x".repeat(50),
+      })
+    );
   });
 });
 
