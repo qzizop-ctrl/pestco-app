@@ -276,6 +276,18 @@ function patchManifest() {
     );
   }
 
+  // 3) android:allowBackup="false". Capacitor's template leaves the default
+  // (true), which lets Android's cloud/adb backup copy the app's data
+  // directory — including the offline Firestore cache of every customer
+  // record — off the device. This app has no use for restore-from-backup
+  // (the data lives in Firestore), so turn it off. Idempotent: rewrites an
+  // existing value, adds the attribute if it isn't there.
+  if (/android:allowBackup="[^"]*"/.test(manifest)) {
+    manifest = manifest.replace(/android:allowBackup="[^"]*"/, 'android:allowBackup="false"');
+  } else {
+    manifest = manifest.replace(/<application/, `<application\n        android:allowBackup="false"`);
+  }
+
   fs.writeFileSync(MANIFEST_PATH, manifest);
 }
 
@@ -351,12 +363,35 @@ function writeJavaFiles() {
   fs.writeFileSync(path.join(PACKAGE_DIR, "MainActivity.java"), MAIN_ACTIVITY_JAVA);
 }
 
+// The release build runs R8 (minifyEnabled true, see patchBuildGradle).
+// StorageAccessPlugin / WhatsAppPlugin live in this app's own package, and
+// Capacitor calls their @PluginMethod methods by reflection — R8 can't see
+// those calls, so without keep rules it may strip or rename the methods and
+// the plugins would then work in debug builds but fail ("method not
+// implemented") only in the shipped release APK. Idempotent: appended once.
+function patchProguardRules() {
+  const proguardPath = path.join(ROOT, "android", "app", "proguard-rules.pro");
+  const marker = "# pestco: keep Capacitor plugins";
+  const current = fs.existsSync(proguardPath) ? fs.readFileSync(proguardPath, "utf8") : "";
+  if (current.includes(marker)) return;
+  const rules = `
+${marker}
+-keep class com.pestco.app.** { *; }
+-keep @com.getcapacitor.annotation.CapacitorPlugin class * {
+    @com.getcapacitor.PluginMethod public <methods>;
+}
+-keepattributes *Annotation*
+`;
+  fs.writeFileSync(proguardPath, current + rules);
+}
+
 function main() {
   patchManifest();
   patchBuildGradle();
+  patchProguardRules();
   writeJavaFiles();
   console.log(
-    "Patched AndroidManifest.xml and build.gradle, and wrote StorageAccessPlugin.java, WhatsAppPlugin.java, MainActivity.java."
+    "Patched AndroidManifest.xml, build.gradle and proguard-rules.pro, and wrote StorageAccessPlugin.java, WhatsAppPlugin.java, MainActivity.java."
   );
 }
 
