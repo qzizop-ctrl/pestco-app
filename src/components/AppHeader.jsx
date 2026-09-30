@@ -1,8 +1,7 @@
 import {
   ChevronRight, Languages, LogOut, Wifi, WifiOff, Moon, Sun,
 } from "lucide-react";
-import { signOut } from "firebase/auth";
-import { auth } from "../firebase";
+import { signOutAndClearLocalData } from "../firebase";
 import { BrandMark } from "./Shared";
 import { PRIMARY } from "../theme";
 
@@ -98,7 +97,7 @@ export default function AppHeader({
       </div>
       <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.22)" }} />
       <button
-        onClick={() => signOut(auth).catch(() => {})}
+        onClick={() => signOutAndClearLocalData()}
         className="btn-press flex items-center"
         style={{ color: "#fff" }}
         aria-label={t.signOut}
