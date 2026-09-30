@@ -3,6 +3,7 @@ import { collection, doc, updateDoc, writeBatch, serverTimestamp } from "firebas
 import { db } from "../firebase";
 import { emptySupplierForm } from "../domain";
 import { diffVisitFields } from "../formHelpers";
+import { mergeLastChange } from "../lastChange";
 import { parseTagsCell } from "../tagsAndLinks";
 import { queueAudit } from "./useAuditLog";
 import { useFlushOnHide } from "./useFlushOnHide";
@@ -125,7 +126,8 @@ export function useSupplierRecords({
         // overwritten.
         batch.update(doc(db, "users", ownerUid, "suppliers", activeSupplierId), {
           ...editFields,
-          last_change: lastChangeData,
+          // Keeps another editor's still-pending change reviewable too.
+          last_change: mergeLastChange(original?.last_change, lastChangeData),
         });
         queueAudit(batch, ownerUid, {
           entityType: "supplier", entityId: activeSupplierId, entityName: data.name,

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { mergeLastChange } from "../lastChange";
 import {
   collection, doc, updateDoc, writeBatch, serverTimestamp, arrayUnion,
 } from "firebase/firestore";
@@ -172,7 +173,9 @@ export function useCustomerRecords({
           // while it was open.
           const updatePayload = {
             ...editFields,
-            last_change: lastChangeData,
+            // Merged with a pending change another editor may have left, so
+            // the owner can still review / roll back both (see mergeLastChange).
+            last_change: mergeLastChange(original?.last_change, lastChangeData),
             updatedAt: new Date().toISOString()
           };
           if (original && original.visitDate !== data.visitDate && data.visitDate) {
