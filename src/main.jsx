@@ -2,7 +2,6 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import { initErrorReporting, reportException } from "./sentry";
-import { registerServiceWorker } from "./registerServiceWorker";
 
 initErrorReporting();
 
@@ -43,4 +42,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-registerServiceWorker();

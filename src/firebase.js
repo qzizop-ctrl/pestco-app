@@ -1,11 +1,10 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, initializeAuth, inMemoryPersistence, signOut } from "firebase/auth";
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  persistentSingleTabManager, memoryLocalCache, getFirestore,
+  initializeFirestore, persistentLocalCache, persistentSingleTabManager,
+  memoryLocalCache, getFirestore,
   terminate, clearIndexedDbPersistence,
 } from "firebase/firestore";
-import { Capacitor } from "@capacitor/core";
 
 /* ---------------------------------------------------------------
    إعدادات Firebase — بتتقرأ من متغيرات البيئة (Environment Variables)
@@ -93,20 +92,14 @@ export const auth = isElectron
 // IndexedDB disabled, some in-app WebViews). If it does, this falls back to
 // the plain in-memory client so the app still works — just back to
 // re-fetching everything over the network each time, the previous behavior.
-// Android (Capacitor) runs the whole app in a single WebView — there is
-// never more than one "tab" — so persistentMultipleTabManager()'s cross-tab
-// lock in IndexedDB buys nothing there and creates a real failure mode: if
-// Android kills the app process uncleanly (swipe-away, low memory, OS
-// backgrounding) instead of letting it shut down, the lock record can be
-// left stale. On the next launch Firestore waits to acquire a lock that
-// never gets released, so onSnapshot() in useLiveData.js never fires its
-// success OR error callback — the UI hangs on its loading skeletons forever
-// (visible as "0" counts that never resolve), and the only fix is clearing
-// app storage to wipe the stale lock out of IndexedDB. Using
-// persistentSingleTabManager() on native Android sidesteps that lock
-// entirely. Desktop browser/PWA use keeps the multi-tab manager, since a
-// person really can have the app open in more than one browser tab there.
-const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+// The app only ships as an Android (Capacitor) WebView and a Windows
+// (Electron) window, so there is never a second "tab". The single-tab
+// manager avoids the multi-tab manager's cross-tab lock in IndexedDB, which
+// Android can leave stale after an unclean process kill: Firestore then
+// waits forever for a lock that is never released, onSnapshot() in
+// useLiveData.js never fires, and the UI hangs on its loading skeletons
+// until app storage is cleared. (Side effect for `npm run dev`: keep the
+// dev server open in ONE browser tab.)
 
 function createFirestore() {
   if (isElectron) {
@@ -115,7 +108,7 @@ function createFirestore() {
   try {
     return initializeFirestore(app, {
       localCache: persistentLocalCache({
-        tabManager: isNativeAndroid ? persistentSingleTabManager() : persistentMultipleTabManager(),
+        tabManager: persistentSingleTabManager(),
       }),
     });
   } catch (e) {
