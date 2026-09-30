@@ -328,3 +328,65 @@ describe("admin list read (regression: any verified user could read the full adm
     await assertSucceeds(getDoc(doc(as(ADMIN), "config/admins")));
   });
 });
+
+// A second admin. Being in config/admins must NOT open another admin's
+// workspace: access is per workspace (owner, or a role the owner granted).
+describe("admins are isolated from each other's workspaces (regression: isReviewer() opened every workspace)", () => {
+  const ADMIN2 = { uid: "admin2-uid", email: "admin2@pest.test" };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const fs = ctx.firestore();
+      await setDoc(doc(fs, "config/admins"), {
+        emails: [ADMIN.email, ADMIN2.email], primaryEmail: ADMIN.email,
+      });
+      // ADMIN2 owns an empty workspace of their own, and was only granted
+      // 'viewer' on ADMIN's workspace.
+      await setDoc(doc(fs, `access/${ADMIN.uid}`), {
+        members: { [EDITOR.email]: "editor", [VIEWER.email]: "viewer", [ADMIN2.email]: "viewer" },
+        dashboardAccess: {},
+      });
+      await setDoc(doc(fs, `users/${ADMIN2.uid}/visits/w1`), { companyName: "Other", notes: "" });
+    });
+  });
+
+  it("an admin can't read another admin's workspace unless granted a role there", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `access/${ADMIN.uid}`), { members: {}, dashboardAccess: {} });
+    });
+    await assertFails(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)));
+    await assertFails(getDoc(doc(as(ADMIN), `users/${ADMIN2.uid}/visits/w1`)));
+  });
+
+  it("an admin with only a 'viewer' grant reads but can't write, approve or hard-delete", async () => {
+    await assertSucceeds(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)));
+    await assertFails(updateDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`), { isPinned: true }));
+    await assertFails(
+      updateDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v1`), { last_change: deleteField() })
+    );
+    await assertFails(deleteDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)));
+  });
+
+  it("an admin without a grant can't write into another admin's workspace", async () => {
+    await assertFails(
+      updateDoc(doc(as(ADMIN), `users/${ADMIN2.uid}/visits/w1`), { notes: "hijack" })
+    );
+    await assertFails(deleteDoc(doc(as(ADMIN), `users/${ADMIN2.uid}/visits/w1`)));
+  });
+
+  it("an admin can't rewrite or read another admin's access document", async () => {
+    await assertFails(
+      setDoc(doc(as(ADMIN2), `access/${ADMIN.uid}`), { members: { [ADMIN2.email]: "editor" } })
+    );
+    await assertFails(getDoc(doc(as(ADMIN2), `access/${ADMIN.uid}`)));
+  });
+
+  it("an admin can't read another admin's audit log", async () => {
+    await assertFails(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/auditLog/a1`)));
+  });
+
+  it("each admin still has full control of their own workspace", async () => {
+    await assertSucceeds(updateDoc(doc(as(ADMIN2), `users/${ADMIN2.uid}/visits/w1`), { notes: "mine" }));
+    await assertSucceeds(updateDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v2`), { notes: "mine" }));
+  });
+});
