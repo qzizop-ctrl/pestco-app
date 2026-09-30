@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PEST</string>
+    <string name="title_activity_main">PEST</string>
+    <string name="package_name">com.pestco.app</string>
+    <string name="custom_url_scheme">com.pestco.app</string>
+</resources>
