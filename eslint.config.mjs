@@ -103,21 +103,13 @@ export default [
     },
   },
 
-  // --- Firestore rules tests + service worker (public/sw.js) ---------------
+  // --- Firestore rules tests ------------------------------------------------
   {
     files: ["tests/**/*.{js,mjs}"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
       globals: { ...globals.node },
-    },
-  },
-  {
-    files: ["public/sw.js"],
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: "script",
-      globals: { ...globals.serviceworker },
     },
   },
 

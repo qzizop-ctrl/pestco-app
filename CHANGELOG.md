@@ -1,3 +1,11 @@
+# تنضيف: أندرويد وويندوز فقط
+
+- مجلد `android/` بقى مرفوع في الريبو (اتولّد مرة واحدة)، واتمسح `scripts/patch-android-storage.cjs` وأوامر `android:add/patch/setup` و`bootstrap-android.yml`. `build-apk.yml` بيبني من المجلد المرفوع.
+- اتشال الويب/PWA: `public/sw.js` و`manifest.webmanifest` و`registerServiceWorker.js` وروابطهم في `index.html`. `vite build` فاضل لأنه بيغذّي أندرويد وويندوز.
+- Firestore cache: `persistentSingleTabManager` لكل المنصات (مفيش تبويبات متعددة).
+
+---
+
 # مراجعة الأمان ودورة الموافقة
 
 ## قواعد Firestore (`src/firestore.rules`)
