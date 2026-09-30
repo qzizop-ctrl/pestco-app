@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeRollbackFields, IGNORED_LAST_CHANGE_KEYS } from "./lastChange";
+import { computeRollbackFields, mergeLastChange, IGNORED_LAST_CHANGE_KEYS } from "./lastChange";
 
 describe("computeRollbackFields", () => {
   it("restores old_value for fields shaped as { old_value }", () => {
@@ -78,5 +78,54 @@ describe("computeRollbackFields", () => {
 
   it("returns an empty object when changes is not an object (defensive)", () => {
     expect(computeRollbackFields({ changes: "not an object" })).toEqual({});
+  });
+});
+
+describe("computeRollbackFields hardening", () => {
+  it("only restores known editable fields (a crafted last_change can't touch createdAt/deleted/offers)", () => {
+    const lastChange = {
+      changes: {
+        companyName: { old_value: "Old Co" },
+        createdAt: { old_value: "1970" },
+        deleted: { old_value: true },
+        offers: { old_value: [] },
+        isAdmin: "yes",
+      },
+    };
+    expect(computeRollbackFields(lastChange)).toEqual({ companyName: "Old Co" });
+  });
+
+  it("turns the \"فارغ\" display placeholder back into an empty value", () => {
+    const lastChange = { changes: { notes: { old_value: "فارغ", new_value: "hi" } } };
+    expect(computeRollbackFields(lastChange)).toEqual({ notes: "" });
+  });
+});
+
+describe("mergeLastChange", () => {
+  const A = { updatedBy: "A", updatedById: "a", updatedAt: "t1" };
+  const B = { updatedBy: "B", updatedById: "b", updatedAt: "t2" };
+
+  it("returns next when there is nothing to merge with", () => {
+    const next = { ...B, changes: { notes: { old_value: "x", new_value: "y" } } };
+    expect(mergeLastChange(null, next)).toBe(next);
+    expect(mergeLastChange({ ...A, type: "delete" }, next)).toBe(next);
+  });
+
+  it("keeps the oldest old_value and newest new_value per field, and both editors' fields", () => {
+    const prev = { ...A, changes: { notes: { old_value: "v0", new_value: "v1" }, phone: { old_value: "1", new_value: "2" } } };
+    const next = { ...B, changes: { notes: { old_value: "v1", new_value: "v2" }, email: { old_value: "فارغ", new_value: "a@b" } } };
+    const out = mergeLastChange(prev, next);
+    expect(out.updatedById).toBe("b");
+    expect(out.changes).toEqual({
+      notes: { old_value: "v0", new_value: "v2" },
+      phone: { old_value: "1", new_value: "2" },
+      email: { old_value: "فارغ", new_value: "a@b" },
+    });
+  });
+
+  it("drops a field that was changed back to its original value", () => {
+    const prev = { ...A, changes: { notes: { old_value: "v0", new_value: "v1" } } };
+    const next = { ...B, changes: { notes: { old_value: "v1", new_value: "v0" } } };
+    expect(mergeLastChange(prev, next).changes).toBeUndefined();
   });
 });

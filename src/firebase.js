@@ -1,8 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, initializeAuth, inMemoryPersistence } from "firebase/auth";
+import { getAuth, initializeAuth, inMemoryPersistence, signOut } from "firebase/auth";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   persistentSingleTabManager, memoryLocalCache, getFirestore,
+  terminate, clearIndexedDbPersistence,
 } from "firebase/firestore";
 import { Capacitor } from "@capacitor/core";
 
@@ -124,3 +125,33 @@ function createFirestore() {
 }
 
 export const db = createFirestore();
+
+// Manual sign-out that also removes the customer data this device cached.
+// persistentLocalCache() (above) keeps every customer/supplier document in
+// IndexedDB so return visits are fast — but plain signOut() left all of it
+// on disk, readable through the browser's dev tools on a shared computer or
+// a handed-over phone. Firestore only allows clearing that cache while the
+// client is terminated, and a terminated client can't be reused, so the
+// page reloads afterwards (which also drops every in-memory copy). Clearing
+// can legitimately fail — e.g. the app is open in a second tab — so each
+// step is best-effort and the reload happens regardless; the user is
+// signed out either way. The in-memory (Electron) cache needs no clearing.
+export async function signOutAndClearLocalData() {
+  try {
+    await signOut(auth);
+  } catch (e) {
+    console.warn("Sign-out failed:", e);
+  }
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch (e) {
+    console.warn("Could not clear the local data cache:", e);
+  }
+  try {
+    localStorage.removeItem("pestco_selected_owner");
+  } catch {
+    // localStorage may be unavailable — safe to ignore.
+  }
+  window.location.reload();
+}

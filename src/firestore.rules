@@ -116,6 +116,57 @@ service cloud.firestore {
       return request.resource.data.last_change.updatedById == request.auth.uid;
     }
 
+    function hasLastChange() {
+      return request.resource.data.keys().hasAny(['last_change']);
+    }
+
+    // The review workflow (last_change + owner approval) used to be enforced
+    // only by the UI: an editor talking to the SDK directly could rewrite any
+    // field, or un-delete a record, without ever raising a pending change.
+    // These helpers close that. A NON-admin write must be one of:
+    //   - a "quick action" the UI applies without review (pin, stage, call
+    //     reminder, activity log, offers ...) touching ONLY the quick keys, or
+    //   - a reviewed edit: it sets a last_change naming the writer and touches
+    //     only the reviewed + quick keys (so createdAt / unknown fields can't
+    //     be rewritten or smuggled in under a harmless-looking last_change).
+    // Owner / reviewer accounts are not restricted here.
+    function changedKeysWithin(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    function visitQuickKeys() {
+      return ['stage', 'isPinned', 'visitDate', 'visitHistory', 'callDateTime',
+              'notified', 'activityLog', 'offers', 'updatedAt'];
+    }
+
+    function visitAllowedKeys() {
+      return ['stage', 'isPinned', 'visitDate', 'visitHistory', 'callDateTime',
+              'notified', 'activityLog', 'offers', 'updatedAt',
+              'companyName', 'contactName', 'sector', 'role', 'tags', 'phone',
+              'email', 'notes', 'deleted', 'last_change'];
+    }
+
+    function visitCreateKeys() {
+      return ['companyName', 'contactName', 'sector', 'role', 'stage', 'tags',
+              'phone', 'email', 'visitDate', 'notes', 'callDateTime', 'notified',
+              'isPinned', 'activityLog', 'offers', 'visitHistory', 'last_change',
+              'createdAt', 'updatedAt'];
+    }
+
+    function supplierQuickKeys() {
+      return ['isPinned', 'updatedAt'];
+    }
+
+    function supplierAllowedKeys() {
+      return ['isPinned', 'updatedAt', 'name', 'contactName', 'phone', 'email',
+              'category', 'tags', 'notes', 'deleted', 'last_change'];
+    }
+
+    function supplierCreateKeys() {
+      return ['name', 'contactName', 'phone', 'email', 'category', 'tags', 'notes',
+              'isPinned', 'last_change', 'createdAt', 'updatedAt'];
+    }
+
 
     // ============================================================
     // USERS / VISITS
@@ -126,12 +177,18 @@ service cloud.firestore {
       allow read: if canRead(ownerUid);
 
       allow create: if canWrite(ownerUid)
-        && (!request.resource.data.keys().hasAny(['last_change'])
-            || lastChangeIsMine());
+        && request.resource.data.companyName is string
+        && (!hasLastChange() || lastChangeIsMine())
+        && (canClearLastChange(ownerUid)
+            || (hasLastChange()
+                && request.resource.data.keys().hasOnly(visitCreateKeys())));
 
       allow update: if canWrite(ownerUid)
         && (!isClearingLastChange() || canClearLastChange(ownerUid))
-        && (!isSettingLastChange() || lastChangeIsMine());
+        && (!isSettingLastChange() || lastChangeIsMine())
+        && (canClearLastChange(ownerUid)
+            || (isSettingLastChange() && changedKeysWithin(visitAllowedKeys()))
+            || changedKeysWithin(visitQuickKeys()));
 
       // Editors "delete" by flagging the record (soft delete + last_change,
       // see useCustomerRecords.js). Removing the document for good is the
@@ -149,7 +206,19 @@ service cloud.firestore {
 
       allow read: if canRead(ownerUid);
 
-      allow create, update: if canWrite(ownerUid);
+      allow create: if canWrite(ownerUid)
+        && request.resource.data.name is string
+        && (!hasLastChange() || lastChangeIsMine())
+        && (canClearLastChange(ownerUid)
+            || (hasLastChange()
+                && request.resource.data.keys().hasOnly(supplierCreateKeys())));
+
+      allow update: if canWrite(ownerUid)
+        && (!isClearingLastChange() || canClearLastChange(ownerUid))
+        && (!isSettingLastChange() || lastChangeIsMine())
+        && (canClearLastChange(ownerUid)
+            || (isSettingLastChange() && changedKeysWithin(supplierAllowedKeys()))
+            || changedKeysWithin(supplierQuickKeys()));
 
       // Same as visits: permanent removal is the owner's approval step.
       allow delete: if canClearLastChange(ownerUid);
@@ -191,6 +260,11 @@ service cloud.firestore {
         && request.resource.data.action in
              ['create', 'update', 'delete', 'restore', 'approve', 'rollback']
         && request.resource.data.entityType in ['customer', 'supplier']
+        && request.resource.data.keys().hasOnly(
+             ['entityType', 'entityId', 'entityName', 'action', 'changes',
+              'changedBy', 'changedById', 'at'])
+        && request.resource.data.entityId is string
+        && request.resource.data.entityId.size() <= 128
         && request.resource.data.at == request.time;
 
       allow update, delete: if false;

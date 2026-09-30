@@ -31,5 +31,25 @@ export async function openWhatsApp(phone) {
     }
   }
 
-  window.location.href = `https://wa.me/${digits}`;
+  openInNewTab(`https://wa.me/${digits}`);
+}
+
+// Opens `url` OUTSIDE the app. This used to be `window.location.href = url`,
+// which replaces the app itself with the external page: in the Windows
+// (Electron) build there is no back button, so the window was stuck on
+// wa.me, and on the web/PWA every unsaved form state was lost. A
+// programmatic <a target="_blank"> click is used instead of window.open():
+// with "noopener" window.open() always returns null, so a blocked popup
+// can't be detected, whereas a click made during the user's tap works
+// everywhere. Electron routes it to the system browser (see electron.js,
+// setWindowOpenHandler); Capacitor hands it to the OS.
+function openInNewTab(url) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
