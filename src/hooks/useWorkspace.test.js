@@ -47,16 +47,22 @@ function access(overrides = {}) {
   };
 }
 
+// Mirrors the real startup order: permissions stay "loading" until auth has
+// answered, THEN resolve. (Rendering with permissionLoading already false
+// before the user exists is a state the app never has, and made the screen
+// guards fire on a signed-out first render.) A test that passes
+// permissionLoading: true keeps it loading for the whole test.
 function setup({ screen = "list", signedIn = true, ...accessOverrides } = {}) {
-  mocks.access = access(accessOverrides);
   const setScreen = vi.fn();
   const setActiveId = vi.fn();
+  mocks.access = access({ ...accessOverrides, permissionLoading: true });
   const hook = renderHook(
     (props) => useWorkspace({ setActiveId, setScreen, ...props }),
     { initialProps: { screen } }
   );
-  // Deliver the auth state the hook subscribed to.
   act(() => mocks.authCallback(signedIn ? USER : null));
+  mocks.access = access(accessOverrides);
+  hook.rerender({ screen });
   return { ...hook, setScreen, setActiveId };
 }
 
