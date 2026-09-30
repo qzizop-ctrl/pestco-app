@@ -1,0 +1,74 @@
+name: Bootstrap Android project (run once)
+
+# Generates the android/ folder ONE time and commits it to the repo, so it is
+# a normal, reviewable part of the code from then on (instead of being
+# regenerated and regex-patched on every build).
+#
+# How to run (works from a phone): GitHub -> Actions -> "Bootstrap Android
+# project (run once)" -> Run workflow.
+#
+# It refuses to run if android/ already exists, so it can't overwrite work.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Refuse to run if android/ already exists
+        run: |
+          if [ -d android ]; then
+            echo "android/ already exists in the repo - nothing to do."
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # cap add / cap sync need the web build folder (dist) to exist. No
+      # Firebase secrets are needed: dist is not committed.
+      - name: Build web app
+        run: npm run build
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      # Applies the manifest / gradle / proguard edits and writes the Java
+      # plugin files (StorageAccessPlugin, WhatsAppPlugin, MainActivity).
+      # After this run they are ordinary files in android/ and this script
+      # is no longer needed.
+      - name: Apply project patches
+        run: npm run android:patch
+
+      - name: Generate Android app icons
+        run: npx @capacitor/assets generate --android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Commit android/
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android
+          git status --short | head -50
+          git commit -m "Add Android platform (generated once, now committed)"
+          git push

@@ -122,22 +122,17 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
       # =========================
-      # Add Android
+      # Android project
       # =========================
-      - name: Add Android platform
-        run: npx cap add android
-
-      # =========================
-      # Android Storage Access
-      # =========================
-      - name: Setup Android storage access
-        run: npm run android:patch
-
-      # =========================
-      # Generate Icons
-      # =========================
-      - name: Generate Android app icons
-        run: npx @capacitor/assets generate --android
+      # android/ is committed to the repo (created once by the "Bootstrap
+      # Android project" workflow) - it is no longer regenerated and
+      # patched on every build.
+      - name: Check android/ is committed
+        run: |
+          if [ ! -d android ]; then
+            echo "android/ is missing. Run the 'Bootstrap Android project (run once)' workflow first."
+            exit 1
+          fi
 
       # =========================
       # Capacitor Sync
