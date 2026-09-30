@@ -128,7 +128,7 @@ export default function SettingsScreen({
         />
       )}
 
-      {(isOwnerAccount || isReviewer) && <AuditLogLink t={t} openAuditLog={openAuditLog} />}
+      {isOwnerAccount && <AuditLogLink t={t} openAuditLog={openAuditLog} />}
 
       {isReviewer && (
         <PendingSignupsCard

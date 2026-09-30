@@ -51,7 +51,8 @@ const ACTION_COLORS = {
 export default function AuditLogScreen({
   t, ownerUid, isOwnerAccount, isReviewer, openDetail, openEditSupplier, visits, suppliers,
 }) {
-  const enabled = isOwnerAccount || isReviewer;
+  // The rules only let the workspace owner read this log.
+  const enabled = isOwnerAccount;
   const { entries, loaded, error } = useAuditLogFeed({ ownerUid, enabled });
 
   const [entityFilter, setEntityFilter] = useState("all"); // all | customer | supplier

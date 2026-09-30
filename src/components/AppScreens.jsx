@@ -376,7 +376,7 @@ export default function AppScreens({
       />
     )}
 
-    {screen === "audit-log" && (isOwnerAccount || isReviewer) && (
+    {screen === "audit-log" && isOwnerAccount && (
       <AuditLogScreen
         t={t}
         ownerUid={ownerUid}
