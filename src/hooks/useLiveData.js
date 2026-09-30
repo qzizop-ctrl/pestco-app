@@ -18,6 +18,12 @@ import { applySnapshot } from "../snapshotCache";
 // pagination means splitting "what the list view renders" from "what
 // those three need", which is a larger redesign, not a drop-in change.
 // The warning below just flags when it's worth actually doing that.
+//
+// What IS done instead: the CPU cost of recomputing derived lists on every
+// snapshot was measured and cut (visitSort.js keys the sort once per record;
+// customerDuplicates.js caches per-record derived values in a WeakMap, which
+// works because applySnapshot keeps unchanged records referentially stable).
+// That does not reduce how many documents are read from Firestore.
 const LARGE_COLLECTION_WARNING_THRESHOLD = 2000;
 
 // Warned once per session per collection (this runs on every snapshot, so an

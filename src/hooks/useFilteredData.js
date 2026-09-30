@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { SECTOR_IDS, STALE_OFFER_DAYS, STALE_ACTIVITY_DAYS } from "../domain";
-import { visitStatus, getVisitEvents } from "../activityHelpers";
+import { getVisitEvents } from "../activityHelpers";
+import { sortVisitsForList } from "../visitSort";
 import { findDuplicateGroups, isStaleCustomer } from "../customerDuplicates";
 import { parseVisitDate, fmtReminder, toJsDate } from "../dateUtils";
 import { collectSupplierTags, collectSupplierCategories } from "../tagsAndLinks";
@@ -170,7 +171,8 @@ export function useFilteredData({
 
   const filtered = useMemo(
     () =>
-      visibleVisits
+      sortVisitsForList(
+        visibleVisits
         .filter((v) => sectorFilter === "all" || v.sector === sectorFilter)
         .filter((v) => stageFilter === "all" || v.stage === stageFilter)
         .filter((v) => tagFilter === "all" || (v.tags || []).includes(tagFilter))
@@ -199,19 +201,7 @@ export function useFilteredData({
             fmtReminder(v.callDateTime, t.locale).toLowerCase().includes(q)
           );
         })
-        .sort((a, b) => {
-          if (!!a.isPinned !== !!b.isPinned) return a.isPinned ? -1 : 1;
-          const sa = visitStatus(a);
-          const sb = visitStatus(b);
-          const order = { overdue: 0, today: 1, upcoming: 2, none: 3 };
-          if (order[sa] !== order[sb]) return order[sa] - order[sb];
-          const da = parseVisitDate(a.visitDate);
-          const db = parseVisitDate(b.visitDate);
-          if (!da && !db) return 0;
-          if (!da) return 1;
-          if (!db) return -1;
-          return db - da;
-        }),
+      ),
     [visibleVisits, sectorFilter, stageFilter, tagFilter, missingDataOnly, noVisitsOnly, dateAddedFilter, debouncedQuery, t.locale]
   );
 
