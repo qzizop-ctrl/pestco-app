@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
@@ -34,6 +34,18 @@ function initAutoUpdate() {
   autoUpdater.checkForUpdatesAndNotify().catch(() => {});
 }
 
+const EXTERNAL_PROTOCOLS = new Set(['https:', 'mailto:', 'tel:']);
+
+function openExternalSafely(url) {
+  try {
+    if (EXTERNAL_PROTOCOLS.has(new URL(url).protocol)) {
+      shell.openExternal(url);
+    }
+  } catch {
+    // Malformed URL — ignore.
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -45,7 +57,27 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      // The renderer only runs our own bundled web app and needs no Node
+      // or preload access, so the OS-level sandbox costs nothing.
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
+  });
+
+  // The app window must never navigate away from the bundled UI (that is
+  // what happened when a WhatsApp link replaced it with wa.me — no back
+  // button here). Anything external opens in the user's own browser/app,
+  // and only for a short allow-list of protocols; everything else is
+  // dropped.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalSafely(url);
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('file://')) return; // the app's own pages
+    event.preventDefault();
+    openExternalSafely(url);
   });
 
   // Remove the default menu bar (File/Edit/View...) for a cleaner app look
