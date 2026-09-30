@@ -73,15 +73,18 @@ service cloud.firestore {
         : null;
     }
 
+    // Access to a workspace is per-workspace: the owner of that uid, or a
+    // member the owner granted a role. Being in config/admins does NOT open
+    // other admins' workspaces — an admin who was only granted 'viewer' on
+    // someone else's workspace must stay read-only there, exactly like the
+    // client (myRole) already treats them.
     function canRead(ownerUid) {
       return isOwner(ownerUid)
-        || isReviewer()
         || roleOn(ownerUid) in ['editor', 'viewer'];
     }
 
     function canWrite(ownerUid) {
       return isOwner(ownerUid)
-        || isReviewer()
         || roleOn(ownerUid) == 'editor';
     }
 
@@ -97,8 +100,11 @@ service cloud.firestore {
         && !request.resource.data.keys().hasAny(['last_change']);
     }
 
+    // Approving / rolling back / permanently deleting is the workspace
+    // owner's step only (client: isOwnerAccount). Other admins get no
+    // special power over a workspace that isn't theirs.
     function canClearLastChange(ownerUid) {
-      return isOwner(ownerUid) || isReviewer();
+      return isOwner(ownerUid);
     }
 
     // True when this update sets a NEW last_change value (or adds one).
@@ -129,7 +135,7 @@ service cloud.firestore {
     //   - a reviewed edit: it sets a last_change naming the writer and touches
     //     only the reviewed + quick keys (so createdAt / unknown fields can't
     //     be rewritten or smuggled in under a harmless-looking last_change).
-    // Owner / reviewer accounts are not restricted here.
+    // Owner accounts are not restricted here.
     function changedKeysWithin(allowed) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
@@ -253,7 +259,7 @@ service cloud.firestore {
     //     the most-recent-500 window the Audit Log screen loads.
     match /users/{ownerUid}/auditLog/{entryId} {
 
-      allow read: if isOwner(ownerUid) || isReviewer();
+      allow read: if isOwner(ownerUid);
 
       allow create: if canWrite(ownerUid)
         && request.resource.data.changedById == request.auth.uid
@@ -280,7 +286,9 @@ service cloud.firestore {
     // via roleOn(), and the client reads access_by_email instead.)
     match /access/{ownerUid} {
 
-      allow read, write: if isReviewer();
+      // Only the workspace owner (an admin whose uid is the doc id) — one
+      // admin can no longer rewrite another admin's member list.
+      allow read, write: if isOwner(ownerUid);
     }
 
 
