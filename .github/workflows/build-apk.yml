@@ -72,9 +72,43 @@ jobs:
           if [[ -n "$VERSION" && ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Version must look like 1.2.3 (got '$VERSION')"; exit 1
           fi
+
+          # Android versionCode must be an integer that GROWS with every
+          # release (otherwise the APK can't be installed over the previous
+          # one). 1.2.3 -> 1002003 (major*1,000,000 + minor*1,000 + patch),
+          # so minor/patch must stay under 1000 and major under 2000 (the
+          # Play/Android ceiling is 2,100,000,000).
+          if [[ -n "$VERSION" ]]; then
+            IFS=. read -r MAJ MIN PAT <<< "$VERSION"
+            if (( 10#$MAJ >= 2000 || 10#$MIN >= 1000 || 10#$PAT >= 1000 )); then
+              echo "Version parts out of range (major < 2000, minor/patch < 1000): $VERSION"; exit 1
+            fi
+            VERSION_CODE=$(( 10#$MAJ * 1000000 + 10#$MIN * 1000 + 10#$PAT ))
+            VERSION_NAME="$VERSION"
+          else
+            # Untagged CI build: never published, only kept as an artifact.
+            # run_number is far below any release's versionCode on purpose, so
+            # a CI test build can't be mistaken for (or replace) a release.
+            VERSION_CODE="$GITHUB_RUN_NUMBER"
+            VERSION_NAME="0.0.0-build.$GITHUB_RUN_NUMBER"
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "Android versionCode=$VERSION_CODE versionName=$VERSION_NAME"
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
+
+      # A published release MUST be signed: an unsigned APK can't be installed,
+      # and installing a release signed with a different key later can't
+      # upgrade over it. Fail fast (before the slow steps) with a clear reason
+      # instead of publishing a broken file.
+      - name: Require signing keystore for releases
+        if: ${{ steps.meta.outputs.version != '' && env.HAS_RELEASE_KEYSTORE != 'true' }}
+        run: |
+          echo "::error::Publishing a release needs the ANDROID_RELEASE_KEYSTORE_B64 / _PASSWORD / KEY_ALIAS / KEY_PASSWORD repository secrets. Add them, or run without a version to only build."
+          exit 1
 
       # =========================
       # Install dependencies
@@ -95,6 +129,14 @@ jobs:
           npm_config_fetch_retries: 5
           npm_config_fetch_retry_mintimeout: 20000
           npm_config_fetch_retry_maxtimeout: 120000
+
+      # Same idea as build-windows.yml: the app reads its version from
+      # package.json (Sentry release tag), so stamp the release version
+      # BEFORE the web build. `npm ci` above is unaffected (it only checks
+      # dependencies against the lockfile, not the version field).
+      - name: Set package version
+        if: ${{ steps.meta.outputs.version != '' }}
+        run: npm pkg set version="${{ steps.meta.outputs.version }}"
 
       # =========================
       # Lint
@@ -124,13 +166,13 @@ jobs:
       # =========================
       # Android project
       # =========================
-      # android/ is committed to the repo (created once by the "Bootstrap
-      # Android project" workflow) - it is no longer regenerated and
-      # patched on every build.
+      # android/ is committed to the repo - it is not regenerated or patched
+      # on every build (the old "Bootstrap Android project" workflow and
+      # patch scripts were removed).
       - name: Check android/ is committed
         run: |
           if [ ! -d android ]; then
-            echo "android/ is missing. Run the 'Bootstrap Android project (run once)' workflow first."
+            echo "android/ is missing from the repository. Restore the committed android/ folder (no workflow generates it any more)."
             exit 1
           fi
 
@@ -162,10 +204,33 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease
         env:
+          ANDROID_VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+          ANDROID_VERSION_NAME: ${{ steps.meta.outputs.version_name }}
           ANDROID_RELEASE_KEYSTORE_PATH: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 != '' && format('{0}/release.keystore', runner.temp) || '' }}
           ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
           ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+
+      # =========================
+      # Locate the APK (fail loudly if there isn't one)
+      # =========================
+      # Without a keystore AGP names the output app-release-unsigned.apk, not
+      # app-release.apk, so a hard-coded path used to upload nothing (the
+      # upload step only warned) and the run still looked green.
+      - name: Locate APK
+        id: apk
+        shell: bash
+        run: |
+          APK=$(find android/app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
+          if [[ -z "$APK" ]]; then
+            echo "::error::Gradle finished but produced no APK in android/app/build/outputs/apk/release"
+            exit 1
+          fi
+          if [[ "$APK" == *unsigned* ]]; then
+            echo "::warning::This APK is UNSIGNED (no release keystore secrets set), so it can't be installed on a phone. Add the ANDROID_RELEASE_KEYSTORE_* secrets."
+          fi
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "Built: $APK"
 
       # =========================
       # Keep the APK (private, 14 days)
@@ -174,8 +239,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pest-android-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: ${{ steps.apk.outputs.path }}
           retention-days: 14
+          if-no-files-found: error
 
       # =========================
       # GitHub Release (tags / manual version only)
@@ -186,6 +252,7 @@ jobs:
         with:
           tag_name: "android-v${{ steps.meta.outputs.version }}"
           name: "Android v${{ steps.meta.outputs.version }}"
-          files: android/app/build/outputs/apk/release/app-release.apk
+          files: ${{ steps.apk.outputs.path }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
