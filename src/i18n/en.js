@@ -443,6 +443,7 @@ export const EN = {
     stage: "Pipeline stage",
     visitDate: "Visit date",
     callDateTime: "Reminder time",
+    offers: "Offers",
   },
   supplierChangeFieldLabels: {
     name: "Supplier name",

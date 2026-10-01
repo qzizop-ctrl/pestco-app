@@ -455,6 +455,7 @@ export const AR = {
     stage: "مرحلة المشروع",
     visitDate: "تاريخ الزيارة",
     callDateTime: "موعد التذكير",
+    offers: "العروض",
   },
   supplierChangeFieldLabels: {
     name: "اسم المورد",
