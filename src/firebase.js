@@ -84,9 +84,9 @@ export const auth = isElectron
 // a persistent on-disk cache of actual customer data would undermine that
 // same intent — the data would sit readable on disk even for someone who
 // never signs in. So Electron keeps the default in-memory-only cache
-// (cleared on every restart, exactly like today) and only the browser/PWA
-// and Android builds — which already keep the user signed in between
-// visits — get the faster/cheaper local cache.
+// (cleared on every restart, exactly like today) and only the Android
+// build (plus `npm run dev` in a browser) — which already keeps the user
+// signed in between visits — gets the faster/cheaper local cache.
 //
 // persistentLocalCache() can fail (Safari private browsing, a browser with
 // IndexedDB disabled, some in-app WebViews). If it does, this falls back to

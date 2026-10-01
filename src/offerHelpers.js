@@ -104,3 +104,23 @@ export function fmtUnifiedOrSplit(totals, t, exchangeRate, unifyCurrency, opts) 
   }
   return fmtOffersTotals(totals, t, opts);
 }
+
+// One-line, human-readable description of an offer for the audit trail, e.g.
+// "Spray contract · #A-12 · 2,500 $ · Rejected · (Price too high)". The audit
+// entry stores this as a snapshot string (same denormalized-snapshot idea as
+// supplierNames) so the log still reads correctly after the offer itself is
+// edited or removed. Returns "" for a missing offer.
+export function describeOfferForAudit(offer, t) {
+  if (!offer) return "";
+  const currency = (t.currencies && (t.currencies[offer.currency] || t.currencies.EGP)) || "";
+  const parts = [
+    offer.name || "—",
+    offer.offerNumber ? `#${offer.offerNumber}` : "",
+    `${fmtMoney(offer.amount || 0, t.locale)} ${currency}`.trim(),
+    (t.offerStatuses && t.offerStatuses[offer.status]) || offer.status || "",
+  ];
+  if (offer.status === "rejected" && offer.rejectionReason) {
+    parts.push(`(${offer.rejectionReason})`);
+  }
+  return parts.filter(Boolean).join(" · ");
+}
