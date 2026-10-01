@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+// Version comes from CI (.github/workflows/build-apk.yml sets these from the
+// android-vX.Y.Z tag). versionCode MUST increase on every release or Android
+// refuses to install the new APK over the old one. Local / ad-hoc builds
+// without the env vars fall back to 1 / "1.0".
+def appVersionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInteger()
+def appVersionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0"
+
 android {
     signingConfigs {
         release {
@@ -18,8 +25,8 @@ android {
         applicationId "com.pestco.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
