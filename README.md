@@ -118,6 +118,8 @@ npm run test:rules
 ### النشر التلقائي (GitHub Actions)
 - **أي push على `main`**: بيبني ويشغّل الـ lint والاختبارات ويحفظ الـ APK/المثبّت كـ artifact خاص (14 يوم). **مش بينشر Release.**
 - **Release أندرويد**: `git tag android-v1.2.0 && git push origin android-v1.2.0` (أو Run workflow واكتب الإصدار).
+  - **رقم الإصدار**: `versionName` = رقم الـ tag، و`versionCode` بيتحسب منه (`1.2.3` ← `1002003`، أي major×1,000,000 + minor×1,000 + patch) عشان أندرويد يقبل التحديث فوق النسخة القديمة. الـ minor/patch لازم يبقوا أقل من 1000 والـ major أقل من 2000. بناء من غير tag بياخد `versionCode` = رقم الـ run (صغير عن قصد، فمينفعش يتحسب نسخة رسمية).
+  - **التوقيع**: النشر (tag أو إدخال إصدار) **بيفشل بوضوح** لو secrets الـ keystore مش مضافة (`ANDROID_RELEASE_KEYSTORE_B64` و`_PASSWORD` و`ANDROID_RELEASE_KEY_ALIAS` و`ANDROID_RELEASE_KEY_PASSWORD`). بناء عادي من غيرها بيطلّع APK **غير موقّع** (مينفعش يتثبّت) مع تحذير، والـ workflow بيفشل لو ماطلعش أي APK.
 - **Release ويندوز**: `git tag win-v1.2.0 && git push origin win-v1.2.0`. رقم الإصدار بيتاخد من الـ tag ويتكتب في `package.json` وقت البناء، وelectron-builder بينشر Release `v1.2.0` ومعاه `latest.yml` اللي بيقراه الـ auto-updater. (قبل كده الإصدار كان ثابت 1.0.0 فالتحديث التلقائي عمره ما كان بيشوف نسخة أحدث.)
 - **توقيع نسخة ويندوز** (اختياري، بيشيل تحذير SmartScreen): ضيف secrets `WIN_CSC_LINK` (ملف .pfx بصيغة base64) و`WIN_CSC_KEY_PASSWORD`.
 - كل الـ workflows (الاختبارات، أندرويد، ويندوز، قواعد Firestore) بتستخدم `npm ci` عشان أي إصدار بيتبني بالظبط بالنسخ المثبّتة في `package-lock.json`. لو عدّلت `package.json`، شغّل `npm install` محليًا واعمل commit للـ lock، أو شغّل workflow «Sync package-lock.json» من تبويب Actions (من غير terminal) — `npm ci` هيفشل بوضوح لو الاتنين اتفرقوا.
