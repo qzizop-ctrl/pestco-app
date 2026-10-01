@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { doc, updateDoc, arrayUnion, runTransaction } from "firebase/firestore";
+import { doc, arrayUnion, runTransaction, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { buildActivity } from "../activityHelpers";
 import { todayLocalISO } from "../dateUtils";
-import { buildOffer } from "../offerHelpers";
+import { buildOffer, describeOfferForAudit } from "../offerHelpers";
+import { queueAudit } from "./useAuditLog";
 
 const emptyNewOffer = () => ({
   name: "", offerNumber: "", amount: "", currency: "EGP",
@@ -21,6 +22,52 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
   const [supplierPickerOpen, setSupplierPickerOpen] = useState(false);
   const [expandedOfferId, setExpandedOfferId] = useState(null);
 
+  // Audit entry for an offer change. Offers hold the money figures, and the
+  // Firestore rules let an editor change them as a "quick action" with no
+  // pending-review step, so the audit trail is what lets the owner see who
+  // added / re-statused / removed which offer, and what it looked like.
+  // Reuses entityType "customer" + action "update" (a field diff on the
+  // `offers` field) because firestore.rules only accepts those values — no
+  // rules redeploy is needed for this to work.
+  const queueOfferAudit = (writer, visit, before, after) =>
+    queueAudit(writer, ownerUid, {
+      entityType: "customer",
+      entityId: visit.id,
+      entityName: visit.companyName,
+      action: "update",
+      changes: {
+        offers: {
+          old_value: describeOfferForAudit(before, t),
+          new_value: after ? describeOfferForAudit(after, t) : "—",
+        },
+      },
+      user,
+      t,
+    });
+
+  // Read-modify-write of a visit's offers array inside a transaction, so a
+  // change to ONE offer is applied to the latest server copy. Writing back
+  // an array built from the (possibly stale) local snapshot would erase an
+  // offer another user added, or a status change they made, in the meantime.
+  // arrayUnion (used when adding) is already safe; this covers edit/remove.
+  //
+  // `auditOf(current, next)` returns { before, after } for the offer that
+  // actually changed in the SERVER copy (or null if nothing did, e.g. a
+  // teammate already removed it); the audit entry is written in the same
+  // transaction, so the change and its trail land together or not at all.
+  const mutateOffers = (visit, mutate, auditOf) =>
+    runTransaction(db, async (tx) => {
+      const ref = doc(db, "users", ownerUid, "visits", visit.id);
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error("visit-not-found");
+      const current = Array.isArray(snap.data().offers) ? snap.data().offers : [];
+      const next = mutate(current);
+      tx.update(ref, { offers: next });
+      const change = auditOf ? auditOf(current, next) : null;
+      if (change) queueOfferAudit(tx, visit, change.before, change.after);
+    });
+
+
   // Builds the extra rejection fields stamped onto an offer at the
   // moment it's rejected — reasonId feeds the Dashboard's rejection-
   // reasons report (grouped by id, not free text), rejectedBy/rejectedById
@@ -28,20 +75,6 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
   // date-range filter (the Dashboard's existing period picker) checks
   // instead of offerDate, since an offer can be rejected well after it
   // was first created.
-  // Read-modify-write of a visit's offers array inside a transaction, so a
-  // change to ONE offer is applied to the latest server copy. Writing back
-  // an array built from the (possibly stale) local snapshot would erase an
-  // offer another user added, or a status change they made, in the meantime.
-  // arrayUnion (used when adding) is already safe; this covers edit/remove.
-  const mutateOffers = (visitId, mutate) =>
-    runTransaction(db, async (tx) => {
-      const ref = doc(db, "users", ownerUid, "visits", visitId);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new Error("visit-not-found");
-      const current = Array.isArray(snap.data().offers) ? snap.data().offers : [];
-      tx.update(ref, { offers: mutate(current) });
-    });
-
   const rejectionFields = ({ reasonId, label }) => ({
     rejectionReason: label,
     rejectionReasonId: reasonId,
@@ -80,9 +113,14 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
     const saveOffer = async (offerToSave) => {
       const offer = buildOffer(offerToSave);
       try {
-        await updateDoc(doc(db, "users", ownerUid, "visits", visit.id), {
+        // The new offer and its audit entry go in ONE batch (both land or
+        // neither does), same pattern as customer create/update.
+        const batch = writeBatch(db);
+        batch.update(doc(db, "users", ownerUid, "visits", visit.id), {
           offers: arrayUnion(offer),
         });
+        queueOfferAudit(batch, visit, null, offer);
+        await batch.commit();
         await appendActivity(visit.id, buildActivity("offer", t.activityOfferAdded(offer.name)));
         setNewOffer(emptyNewOffer());
       } catch (e) {
@@ -114,8 +152,14 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
           : { rejectionReason: "", rejectionReasonId: "", rejectedBy: "", rejectedById: null, rejectedAt: "" }),
       };
       try {
-        await mutateOffers(visit.id, (current) =>
-          current.map((o) => (o.id === offer.id ? { ...o, ...patch } : o))
+        await mutateOffers(
+          visit,
+          (current) => current.map((o) => (o.id === offer.id ? { ...o, ...patch } : o)),
+          (current, next) => {
+            const before = current.find((o) => o.id === offer.id);
+            const after = next.find((o) => o.id === offer.id);
+            return before && after ? { before, after } : null;
+          }
         );
         await appendActivity(visit.id, buildActivity("offer", t.activityOfferStatus(offer.name, t.offerStatuses[newStatus] || newStatus)));
       } catch (e) {
@@ -144,7 +188,14 @@ export function useOfferActions({ ownerUid, user, canEdit, requireOnline, confir
     if (!requireOnline()) return;
     confirmAction(t.deleteOfferConfirm, async () => {
       try {
-        await mutateOffers(visit.id, (current) => current.filter((o) => o.id !== offer.id));
+        await mutateOffers(
+          visit,
+          (current) => current.filter((o) => o.id !== offer.id),
+          (current) => {
+            const before = current.find((o) => o.id === offer.id);
+            return before ? { before, after: null } : null;
+          }
+        );
       } catch (e) {
         reportSaveError(e);
       }

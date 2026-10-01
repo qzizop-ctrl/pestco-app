@@ -6,11 +6,17 @@ import { STRINGS } from "../i18n";
 // "server copy" of the visit (set per test), update() records what would be
 // written back. That lets these tests check the property the hook exists to
 // guarantee: a change to ONE offer is applied to the latest server copy of
-// the offers array, never to a stale local snapshot.
+// the offers array, never to a stale local snapshot. `batch` stands in for
+// the WriteBatch the add-offer path uses, and queueAudit is mocked so the
+// tests can pin down WHICH audit entry goes along with each offer change.
 const mocks = vi.hoisted(() => {
-  const tx = { get: vi.fn(), update: vi.fn() };
+  const tx = { get: vi.fn(), update: vi.fn(), set: vi.fn() };
+  const batch = { update: vi.fn(), set: vi.fn(), commit: vi.fn(() => Promise.resolve()) };
   return {
     tx,
+    batch,
+    writeBatch: vi.fn(() => batch),
+    queueAudit: vi.fn(),
     updateDoc: vi.fn(() => Promise.resolve()),
     doc: vi.fn((...args) => ({ path: args.slice(1).join("/") })),
     arrayUnion: vi.fn((...items) => ({ __arrayUnion: items })),
@@ -23,8 +29,10 @@ vi.mock("firebase/firestore", () => ({
   updateDoc: mocks.updateDoc,
   arrayUnion: mocks.arrayUnion,
   runTransaction: mocks.runTransaction,
+  writeBatch: mocks.writeBatch,
 }));
 vi.mock("../firebase", () => ({ db: {} }));
+vi.mock("./useAuditLog", () => ({ queueAudit: mocks.queueAudit }));
 
 import { useOfferActions } from "./useOfferActions";
 
@@ -70,11 +78,24 @@ describe("useOfferActions — addOffer", () => {
       await result.current.addOffer(visit);
     });
 
-    expect(mocks.updateDoc).toHaveBeenCalledTimes(1);
-    const [ref, payload] = mocks.updateDoc.mock.calls[0];
+    expect(mocks.batch.update).toHaveBeenCalledTimes(1);
+    const [ref, payload] = mocks.batch.update.mock.calls[0];
     expect(ref.path).toBe("users/owner1/visits/v1");
     const saved = payload.offers.__arrayUnion[0];
     expect(saved).toMatchObject({ name: "Spray contract", amount: 2500, currency: "USD", status: "pending" });
+    // The audit entry rides in the SAME batch as the offer write.
+    expect(mocks.queueAudit).toHaveBeenCalledWith(
+      mocks.batch,
+      "owner1",
+      expect.objectContaining({
+        entityType: "customer",
+        entityId: "v1",
+        entityName: "Acme",
+        action: "update",
+        changes: { offers: { old_value: "", new_value: expect.stringContaining("Spray contract") } },
+      })
+    );
+    expect(mocks.batch.commit).toHaveBeenCalledTimes(1);
     expect(props.appendActivity).toHaveBeenCalledWith(
       "v1",
       expect.objectContaining({ type: "offer", text: t.activityOfferAdded("Spray contract") })
@@ -91,7 +112,8 @@ describe("useOfferActions — addOffer", () => {
       await result.current.addOffer(visit);
     });
 
-    expect(mocks.updateDoc).not.toHaveBeenCalled();
+    expect(mocks.batch.commit).not.toHaveBeenCalled();
+    expect(mocks.queueAudit).not.toHaveBeenCalled();
     expect(props.appendActivity).not.toHaveBeenCalled();
   });
 
@@ -106,14 +128,14 @@ describe("useOfferActions — addOffer", () => {
 
     // Nothing is written until the person picks a reason.
     expect(props.setRejectionPrompt).toHaveBeenCalledTimes(1);
-    expect(mocks.updateDoc).not.toHaveBeenCalled();
+    expect(mocks.batch.commit).not.toHaveBeenCalled();
 
     const prompt = props.setRejectionPrompt.mock.calls[0][0];
     await act(async () => {
       await prompt.onConfirm({ reasonId: "price", label: "Price too high" });
     });
 
-    const saved = mocks.updateDoc.mock.calls[0][1].offers.__arrayUnion[0];
+    const saved = mocks.batch.update.mock.calls[0][1].offers.__arrayUnion[0];
     expect(saved.status).toBe("rejected");
     expect(saved.rejectionReason).toBe("Price too high");
     expect(saved.rejectionReasonId).toBe("price");
@@ -122,7 +144,7 @@ describe("useOfferActions — addOffer", () => {
   });
 
   it("reports the error instead of logging activity when the write fails", async () => {
-    mocks.updateDoc.mockRejectedValueOnce(new Error("permission-denied"));
+    mocks.batch.commit.mockRejectedValueOnce(new Error("permission-denied"));
     const props = makeProps();
     const { result } = renderHook(() => useOfferActions(props));
     fillNewOffer(result, { name: "Offer" });
@@ -159,6 +181,34 @@ describe("useOfferActions — updateOfferStatus", () => {
       "v1",
       expect.objectContaining({ type: "offer" })
     );
+    // Audited inside the same transaction, describing the SERVER copy's offer.
+    expect(mocks.queueAudit).toHaveBeenCalledTimes(1);
+    expect(mocks.queueAudit).toHaveBeenCalledWith(
+      mocks.tx,
+      "owner1",
+      expect.objectContaining({
+        entityId: "v1",
+        action: "update",
+        changes: {
+          offers: {
+            old_value: expect.stringContaining(t.offerStatuses.pending),
+            new_value: expect.stringContaining(t.offerStatuses.purchased),
+          },
+        },
+      })
+    );
+  });
+
+  it("writes no audit entry when a teammate already removed the offer", async () => {
+    mocks.tx.get.mockResolvedValue(serverCopy([theirs])); // `mine` is gone
+    const props = makeProps();
+    const { result } = renderHook(() => useOfferActions(props));
+
+    await act(async () => {
+      await result.current.updateOfferStatus(visit, mine, "purchased");
+    });
+
+    expect(mocks.queueAudit).not.toHaveBeenCalled();
   });
 
   it("does nothing when the status did not change", async () => {
@@ -246,6 +296,29 @@ describe("useOfferActions — deleteOffer", () => {
     expect(props.confirmAction).toHaveBeenCalledWith(t.deleteOfferConfirm, expect.any(Function), { danger: true });
     await waitFor(() => expect(mocks.tx.update).toHaveBeenCalledTimes(1));
     expect(mocks.tx.update.mock.calls[0][1].offers).toEqual([b]);
+    // The removed offer is recorded (old value = what it looked like).
+    expect(mocks.queueAudit).toHaveBeenCalledWith(
+      mocks.tx,
+      "owner1",
+      expect.objectContaining({
+        entityId: "v1",
+        action: "update",
+        changes: { offers: { old_value: expect.stringContaining("A"), new_value: "—" } },
+      })
+    );
+  });
+
+  it("writes no audit entry when the offer was already gone on the server", async () => {
+    mocks.tx.get.mockResolvedValue(serverCopy([{ id: "o2", name: "B" }]));
+    const props = makeProps();
+    const { result } = renderHook(() => useOfferActions(props));
+
+    act(() => {
+      result.current.deleteOffer(visit, { id: "o1", name: "A" });
+    });
+
+    await waitFor(() => expect(mocks.tx.update).toHaveBeenCalledTimes(1));
+    expect(mocks.queueAudit).not.toHaveBeenCalled();
   });
 
   it("does not delete when the confirmation is declined", () => {
@@ -270,8 +343,9 @@ describe("useOfferActions — permissions and connectivity", () => {
       result.current.deleteOffer(visit, { id: "o1" });
     });
 
-    expect(mocks.updateDoc).not.toHaveBeenCalled();
+    expect(mocks.batch.commit).not.toHaveBeenCalled();
     expect(mocks.runTransaction).not.toHaveBeenCalled();
+    expect(mocks.queueAudit).not.toHaveBeenCalled();
     expect(props.confirmAction).not.toHaveBeenCalled();
   });
 
@@ -285,7 +359,8 @@ describe("useOfferActions — permissions and connectivity", () => {
       await result.current.updateOfferStatus(visit, { id: "o1", status: "pending" }, "purchased");
     });
 
-    expect(mocks.updateDoc).not.toHaveBeenCalled();
+    expect(mocks.batch.commit).not.toHaveBeenCalled();
     expect(mocks.runTransaction).not.toHaveBeenCalled();
+    expect(mocks.queueAudit).not.toHaveBeenCalled();
   });
 });

@@ -20,7 +20,7 @@ import { REMINDER_POLL_MS, reminderKey, splitDueReminders } from "../reminderLog
 // 2. Native (Android only): keeps local notifications, which fire even with
 //    the app closed, in step with the live visit list so reminders set by a
 //    teammate reach this device too (see syncCallReminders in
-//    notifications.js). Web/PWA and Windows builds have no background
+//    notifications.js). The Windows build has no background
 //    delivery — that would need push notifications from a server.
 //
 // `visitsLoaded` must be true only once the first snapshot has arrived: the
