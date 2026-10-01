@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Paths the FileProvider may hand to other apps (share sheet). The app only
+  ever shares files it wrote itself into its own cache folder
+  (src/nativeFileSave.js: Filesystem.writeFile -> Directory.Cache -> Share),
+  so that is the only path exposed. The old template also listed
+  <external-path path="."/>, i.e. the whole shared storage, which nothing used.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
     <cache-path name="my_cache_images" path="." />
 </paths>
