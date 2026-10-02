@@ -2,15 +2,23 @@
 // suppliers tabs, since both need the exact same rename/merge UI, just
 // pointed at a different data source and rename function.
 import { X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { TEXT, MUTED, GOLD, LINE, SURFACE, SURFACE_SUBTLE } from "../../theme";
 
 export default function TagRow({ tag, count, isEditing, draft, onDraftChange, onStartEdit, onSave, onCancel, busy, t }) {
+  const inputRef = useRef(null);
+  // Focus the field when the person taps "edit" — a response to their own
+  // action, not focus stolen on page load (which is what autoFocus is flagged for).
+  useEffect(() => {
+    if (isEditing) inputRef.current?.focus();
+  }, [isEditing]);
+
   return (
     <div style={{ background: SURFACE_SUBTLE, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 10px" }}>
       {isEditing ? (
         <div className="flex items-center gap-2">
           <input
-            autoFocus
+            ref={inputRef}
             value={draft}
             onChange={(e) => onDraftChange(e.target.value)}
             style={{ flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 8, border: `1px solid ${LINE}`, background: SURFACE, color: TEXT }}
