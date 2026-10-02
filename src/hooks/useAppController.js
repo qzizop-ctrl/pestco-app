@@ -16,6 +16,7 @@ import { useCustomerRecords } from "./useCustomerRecords";
 import { useSupplierRecords } from "./useSupplierRecords";
 import { useOfferActions } from "./useOfferActions";
 import { useActivityLog, makeAppendActivity } from "./useActivityLog";
+import { useAuditLogPrune } from "./useAuditLog";
 import { useFilteredData } from "./useFilteredData";
 import { useDialogState } from "./useDialogState";
 import { useCustomerFilters } from "./useCustomerFilters";
@@ -142,6 +143,8 @@ export function useAppController() {
   };
 
   useReminders({ visits, user, ownerUid, canEdit, t, visitsLoaded: loaded && !visitsError });
+  // Owner-only: keeps the audit log trimmed to the newest 40 entries.
+  useAuditLogPrune({ ownerUid, enabled: !!isOwnerAccount && !!user });
 
   // Written to from customer CRUD, offers, and the activity feed itself —
   // kept as a plain helper (not a hook) since it only needs ownerUid. See

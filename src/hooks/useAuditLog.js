@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, doc, addDoc, query, orderBy, where, limit, onSnapshot, serverTimestamp, Timestamp } from "firebase/firestore";
+import { collection, doc, addDoc, query, orderBy, where, limit, onSnapshot, getDocsFromServer, writeBatch, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { buildAuditEntry } from "../auditLog";
 import { reportException } from "../sentry";
@@ -14,6 +14,10 @@ import { toJsDate } from "../dateUtils";
 // "from" date) reach further back than what's actually loaded, instead of
 // those filters silently returning an empty/incomplete result.
 export const AUDIT_LOG_LIMIT = 500;
+
+// Only the newest AUDIT_LOG_KEEP entries are kept; everything older is
+// deleted automatically (see pruneAuditLog / useAuditLogPrune below).
+export const AUDIT_LOG_KEEP = 40;
 
 // Fire-and-forget write of one audit-log entry to
 // users/{ownerUid}/auditLog. Deliberately never throws into the caller —
@@ -78,6 +82,53 @@ function sortNewestFirst(list) {
   });
 }
 
+// The two type-bounded queries described above. Inequality filters are
+// type-bounded in Firestore: `> Timestamp(0)` matches only Timestamp
+// values, `> ""` matches only strings.
+function auditQueries(ownerUid) {
+  const col = collection(db, "users", ownerUid, "auditLog");
+  return [
+    query(col, where("at", ">", Timestamp.fromMillis(0)), orderBy("at", "desc"), limit(AUDIT_LOG_LIMIT)),
+    query(col, where("at", ">", ""), orderBy("at", "desc"), limit(AUDIT_LOG_LIMIT)),
+  ];
+}
+
+// Deletes every entry past the newest AUDIT_LOG_KEEP. `sortedEntries` must
+// already be newest-first. Entries with no date yet (pending local writes)
+// sort first, so they are never the ones removed.
+async function deleteBeyondKeep(ownerUid, sortedEntries) {
+  const stale = sortedEntries.slice(AUDIT_LOG_KEEP);
+  for (let i = 0; i < stale.length; i += 400) {
+    const batch = writeBatch(db);
+    stale.slice(i, i + 400).forEach((e) => batch.delete(doc(db, "users", ownerUid, "auditLog", e.id)));
+    await batch.commit();
+  }
+}
+
+// One-shot cleanup (owner only — firestore.rules only lets the owner
+// delete audit entries). Reads from the server, not the local cache, so a
+// stale offline cache can never cause a wrong delete. If there is a large
+// backlog, each run removes up to AUDIT_LOG_LIMIT-AUDIT_LOG_KEEP entries
+// per format and the next run continues.
+export async function pruneAuditLog(ownerUid) {
+  if (!ownerUid) return;
+  try {
+    const snaps = await Promise.all(auditQueries(ownerUid).map((q) => getDocsFromServer(q)));
+    const all = sortNewestFirst(snaps.flatMap((snap) => snap.docs.map(normalizeEntry)));
+    await deleteBeyondKeep(ownerUid, all);
+  } catch (e) {
+    console.error("Audit log prune failed:", e.code, e.message);
+  }
+}
+
+// Runs the cleanup once when the owner's session is ready.
+export function useAuditLogPrune({ ownerUid, enabled }) {
+  useEffect(() => {
+    if (!enabled || !ownerUid) return;
+    pruneAuditLog(ownerUid);
+  }, [ownerUid, enabled]);
+}
+
 export function useAuditLogFeed({ ownerUid, enabled }) {
   const [entries, setEntries] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -93,20 +144,15 @@ export function useAuditLogFeed({ ownerUid, enabled }) {
     setLoaded(false);
     setError(null);
 
-    const col = collection(db, "users", ownerUid, "auditLog");
-    // Inequality filters are type-bounded in Firestore: `> Timestamp(0)`
-    // matches only Timestamp values, `> ""` matches only strings.
-    const queries = [
-      query(col, where("at", ">", Timestamp.fromMillis(0)), orderBy("at", "desc"), limit(AUDIT_LOG_LIMIT)),
-      query(col, where("at", ">", ""), orderBy("at", "desc"), limit(AUDIT_LOG_LIMIT)),
-    ];
+    const queries = auditQueries(ownerUid);
     const results = [[], []];
     const ready = [false, false];
     let failed = false;
 
     const publish = () => {
       if (!ready.every(Boolean)) return;
-      setEntries(sortNewestFirst(results.flat()).slice(0, AUDIT_LOG_LIMIT));
+      const sorted = sortNewestFirst(results.flat());
+      setEntries(sorted.slice(0, AUDIT_LOG_KEEP));
       setLoaded(true);
     };
 
@@ -117,6 +163,13 @@ export function useAuditLogFeed({ ownerUid, enabled }) {
           results[i] = snap.docs.map(normalizeEntry);
           ready[i] = true;
           publish();
+          // Auto-clean while the screen is open too: only from a
+          // server-confirmed snapshot, never from the local cache.
+          if (!snap.metadata.fromCache && ready.every(Boolean)) {
+            deleteBeyondKeep(ownerUid, sortNewestFirst(results.flat())).catch((e) =>
+              console.error("Audit log prune failed:", e.code, e.message)
+            );
+          }
         },
         (err) => {
           if (failed) return;
