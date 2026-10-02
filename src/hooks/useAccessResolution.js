@@ -22,6 +22,93 @@ const ACCESS_HARD_TIMEOUT_MS = 15000;
 // cache: terminating Firestore drops writes that haven't reached the server.
 const SELF_HEAL_WAIT_MS = 5000;
 
+// Carries out the sign-out half of a "this account has no workspace" outcome
+// (see resolveNoOwnersOutcome in workspaceAccess.js). The state resets stay in
+// applyAccessSnap; only the sign-out / self-heal side effects live here.
+function signOutForOutcome(outcome, { user, emailKey, setAuthError }) {
+  // Not the reviewer and not granted access by anyone: this account
+  // has nothing to do in the app (still pending review, dismissed,
+  // or revoked). Sign it back out and let AuthScreen show an
+  // "email not registered" style message instead of leaving it
+  // signed in with no data and no way forward.
+  if (outcome === "needs_email_verification") {
+    // firestore.rules now requires request.auth.token.email_verified
+    // on the signups/{uid} create, so an unverified account can
+    // never reach the reviewer's pending list no matter what this
+    // client does — closing the gap where anyone could register
+    // with an email they don't own and hope to get approved on
+    // sight. Tell the person to verify instead of the generic
+    // "no account" message, and don't bother attempting the
+    // doc write below; it would just fail.
+    setAuthError("unverified");
+    signOut(auth).catch((e) => {
+      console.error("Sign-out for unverified account failed:", e);
+      reportException(e, { context: "Sign-out for unverified account failed" });
+    });
+    return;
+  }
+
+  if (outcome === "sign_out_and_self_heal" || outcome === "sign_out_only") {
+    setAuthError(true);
+    // Wipe this device's cached customer / supplier data too: a member
+    // whose access was revoked (or who never had any) must not keep a
+    // readable copy of the workspace on their phone. The page reloads
+    // afterwards; the reason is carried across it (signOutReason.js).
+    const endSession = () =>
+      signOutAndClearLocalData({ reason: true }).catch((e) => {
+        console.error("Sign-out for unauthorized account failed:", e);
+        reportException(e, { context: "Sign-out for unauthorized account failed" });
+      });
+    if (outcome === "sign_out_and_self_heal") {
+      // Self-heal: AuthScreen's registration flow sends the
+      // verification email right after creating the account, but
+      // doesn't write signups/{uid} itself anymore (it can't yet —
+      // the account isn't verified at that point). Once the person
+      // verifies and logs back in, write it here instead, now that
+      // the rules' email_verified check can actually pass.
+      //
+      // Only within a reasonable window of account creation — this
+      // branch also covers a *dismissed* or *revoked* account
+      // trying to log back in, and those must NOT reappear in
+      // "pending review" every time they retry (that's what
+      // dismiss/revoke are for). A verified signup retrying after
+      // the original write failed and a months-old dismissed
+      // account both land here identically; creation-time recency
+      // is the only signal available to tell them apart. Widened
+      // from the original 15 minutes since verifying an email
+      // realistically takes longer than that.
+      //
+      // No existence check first — a plain user can't even read the
+      // signups collection (only a reviewer can, see
+      // firestore.rules), so a getDoc here would just fail
+      // silently and never reach the write. Firestore's own rules
+      // already make this safe without one: `allow create` covers
+      // a missing doc (the actual repair case), while `allow
+      // update: if false` rejects this exact same call as a no-op
+      // whenever the doc already exists and is correct.
+      const healWrite = setDoc(doc(db, "signups", user.uid), {
+        email: emailKey,
+        createdAt: serverTimestamp(),
+      }).catch((e) => {
+        // permission-denied here just means the doc already exists
+        // (the "update: if false" case above) — the expected,
+        // harmless outcome for a still-pending or already-repaired
+        // signup, not a real failure worth logging.
+        if (e.code !== "permission-denied") {
+          console.error("Signup self-heal failed:", e);
+          reportException(e, { context: "Signup self-heal failed" });
+        }
+      });
+      // Let the write reach the server (bounded) BEFORE the cache is
+      // wiped — terminating Firestore would otherwise discard it.
+      // healWrite and endSession both catch their own errors, so this never rejects.
+      void Promise.race([healWrite, new Promise((r) => setTimeout(r, SELF_HEAL_WAIT_MS))]).then(endSession);
+    } else {
+      void endSession(); // catches its own errors
+    }
+  }
+}
+
 export function useAccessResolution({ user, adminEmails, screen, setScreen, setActiveId }) {
   const [ownerUid, setOwnerUid] = useState(null);
   const [myRole, setMyRole] = useState(null);
@@ -209,87 +296,7 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
         setActiveId(null);
         setPermissionLoading(false);
 
-        // Not the reviewer and not granted access by anyone: this account
-        // has nothing to do in the app (still pending review, dismissed,
-        // or revoked). Sign it back out and let AuthScreen show an
-        // "email not registered" style message instead of leaving it
-        // signed in with no data and no way forward.
-        if (outcome === "needs_email_verification") {
-          // firestore.rules now requires request.auth.token.email_verified
-          // on the signups/{uid} create, so an unverified account can
-          // never reach the reviewer's pending list no matter what this
-          // client does — closing the gap where anyone could register
-          // with an email they don't own and hope to get approved on
-          // sight. Tell the person to verify instead of the generic
-          // "no account" message, and don't bother attempting the
-          // doc write below; it would just fail.
-          setAuthError("unverified");
-          signOut(auth).catch((e) => {
-            console.error("Sign-out for unverified account failed:", e);
-            reportException(e, { context: "Sign-out for unverified account failed" });
-          });
-          return;
-        }
-
-        if (outcome === "sign_out_and_self_heal" || outcome === "sign_out_only") {
-          setAuthError(true);
-          // Wipe this device's cached customer / supplier data too: a member
-          // whose access was revoked (or who never had any) must not keep a
-          // readable copy of the workspace on their phone. The page reloads
-          // afterwards; the reason is carried across it (signOutReason.js).
-          const endSession = () =>
-            signOutAndClearLocalData({ reason: true }).catch((e) => {
-              console.error("Sign-out for unauthorized account failed:", e);
-              reportException(e, { context: "Sign-out for unauthorized account failed" });
-            });
-          if (outcome === "sign_out_and_self_heal") {
-            // Self-heal: AuthScreen's registration flow sends the
-            // verification email right after creating the account, but
-            // doesn't write signups/{uid} itself anymore (it can't yet —
-            // the account isn't verified at that point). Once the person
-            // verifies and logs back in, write it here instead, now that
-            // the rules' email_verified check can actually pass.
-            //
-            // Only within a reasonable window of account creation — this
-            // branch also covers a *dismissed* or *revoked* account
-            // trying to log back in, and those must NOT reappear in
-            // "pending review" every time they retry (that's what
-            // dismiss/revoke are for). A verified signup retrying after
-            // the original write failed and a months-old dismissed
-            // account both land here identically; creation-time recency
-            // is the only signal available to tell them apart. Widened
-            // from the original 15 minutes since verifying an email
-            // realistically takes longer than that.
-            //
-            // No existence check first — a plain user can't even read the
-            // signups collection (only a reviewer can, see
-            // firestore.rules), so a getDoc here would just fail
-            // silently and never reach the write. Firestore's own rules
-            // already make this safe without one: `allow create` covers
-            // a missing doc (the actual repair case), while `allow
-            // update: if false` rejects this exact same call as a no-op
-            // whenever the doc already exists and is correct.
-            const healWrite = setDoc(doc(db, "signups", user.uid), {
-              email: emailKey,
-              createdAt: serverTimestamp(),
-            }).catch((e) => {
-              // permission-denied here just means the doc already exists
-              // (the "update: if false" case above) — the expected,
-              // harmless outcome for a still-pending or already-repaired
-              // signup, not a real failure worth logging.
-              if (e.code !== "permission-denied") {
-                console.error("Signup self-heal failed:", e);
-                reportException(e, { context: "Signup self-heal failed" });
-              }
-            });
-            // Let the write reach the server (bounded) BEFORE the cache is
-            // wiped — terminating Firestore would otherwise discard it.
-            // healWrite and endSession both catch their own errors, so this never rejects.
-            void Promise.race([healWrite, new Promise((r) => setTimeout(r, SELF_HEAL_WAIT_MS))]).then(endSession);
-          } else {
-            void endSession(); // catches its own errors
-          }
-        }
+        signOutForOutcome(outcome, { user, emailKey, setAuthError });
         // outcome === "reviewer_no_owners": nothing further to do — a
         // reviewer with no resolved workspace still stays signed in.
         return;

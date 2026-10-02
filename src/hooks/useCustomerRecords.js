@@ -34,6 +34,138 @@ function toFormData(f) {
   return { ...rest, tags: parseTagsCell(f.tagsInput) };
 }
 
+// ---------------------------------------------------------------------------
+// Pieces of saveForm, pulled out so each one can be read (and reasoned about)
+// on its own instead of living in one 150-line closure.
+// ---------------------------------------------------------------------------
+
+const AUDIT_IGNORE_KEYS = new Set(["createdAt", "updatedAt", "notified"]);
+
+// تجهيز كائن التتبع (Audit Log) — بيقارن كل حقل في البيانات الجديدة
+// بالسجل الأصلي الموجود فعليًا في Firestore (visits state)، عشان
+// القيم القديمة في last_change.changes تبقى حقيقية، مش "فارغ" لكل حقل.
+function buildAuditChanges(original, editFields, data) {
+  const changes = {};
+  if (!original) return changes;
+
+  Object.keys(editFields).forEach((key) => {
+    if (AUDIT_IGNORE_KEYS.has(key)) return;
+    // Tags are arrays: they used to be skipped here, so a tag edit never
+    // reached the owner's review (or the audit trail) and could not be
+    // rolled back. Compared as lists, ignoring order.
+    if (key === "tags") {
+      if (tagsChanged(original.tags, data.tags)) {
+        changes.tags = { old_value: original.tags || [], new_value: data.tags };
+      }
+      return;
+    }
+    const oldVal = original[key];
+    const newVal = data[key];
+    if ((oldVal ?? "") !== (newVal ?? "")) {
+      changes[key] = { old_value: oldVal ?? "فارغ", new_value: newVal ?? "فارغ" };
+    }
+  });
+  return changes;
+}
+
+// A changed visit date also logs a visit-history entry (so the Dashboard
+// counts it). The entry's id travels with last_change so the owner's
+// rollback can remove exactly that entry — otherwise rolling back restored
+// the date but left the cancelled visit counted.
+function buildChangedVisitEntry(id, original, data, editFields) {
+  const dateChanged = id && original && original.visitDate !== data.visitDate
+    && data.visitDate && Object.hasOwn(editFields, "visitDate");
+  return dateChanged ? buildVisitEntry(data.visitDate) : null;
+}
+
+function buildLastChangeData(user, changes, newVisitEntry) {
+  return {
+    updatedBy: user?.displayName || user?.email || "موظف غير معروف",
+    updatedById: user?.uid || null,
+    updatedAt: new Date().toISOString(),
+    ...(Object.keys(changes).length > 0 ? { changes } : {}),
+    ...(newVisitEntry ? { addedVisitEntryIds: [newVisitEntry.id] } : {}),
+  };
+}
+
+// The write for one save: an update of just the changed fields, or a new
+// record — each with its audit entry queued on the same batch.
+function buildSaveBatch({ id, ownerUid, user, t, data, editFields, original, changes, lastChangeData, newVisitEntry }) {
+  const batch = writeBatch(db);
+
+  if (id) {
+    // Send only the fields this person actually changed since opening
+    // the form — writing the whole form back would overwrite a
+    // concurrent pin / stage change / reschedule made by someone else
+    // while it was open.
+    const updatePayload = {
+      ...editFields,
+      // Merged with a pending change another editor may have left, so
+      // the owner can still review / roll back both (see mergeLastChange).
+      last_change: mergeLastChange(original?.last_change, lastChangeData),
+      updatedAt: new Date().toISOString(),
+    };
+    if (newVisitEntry) {
+      updatePayload.visitHistory = arrayUnion(newVisitEntry);
+    }
+    batch.update(doc(db, "users", ownerUid, "visits", id), updatePayload);
+    queueAudit(batch, ownerUid, {
+      entityType: "customer", entityId: id, entityName: data.companyName,
+      action: "update", changes, user, t,
+    });
+    return { batch, savedId: id };
+  }
+
+  const ref = doc(collection(db, "users", ownerUid, "visits"));
+  batch.set(ref, {
+    ...data,
+    last_change: lastChangeData,
+    activityLog: [],
+    offers: [],
+    visitHistory: data.visitDate ? [buildVisitEntry(data.visitDate)] : [],
+    createdAt: serverTimestamp(),
+    updatedAt: new Date().toISOString(),
+  });
+  queueAudit(batch, ownerUid, {
+    entityType: "customer", entityId: ref.id, entityName: data.companyName,
+    action: "create", user, t,
+  });
+  return { batch, savedId: ref.id };
+}
+
+// Timeline entries written after the record itself is saved.
+async function appendSaveActivities({ id, savedId, original, data, t, appendActivity }) {
+  if (!id) {
+    await appendActivity(savedId, buildActivity("created", t.activityCreated));
+    return;
+  }
+  if (original && original.stage !== data.stage) {
+    await appendActivity(
+      savedId,
+      buildActivity(
+        "stage",
+        data.stage ? t.activityStageChanged(t.stages[data.stage] || data.stage) : t.activityStageCleared
+      )
+    );
+  }
+  if (original && original.callDateTime !== data.callDateTime && data.callDateTime) {
+    await appendActivity(savedId, buildActivity("call", t.activityCallSet(fmtReminder(data.callDateTime, t.locale))));
+  }
+}
+
+async function syncCallReminder(savedId, data, t) {
+  if (!data.callDateTime) {
+    await cancelCallReminder(savedId);
+    return;
+  }
+  await scheduleCallReminder(
+    savedId,
+    data.callDateTime,
+    `${t.reminderTitle} ${data.companyName}`,
+    t.reminderBody(data.contactName)
+  );
+}
+
 export function useCustomerRecords({
   ownerUid, user, visits, canEdit, requireOnline, confirmAction, reportSaveError,
   appendActivity, t, lang, setScreen, resetDetailPanels, setIsSaving,
@@ -123,13 +255,10 @@ export function useCustomerRecords({
     if (!validate() || !user || !ownerUid) return;
 
     const runSave = async () => {
-      const { id, tagsInput } = form;
-      const rest = omitKeys(form, FORM_ONLY_KEYS);
-      const data = { ...rest, tags: parseTagsCell(tagsInput) };
+      const { id } = form;
+      const data = toFormData(form);
       const original = id ? visits.find((v) => v.id === id) : null;
-      const baselineForm = id && editBaselineRef.current && editBaselineRef.current.id === id
-        ? editBaselineRef.current
-        : null;
+      const baselineForm = id && editBaselineRef.current?.id === id ? editBaselineRef.current : null;
       const baselineData = baselineForm ? toFormData(baselineForm) : null;
       // What this person actually changed (whole form when creating / when
       // there is no baseline). Both the write and the audit trail use it, so
@@ -137,122 +266,21 @@ export function useCustomerRecords({
       // written nor recorded as if this person had edited it.
       const editFields = id ? buildVisitEditFields(baselineData, data) : data;
 
-      // تجهيز كائن التتبع (Audit Log) — بيقارن كل حقل في البيانات الجديدة
-      // بالسجل الأصلي الموجود فعليًا في Firestore (visits state)، عشان
-      // القيم القديمة في last_change.changes تبقى حقيقية، مش "فارغ" لكل حقل.
-      const auditIgnoreKeys = new Set(["createdAt", "updatedAt", "notified"]);
-      const changes = {};
-      if (original) {
-        Object.keys(editFields).forEach((key) => {
-          if (auditIgnoreKeys.has(key)) return;
-          // Tags are arrays: they used to be skipped here, so a tag edit never
-          // reached the owner's review (or the audit trail) and could not be
-          // rolled back. Compared as lists, ignoring order.
-          if (key === "tags") {
-            if (tagsChanged(original.tags, data.tags)) {
-              changes.tags = { old_value: original.tags || [], new_value: data.tags };
-            }
-            return;
-          }
-          const oldVal = original[key];
-          const newVal = data[key];
-          const oldCompare = oldVal ?? "";
-          const newCompare = newVal ?? "";
-          if (oldCompare !== newCompare) {
-            changes[key] = { old_value: oldVal ?? "فارغ", new_value: newVal ?? "فارغ" };
-          }
-        });
-      }
-
-      // A changed visit date also logs a visit-history entry (so the
-      // Dashboard counts it). The entry's id travels with last_change so the
-      // owner's rollback can remove exactly that entry — otherwise rolling
-      // back restored the date but left the cancelled visit counted.
-      const newVisitEntry = id && original && original.visitDate !== data.visitDate
-        && data.visitDate && Object.prototype.hasOwnProperty.call(editFields, "visitDate")
-        ? buildVisitEntry(data.visitDate)
-        : null;
-
-      const lastChangeData = {
-        updatedBy: user?.displayName || user?.email || "موظف غير معروف",
-        updatedById: user?.uid || null,
-        updatedAt: new Date().toISOString(),
-        ...(Object.keys(changes).length > 0 ? { changes } : {}),
-        ...(newVisitEntry ? { addedVisitEntryIds: [newVisitEntry.id] } : {}),
-      };
+      const changes = buildAuditChanges(original, editFields, data);
+      const newVisitEntry = buildChangedVisitEntry(id, original, data, editFields);
+      const lastChangeData = buildLastChangeData(user, changes, newVisitEntry);
 
       setIsSaving(true);
       try {
-        let savedId = id;
         // Record write and its audit entry go in ONE batch, so they either
         // both land or both fail (see queueAudit).
-        const batch = writeBatch(db);
-        if (id) {
-          // Send only the fields this person actually changed since opening
-          // the form — writing the whole form back would overwrite a
-          // concurrent pin / stage change / reschedule made by someone else
-          // while it was open.
-          const updatePayload = {
-            ...editFields,
-            // Merged with a pending change another editor may have left, so
-            // the owner can still review / roll back both (see mergeLastChange).
-            last_change: mergeLastChange(original?.last_change, lastChangeData),
-            updatedAt: new Date().toISOString()
-          };
-          if (newVisitEntry) {
-            updatePayload.visitHistory = arrayUnion(newVisitEntry);
-          }
-          batch.update(doc(db, "users", ownerUid, "visits", id), updatePayload);
-          queueAudit(batch, ownerUid, {
-            entityType: "customer", entityId: id, entityName: data.companyName,
-            action: "update", changes, user, t,
-          });
-        } else {
-          const ref = doc(collection(db, "users", ownerUid, "visits"));
-          savedId = ref.id;
-          batch.set(ref, {
-            ...data,
-            last_change: lastChangeData,
-            activityLog: [],
-            offers: [],
-            visitHistory: data.visitDate ? [buildVisitEntry(data.visitDate)] : [],
-            createdAt: serverTimestamp(),
-            updatedAt: new Date().toISOString()
-          });
-          queueAudit(batch, ownerUid, {
-            entityType: "customer", entityId: savedId, entityName: data.companyName,
-            action: "create", user, t,
-          });
-        }
+        const { batch, savedId } = buildSaveBatch({
+          id, ownerUid, user, t, data, editFields, original, changes, lastChangeData, newVisitEntry,
+        });
         await batch.commit();
 
-        if (!id) {
-          await appendActivity(savedId, buildActivity("created", t.activityCreated));
-        } else {
-          if (original && original.stage !== data.stage) {
-            await appendActivity(
-              savedId,
-              buildActivity(
-                "stage",
-                data.stage ? t.activityStageChanged(t.stages[data.stage] || data.stage) : t.activityStageCleared
-              )
-            );
-          }
-          if (original && original.callDateTime !== data.callDateTime && data.callDateTime) {
-            await appendActivity(savedId, buildActivity("call", t.activityCallSet(fmtReminder(data.callDateTime, t.locale))));
-          }
-        }
-
-        if (data.callDateTime) {
-          await scheduleCallReminder(
-            savedId,
-            data.callDateTime,
-            `${t.reminderTitle} ${data.companyName}`,
-            t.reminderBody(data.contactName)
-          );
-        } else {
-          await cancelCallReminder(savedId);
-        }
+        await appendSaveActivities({ id, savedId, original, data, t, appendActivity });
+        await syncCallReminder(savedId, data, t);
         setScreen("list");
       } catch (e) {
         reportSaveError(e);

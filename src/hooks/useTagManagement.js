@@ -17,7 +17,9 @@ async function batchRenameTag(collectionName, ownerUid, records, oldTag, newTag)
       const nextTags = Array.from(new Set((r.tags || []).map((tag) => (tag === oldTag ? newTag : tag))));
       batch.update(doc(db, "users", ownerUid, collectionName, r.id), { tags: nextTags });
     });
-    await batch.commit();
+    // Sequential on purpose: a failure stops the rename at a chunk boundary
+    // instead of leaving several chunks half-applied in parallel.
+    await batch.commit(); // NOSONAR
   }
   return affected.length;
 }
