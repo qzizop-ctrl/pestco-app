@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, doc, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, doc, addDoc, query, orderBy, where, limit, onSnapshot, serverTimestamp, Timestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { buildAuditEntry } from "../auditLog";
 import { reportException } from "../sentry";
@@ -54,6 +54,30 @@ export function queueAudit(batch, ownerUid, params) {
   batch.set(ref, { ...buildAuditEntry(params), at: serverTimestamp() });
 }
 
+// Firestore orders mixed field types by TYPE first (null < number <
+// Timestamp < string), not by the moment they describe. Old audit entries
+// were written with `at` as an ISO string; new ones use serverTimestamp()
+// (a Timestamp). A single orderBy("at", "desc") therefore put every old
+// string entry above all the new Timestamp entries. To fix that without
+// migrating data, the feed runs one type-bounded query per format and
+// merges + sorts them by the real date on the client.
+function normalizeEntry(d) {
+  // "estimate" gives a pending serverTimestamp() (a write that hasn't
+  // reached the server yet) a usable local time instead of null, so a
+  // just-made change shows up at the top right away.
+  const data = d.data({ serverTimestamps: "estimate" });
+  const atDate = toJsDate(data.at);
+  return { id: d.id, ...data, at: atDate ? atDate.toISOString() : null };
+}
+
+function sortNewestFirst(list) {
+  return [...list].sort((a, b) => {
+    const ta = a.at ? Date.parse(a.at) : Infinity; // no date yet = newest
+    const tb = b.at ? Date.parse(b.at) : Infinity;
+    return tb - ta;
+  });
+}
+
 export function useAuditLogFeed({ ownerUid, enabled }) {
   const [entries, setEntries] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -68,38 +92,43 @@ export function useAuditLogFeed({ ownerUid, enabled }) {
     }
     setLoaded(false);
     setError(null);
-    const ref = query(
-      collection(db, "users", ownerUid, "auditLog"),
-      orderBy("at", "desc"),
-      limit(AUDIT_LOG_LIMIT)
+
+    const col = collection(db, "users", ownerUid, "auditLog");
+    // Inequality filters are type-bounded in Firestore: `> Timestamp(0)`
+    // matches only Timestamp values, `> ""` matches only strings.
+    const queries = [
+      query(col, where("at", ">", Timestamp.fromMillis(0)), orderBy("at", "desc"), limit(AUDIT_LOG_LIMIT)),
+      query(col, where("at", ">", ""), orderBy("at", "desc"), limit(AUDIT_LOG_LIMIT)),
+    ];
+    const results = [[], []];
+    const ready = [false, false];
+    let failed = false;
+
+    const publish = () => {
+      if (!ready.every(Boolean)) return;
+      setEntries(sortNewestFirst(results.flat()).slice(0, AUDIT_LOG_LIMIT));
+      setLoaded(true);
+    };
+
+    const unsubs = queries.map((q, i) =>
+      onSnapshot(
+        q,
+        (snap) => {
+          results[i] = snap.docs.map(normalizeEntry);
+          ready[i] = true;
+          publish();
+        },
+        (err) => {
+          if (failed) return;
+          failed = true;
+          console.error("Failed to load audit log (ownerUid=" + ownerUid + "):", err.code, err.message);
+          reportException(err, { context: "Failed to load audit log", ownerUid });
+          setError(err);
+          setLoaded(true);
+        }
+      )
     );
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        // `at` now comes back from Firestore as a Timestamp object (it's
-        // written with serverTimestamp() — see logAudit above), not the
-        // ISO string it used to be. Every consumer of an entry's `at`
-        // (AuditLog.jsx's date-range filter, which does e.at.slice(0,10),
-        // and fmtActivityDate) still expects a string, so it's normalized
-        // back to one right here, in the one place entries enter the app,
-        // instead of touching every call site.
-        setEntries(
-          snap.docs.map((d) => {
-            const data = d.data();
-            const atDate = toJsDate(data.at);
-            return { id: d.id, ...data, at: atDate ? atDate.toISOString() : null };
-          })
-        );
-        setLoaded(true);
-      },
-      (err) => {
-        console.error("Failed to load audit log (ownerUid=" + ownerUid + "):", err.code, err.message);
-        reportException(err, { context: "Failed to load audit log", ownerUid });
-        setError(err);
-        setLoaded(true);
-      }
-    );
-    return () => unsub();
+    return () => unsubs.forEach((u) => u());
   }, [ownerUid, enabled]);
 
   return { entries, loaded, error };
