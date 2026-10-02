@@ -5,6 +5,19 @@ import { beep } from "../sound";
 import { requestNotificationPermission, syncCallReminders } from "../notifications";
 import { REMINDER_POLL_MS, reminderKey, splitDueReminders } from "../reminderLogic";
 
+// Asks the browser for notification permission. `await` copes with both API
+// shapes: modern browsers return a promise, old Safari returns undefined.
+// Any failure (blocked, unsupported) is safe to ignore.
+async function askBrowserNotificationPermission() {
+  try {
+    if (window.Notification && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  } catch {
+    // Requesting notification permission may be unsupported or blocked — safe to ignore.
+  }
+}
+
 // Call reminders, two layers:
 //
 // 1. In-app (this file's interval): while the app is open, polls every 15s
@@ -31,18 +44,8 @@ export function useReminders({ visits, user, ownerUid, canEdit, t, visitsLoaded 
   const seenRef = useRef(new Set());
 
   useEffect(() => {
-    try {
-      if (window.Notification && Notification.permission === "default") {
-        // Modern browsers return a promise, old Safari returns undefined —
-        // Promise.resolve() handles both, and the catch keeps a rejection
-        // from becoming an unhandled promise.
-        Promise.resolve(Notification.requestPermission()).catch(() => {
-          // Permission prompt blocked or unsupported — safe to ignore.
-        });
-      }
-    } catch {
-      // Requesting notification permission may be unsupported or blocked — safe to ignore.
-    }
+    // Handles its own errors (try/catch around an await) — never rejects.
+    void askBrowserNotificationPermission();
     Promise.resolve(requestNotificationPermission()).catch((e) => {
       console.warn("Could not request notification permission:", e?.code ?? e);
     });
