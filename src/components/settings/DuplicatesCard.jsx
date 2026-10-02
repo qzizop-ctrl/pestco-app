@@ -27,9 +27,9 @@ export default function DuplicatesCard({ t, showDuplicates, setShowDuplicates, d
           {duplicateGroups.length === 0 ? (
             <p className="text-sm text-center py-4" style={{ color: MUTED }}>{t.noDuplicatesFound}</p>
           ) : (
-            duplicateGroups.map((group, idx) => (
+            duplicateGroups.map((group) => (
               <div
-                key={idx}
+                key={`${group.reason}-${group.customers.map((c) => c.id).join("-")}`}
                 style={{ background: SURFACE_SUBTLE, borderRadius: 12, padding: 10, marginBottom: 8 }}
               >
                 <span className="text-xs font-bold" style={{ color: GOLD }}>

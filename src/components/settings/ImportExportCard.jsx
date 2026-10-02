@@ -24,6 +24,19 @@ export default function ImportExportCard({
 }) {
   const [exportTab, setExportTab] = useState("customers");
 
+  let importLabel = t.importBtn;
+  if (importing) {
+    importLabel = importProgress?.total > 0
+      ? t.importProgress(importProgress.done, importProgress.total)
+      : t.importing;
+  }
+  let supplierImportLabel = t.importSuppliersBtn;
+  if (importingSuppliers) {
+    supplierImportLabel = supplierImportProgress?.total > 0
+      ? t.importSuppliersProgress(supplierImportProgress.done, supplierImportProgress.total)
+      : t.importingSuppliers;
+  }
+
   return (
     <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
       <p className="font-bold text-base mb-3" style={{ color: TEXT }}>{t.excelTitle}</p>
@@ -131,11 +144,7 @@ export default function ImportExportCard({
             }}
           >
             <Upload size={16} />{" "}
-            {importing
-              ? importProgress && importProgress.total > 0
-                ? t.importProgress(importProgress.done, importProgress.total)
-                : t.importing
-              : t.importBtn}
+            {importLabel}
           </button>
           <input
             ref={fileInputRef}
@@ -194,11 +203,7 @@ export default function ImportExportCard({
             }}
           >
             <Upload size={16} />{" "}
-            {importingSuppliers
-              ? supplierImportProgress && supplierImportProgress.total > 0
-                ? t.importSuppliersProgress(supplierImportProgress.done, supplierImportProgress.total)
-                : t.importingSuppliers
-              : t.importSuppliersBtn}
+            {supplierImportLabel}
           </button>
           <input
             ref={supplierFileInputRef}

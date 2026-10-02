@@ -2,6 +2,8 @@ import { SURFACE, LINE, TEXT, MUTED, SURFACE_SUBTLE } from "../../theme";
 
 // Only rendered when the account has access to more than one workspace —
 // gated in the parent (Settings.jsx), not here.
+const roleLabel = (role) => (role === "editor" ? "Editor" : "Viewer");
+
 export default function WorkspaceSwitcherCard({ availableOwners, ownerUid, user, switchOwnerWorkspace }) {
   return (
     <div style={{ background: SURFACE, borderRadius: 16, border: `1px solid ${LINE}`, padding: 16, marginBottom: 16 }}>
@@ -14,7 +16,7 @@ export default function WorkspaceSwitcherCard({ availableOwners, ownerUid, user,
       >
         {availableOwners.map((workspace, index) => (
           <option key={workspace.uid} value={workspace.uid}>
-            {workspace.uid === user?.uid ? "حسابي (Owner)" : `مساحة عمل ${index + 1} — ${workspace.role === "editor" ? "Editor" : "Viewer"}`}
+            {workspace.uid === user?.uid ? "حسابي (Owner)" : `مساحة عمل ${index + 1} — ${roleLabel(workspace.role)}`}
           </option>
         ))}
       </select>
