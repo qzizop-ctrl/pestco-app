@@ -6,14 +6,23 @@ updates:
   # that one has to be updated manually by watching
   # https://cdn.sheetjs.com/ or https://git.sheetjs.com/sheetjs/sheetjs
   # for new releases.
+  #
+  # Policy (changed): minor and patch updates are now allowed. The old
+  # "patch only" rule blocked every minor/major bump, so security fixes
+  # shipped in newer lines (Electron is supported for only ~6 months per
+  # major, jsPDF fixed several CVEs in 4.x) never arrived on their own.
+  # Safety now comes from CI (lint + tests must pass on every PR) and from
+  # grouping, not from blocking updates:
+  #   - minor + patch of everything else -> ONE weekly PR
+  #   - every major -> its own PR, so it can be reviewed and tested alone
+  #   - Capacitor majors also need a native android/ migration
+  #     (npx cap migrate) — never merge those PRs without doing it.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
     groups:
-      # Batch same-vendor packages into one PR instead of one PR per
-      # package, so a Capacitor or Sentry bump doesn't spam ten PRs.
       capacitor:
         patterns:
           - "@capacitor/*"
@@ -25,17 +34,24 @@ updates:
           - "eslint"
           - "eslint-*"
           - "@eslint/*"
+      # Electron + its packaging/updating tools move together.
+      electron:
+        patterns:
+          - "electron"
+          - "electron-builder"
+          - "electron-updater"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+        exclude-patterns:
+          - "@capacitor/*"
+          - "electron"
+          - "electron-*"
     ignore:
-      # Only patch-level updates (1.2.3 -> 1.2.4) go through
-      # automatically now. Both major AND minor are blocked, because
-      # minor alone already broke something once: lucide-react went
-      # 0.383.0 -> 0.577.0 as a "minor" bump (its major is still 0, so
-      # semver formally allows that), and pre-1.0 packages routinely
-      # rename/remove things across "minor" versions the same way a real
-      # major bump would. Dependabot won't propose major or minor bumps
-      # for anything now — check release notes by hand and upgrade
-      # deliberately when there's a real reason to.
-      - dependency-name: "*"
+      # lucide-react is 0.x, so a "minor" bump can rename/remove icons
+      # (0.383.0 -> 0.577.0 broke the build once). Upgrade it by hand.
+      - dependency-name: "lucide-react"
         update-types:
           - "version-update:semver-major"
           - "version-update:semver-minor"
@@ -46,9 +62,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    ignore:
-      # Same patch-only policy as the npm block above.
-      - dependency-name: "*"
+    groups:
+      actions-minor-and-patch:
         update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
+          - "minor"
+          - "patch"
