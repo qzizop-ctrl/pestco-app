@@ -490,7 +490,10 @@ export const AR = {
     empty: "الملف مفيهوش عملاء ولا موردين.",
   }[reason] || "الملف مش صالح للاستعادة."),
   restorePanelTitle: "ملف جاهز للاستعادة",
-  restoreFileSummary: (name, c, when) => `${name} — ${c.visits} عميل و${c.suppliers} مورد${when ? ` (بتاريخ ${when})` : ""}`,
+  restoreFileSummary: (name, c, when) => {
+    const date = when ? ` (بتاريخ ${when})` : "";
+    return `${name} — ${c.visits} عميل و${c.suppliers} مورد${date}`;
+  },
   restoreMergeBtn: "دمج (إضافة الناقص فقط)",
   restoreMergeHint: "بيضيف العملاء والموردين اللي مش موجودين حالياً، ومبيلمسش أي حاجة موجودة.",
   restoreReplaceBtn: "استبدال كل البيانات",
@@ -500,7 +503,11 @@ export const AR = {
   restoreProgress: (done, total) => `جاري الاستعادة... (${done}/${total})`,
   restoreNothingToDo: "مفيش حاجة تتستعاد، كل اللي في الملف موجود فعلاً.",
   restoreSafetyFailed: "مقدرناش نحفظ نسخة من البيانات الحالية قبل الاستبدال، فالاستعادة اتلغت ومحصلش أي تغيير.",
-  restoreDone: (written, removed, approved) => `تمت الاستعادة: ${written} سجل اتكتب${removed ? ` و${removed} اتمسح` : ""}.${approved ? ` ${approved} سجل كان عليه تعديل معلق من عضو اتعتمد بقيمه المعدّلة.` : ""}`,
+  restoreDone: (written, removed, approved) => {
+    const removedPart = removed ? ` و${removed} اتمسح` : "";
+    const approvedPart = approved ? ` ${approved} سجل كان عليه تعديل معلق من عضو اتعتمد بقيمه المعدّلة.` : "";
+    return `تمت الاستعادة: ${written} سجل اتكتب${removedPart}.${approvedPart}`;
+  },
   restorePartialError: (n) => `حصل خطأ أثناء الاستعادة بعد ما اتكتب ${n} سجل. تقدر تعيد الاستعادة بنفس الملف.`,
   restoreFailed: "حصل خطأ أثناء الاستعادة ومحصلش أي تغيير. حاول تاني.",
 

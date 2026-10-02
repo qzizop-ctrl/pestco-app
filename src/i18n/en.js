@@ -475,7 +475,10 @@ export const EN = {
     empty: "The file has no customers or suppliers.",
   }[reason] || "This file can't be restored."),
   restorePanelTitle: "File ready to restore",
-  restoreFileSummary: (name, c, when) => `${name} — ${c.visits} customers and ${c.suppliers} suppliers${when ? ` (from ${when})` : ""}`,
+  restoreFileSummary: (name, c, when) => {
+    const date = when ? ` (from ${when})` : "";
+    return `${name} — ${c.visits} customers and ${c.suppliers} suppliers${date}`;
+  },
   restoreMergeBtn: "Merge (add missing only)",
   restoreMergeHint: "Adds customers and suppliers that are not here yet and leaves everything that exists untouched.",
   restoreReplaceBtn: "Replace all data",
@@ -485,7 +488,11 @@ export const EN = {
   restoreProgress: (done, total) => `Restoring... (${done}/${total})`,
   restoreNothingToDo: "Nothing to restore, everything in the file is already here.",
   restoreSafetyFailed: "Could not save a backup of the current data before replacing it, so the restore was cancelled and nothing changed.",
-  restoreDone: (written, removed, approved) => `Restore complete: ${written} records written${removed ? `, ${removed} deleted` : ""}.${approved ? ` ${approved} records that had a pending edit from a member were restored as approved, with the edited values.` : ""}`,
+  restoreDone: (written, removed, approved) => {
+    const removedPart = removed ? `, ${removed} deleted` : "";
+    const approvedPart = approved ? ` ${approved} records that had a pending edit from a member were restored as approved, with the edited values.` : "";
+    return `Restore complete: ${written} records written${removedPart}.${approvedPart}`;
+  },
   restorePartialError: (n) => `The restore failed after ${n} records were written. You can run it again with the same file.`,
   restoreFailed: "The restore failed and nothing was changed. Please try again.",
 
