@@ -88,7 +88,7 @@ export function useFilteredData({
   const duplicateGroups = useMemo(() => findDuplicateGroups(visibleVisits), [visibleVisits]);
 
   const allTags = useMemo(
-    () => Array.from(new Set(visibleVisits.flatMap((v) => v.tags || []))).sort(),
+    () => Array.from(new Set(visibleVisits.flatMap((v) => v.tags || []))).sort((a, b) => String(a).localeCompare(String(b))),
     [visibleVisits]
   );
 

@@ -122,7 +122,8 @@ export function useAppPrefs() {
       }
     };
 
-    verifyRealConnectivity();
+    // Handles its own errors (try/catch) — never rejects.
+    void verifyRealConnectivity();
     // Re-verify periodically too, not just on the browser's online/offline
     // events — those events don't fire for "still connected to wifi, but
     // the wifi itself lost its internet upstream" (the exact bug being

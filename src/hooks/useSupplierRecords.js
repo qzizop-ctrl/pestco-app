@@ -196,17 +196,20 @@ export function useSupplierRecords({
     if (!p) return;
     clearTimeout(p.timeoutId);
     pendingSupplierDeleteRef.current = null;
-    commitDeleteSupplier(p.id, p.companyName);
+    // commitDeleteSupplier reports its own failures and never rejects.
+    void commitDeleteSupplier(p.id, p.companyName);
   });
 
-  const proceedDeleteSupplier = async (id) => {
+  // Not async: nothing in here awaits (the write happens later, in the timeout).
+  const proceedDeleteSupplier = (id) => {
     const supplier = suppliers.find((s) => s.id === id);
     setScreen("suppliers");
 
     const companyName = supplier ? supplier.name : "";
     const timeoutId = setTimeout(() => {
       pendingSupplierDeleteRef.current = null;
-      commitDeleteSupplier(id, companyName);
+      // Reports its own failures and never rejects (see commitDeleteSupplier).
+      void commitDeleteSupplier(id, companyName);
     }, 5000);
 
     const pending = { id, companyName, timeoutId };

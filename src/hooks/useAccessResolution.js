@@ -284,9 +284,10 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
             });
             // Let the write reach the server (bounded) BEFORE the cache is
             // wiped — terminating Firestore would otherwise discard it.
-            Promise.race([healWrite, new Promise((r) => setTimeout(r, SELF_HEAL_WAIT_MS))]).then(endSession);
+            // healWrite and endSession both catch their own errors, so this never rejects.
+            void Promise.race([healWrite, new Promise((r) => setTimeout(r, SELF_HEAL_WAIT_MS))]).then(endSession);
           } else {
-            endSession();
+            void endSession(); // catches its own errors
           }
         }
         // outcome === "reviewer_no_owners": nothing further to do — a
