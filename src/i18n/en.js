@@ -434,6 +434,7 @@ export const EN = {
 
   // Field labels shown inside the edit-approval banner's diff list.
   customerChangeFieldLabels: {
+    tags: "Tags",
     companyName: "Company name",
     contactName: "Contact person",
     phone: "Phone",
@@ -446,6 +447,7 @@ export const EN = {
     offers: "Offers",
   },
   supplierChangeFieldLabels: {
+    tags: "Tags",
     name: "Supplier name",
     contactName: "Contact person",
     phone: "Phone",
@@ -453,6 +455,16 @@ export const EN = {
     category: "Product/service type",
     notes: "Notes",
   },
+  reviewStaleMsg: "This record was changed while you were reviewing it, so nothing was applied. Review the new changes and try again.",
+  reviewNothingPendingMsg: "There is no pending change on this record anymore (someone else may have reviewed it).",
+  connectionIssueTitle: "Couldn't load your data",
+  connectionIssueHint: "Your connection may be weak or offline. Check it and try again — your data has not been deleted.",
+  retryBtn: "Try again",
+  fullBackupBtn: "Full backup (JSON)",
+  fullBackupHint: "Saves every customer and supplier with all their details (offers, activity log, visits) plus the audit log, in one file on this device.",
+  fullBackupDone: "The full backup was saved to this device.",
+  fullBackupFailed: "Saving the full backup failed. Please try again.",
+  fullBackupNotReady: "Your data is still loading. Wait until the customers appear, then try again.",
 
   // PDF report export
   dashExportPdfBtn: "Export PDF Report",

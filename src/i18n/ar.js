@@ -446,6 +446,7 @@ export const AR = {
 
   // Field labels shown inside the edit-approval banner's diff list.
   customerChangeFieldLabels: {
+    tags: "الوسوم",
     companyName: "اسم الشركة",
     contactName: "الشخص المسؤول",
     phone: "رقم الهاتف",
@@ -458,6 +459,7 @@ export const AR = {
     offers: "العروض",
   },
   supplierChangeFieldLabels: {
+    tags: "الوسوم",
     name: "اسم المورد",
     contactName: "الشخص المسؤول",
     phone: "رقم الهاتف",
@@ -465,6 +467,16 @@ export const AR = {
     category: "نوع الخدمة/المنتج",
     notes: "الملاحظات",
   },
+  reviewStaleMsg: "السجل ده اتعدّل أثناء ما كنت بتراجعه، فمتنفّذش أي حاجة. راجع التغييرات الجديدة وجرّب تاني.",
+  reviewNothingPendingMsg: "لا يوجد تغيير معلّق على السجل ده دلوقتي (يمكن حد تاني راجعه).",
+  connectionIssueTitle: "تعذّر تحميل البيانات",
+  connectionIssueHint: "ممكن يكون الاتصال بالإنترنت ضعيف أو مقطوع. اتأكد منه وجرّب تاني — بياناتك مش اتمسحت.",
+  retryBtn: "إعادة المحاولة",
+  fullBackupBtn: "نسخة احتياطية كاملة (JSON)",
+  fullBackupHint: "بتحفظ كل العملاء والموردين بكل تفاصيلهم (العروض وسجل النشاط والزيارات) مع سجل المراجعة في ملف واحد على الجهاز.",
+  fullBackupDone: "تم حفظ النسخة الاحتياطية الكاملة على الجهاز.",
+  fullBackupFailed: "حصل خطأ أثناء حفظ النسخة الاحتياطية الكاملة. حاول تاني.",
+  fullBackupNotReady: "البيانات لسه بتتحمّل. استنى لحد ما العملاء يظهروا وجرّب تاني.",
 
   // PDF report export
   dashExportPdfBtn: "تصدير تقرير PDF",
