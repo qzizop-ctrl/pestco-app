@@ -1,0 +1,78 @@
+name: Generate gradle.lockfile
+
+# One-off manual job (same idea as "Sync package-lock.json"): android/build.gradle
+# already turns on dependency locking, but no gradle.lockfile has been
+# committed yet, which is what SonarCloud's S8569 complains about.
+#
+# Run it from the Actions tab (or the GitHub mobile app: repo -> Actions ->
+# "Generate gradle.lockfile" -> Run workflow). It resolves the Android
+# dependencies once, writes the lockfile(s) and commits them to the branch you
+# pick. Re-run it whenever you intentionally change an Android dependency.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to update"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  gradle-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      # The Android project includes the Capacitor modules from node_modules
+      # (see android/capacitor.settings.gradle), so they must exist first.
+      - name: Install JS dependencies
+        run: npm ci --ignore-scripts
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Wires the Capacitor plugins into the Android project (no web build or
+      # asset copy needed just to resolve dependencies).
+      - name: Update Capacitor Android project
+        run: npx --no-install cap update android
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
+
+      - name: Write the lockfile(s)
+        working-directory: android
+        run: ./gradlew dependencies --write-locks
+
+      - name: Commit lockfile(s)
+        env:
+          # Via env, not interpolated into the script, so a crafted branch
+          # name can't inject shell commands.
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          files=$(find android -name gradle.lockfile -not -path "*/node_modules/*" -not -path "*/build/*")
+          if [ -z "$files" ]; then
+            echo "Gradle did not write any gradle.lockfile — nothing to commit."
+            exit 1
+          fi
+          echo "Lockfiles:"; echo "$files"
+          git add -f $files
+          if git diff --cached --quiet; then
+            echo "Lockfile(s) already up to date — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: add gradle.lockfile"
+          git push origin "HEAD:${BRANCH}"
