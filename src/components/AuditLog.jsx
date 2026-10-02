@@ -164,13 +164,14 @@ export default function AuditLogScreen({
       </div>
 
       {/* List */}
-      {!loaded ? (
-        <SkeletonList count={4} />
-      ) : error ? (
+      {!loaded && <SkeletonList count={4} />}
+      {loaded && error && (
         <p className="text-sm text-center py-6" style={{ color: DANGER }}>{t.auditLogLoadError}</p>
-      ) : filtered.length === 0 ? (
+      )}
+      {loaded && !error && filtered.length === 0 && (
         <p className="text-sm text-center py-6" style={{ color: MUTED }}>{t.auditLogEmpty}</p>
-      ) : (
+      )}
+      {loaded && !error && filtered.length > 0 && (
         <div className="flex flex-col gap-2">
           {filtered.map((entry) => {
             const isExpanded = expandedId === entry.id;

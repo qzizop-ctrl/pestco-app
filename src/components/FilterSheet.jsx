@@ -13,6 +13,7 @@ import {
   Building2, GitBranch, SlidersHorizontal,
 } from "lucide-react";
 import { PRIMARY, TEXT, MUTED, DANGER, GOLD, LINE, SURFACE, SURFACE_SUBTLE, sectorColor, stageColor } from "../theme";
+import { ModalOverlay, ModalDialog } from "./ModalOverlay";
 import { SECTOR_IDS, STAGE_IDS } from "../domain";
 
 function ChipRow({ children }) {
@@ -101,17 +102,8 @@ export default function FilterSheet({
   };
 
   return (
-    <div
-      className="flex items-end justify-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 90 }}
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
+    <ModalOverlay onClose={onClose} align="end" zIndex={90}>
+      <ModalDialog
         style={{
           background: SURFACE,
           borderRadius: "18px 18px 0 0",
@@ -253,7 +245,7 @@ export default function FilterSheet({
             {t.applyFiltersBtn}
           </button>
         </div>
-      </div>
-    </div>
+      </ModalDialog>
+    </ModalOverlay>
   );
 }

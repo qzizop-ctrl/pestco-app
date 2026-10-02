@@ -16,6 +16,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import { PRIMARY_MID, DANGER, TEXT, MUTED, LINE, SURFACE } from "../theme";
+import { ModalOverlay, ModalDialog } from "./ModalOverlay";
 
 export default function ConfirmModal({
   t,
@@ -26,17 +27,8 @@ export default function ConfirmModal({
   onCancel,
 }) {
   return (
-    <div
-      className="flex items-center justify-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 100, padding: 20 }}
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
+    <ModalOverlay onClose={onCancel} align="center" zIndex={100} padding={20}>
+      <ModalDialog
         className="animate-screen-in"
         style={{ background: SURFACE, borderRadius: 16, padding: 18, width: "100%", maxWidth: 380 }}
       >
@@ -72,7 +64,7 @@ export default function ConfirmModal({
             {variant === "confirm" ? t.confirmModalConfirm : t.confirmModalOk}
           </button>
         </div>
-      </div>
-    </div>
+      </ModalDialog>
+    </ModalOverlay>
   );
 }

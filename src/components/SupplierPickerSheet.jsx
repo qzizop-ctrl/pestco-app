@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Check, Search } from "lucide-react";
 import { TEXT, MUTED, SURFACE, PRIMARY, GOLD_SOFT } from "../theme";
+import { ModalOverlay, ModalDialog } from "./ModalOverlay";
 
 export default function SupplierPickerSheet({
   t, open, onClose,
@@ -40,17 +41,8 @@ export default function SupplierPickerSheet({
   if (!open) return null;
 
   return (
-    <div
-      className="flex items-end justify-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 95 }}
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
+    <ModalOverlay onClose={onClose} align="end" zIndex={95}>
+      <ModalDialog
         style={{
           background: SURFACE,
           borderRadius: "18px 18px 0 0",
@@ -125,7 +117,7 @@ export default function SupplierPickerSheet({
         >
           {t.offerSuppliersDone}
         </button>
-      </div>
-    </div>
+      </ModalDialog>
+    </ModalOverlay>
   );
 }

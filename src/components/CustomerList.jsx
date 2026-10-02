@@ -12,6 +12,7 @@ import { VisitCard, SkeletonList } from "./Shared";
 import AlertsCenter from "./AlertsCenter";
 import FilterSheet from "./FilterSheet";
 import PendingEditsSheet from "./PendingEditsSheet";
+import PillButton from "./PillButton";
 import { PRIMARY, TEXT, MUTED, GOLD, LINE, SURFACE, sectorColor } from "../theme";
 import { SECTOR_IDS } from "../domain";
 import { useIncrementalReveal } from "../hooks/useIncrementalReveal";
@@ -59,12 +60,8 @@ export default function CustomerListScreen({
   const searchActive = searchFocused || query.length > 0;
   const [pendingEditsOpen, setPendingEditsOpen] = useState(false);
   const activeFilterCount =
-    (sectorFilter !== "all" ? 1 : 0) +
-    (stageFilter !== "all" ? 1 : 0) +
-    (tagFilter !== "all" ? 1 : 0) +
-    (missingDataOnly ? 1 : 0) +
-    (noVisitsOnly ? 1 : 0) +
-    (dateAddedFilter !== "all" ? 1 : 0);
+    [sectorFilter, stageFilter, tagFilter, dateAddedFilter].filter((f) => f !== "all").length +
+    [missingDataOnly, noVisitsOnly].filter(Boolean).length;
 
   // Only render a growing window of `filtered` instead of every row at
   // once — see useIncrementalReveal.js for why. resetKey is built from the
@@ -103,72 +100,28 @@ export default function CustomerListScreen({
             style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
           />
         </div>
-        <button
+        <PillButton
           onClick={() => setFilterSheetOpen(true)}
-          className="btn-press flex items-center justify-center gap-1 font-bold text-xs flex-shrink-0"
-          style={{
-            position: "relative",
-            border: `1.4px solid ${activeFilterCount > 0 ? PRIMARY : LINE}`,
-            background: activeFilterCount > 0 ? PRIMARY : SURFACE,
-            color: activeFilterCount > 0 ? "#fff" : MUTED,
-            borderRadius: 14,
-            height: 44,
-            overflow: "hidden",
-            transition: "max-width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease",
-            maxWidth: searchActive ? 0 : 120,
-            padding: searchActive ? "0" : "0 14px",
-            opacity: searchActive ? 0 : 1,
-            pointerEvents: searchActive ? "none" : "auto",
-          }}
-        >
-          <SlidersHorizontal size={15} />
-          {t.filtersBtn}
-          {activeFilterCount > 0 && (
-            <span
-              className="text-xs font-extrabold flex items-center justify-center"
-              style={{
-                background: GOLD, color: "#fff", borderRadius: 999,
-                minWidth: 16, height: 16, padding: "0 4px",
-              }}
-            >
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+          icon={SlidersHorizontal}
+          label={t.filtersBtn}
+          count={activeFilterCount}
+          accent={PRIMARY}
+          badgeBg={GOLD}
+          badgeColor="#fff"
+          searchActive={searchActive}
+        />
 
         {isOwnerAccount && (
-          <button
+          <PillButton
             onClick={() => setPendingEditsOpen(true)}
-            className="btn-press flex items-center justify-center gap-1 font-bold text-xs flex-shrink-0"
-            style={{
-              position: "relative",
-              border: `1.4px solid ${pendingEdits.length > 0 ? GOLD : LINE}`,
-              background: pendingEdits.length > 0 ? GOLD : SURFACE,
-              color: pendingEdits.length > 0 ? "#fff" : MUTED,
-              borderRadius: 14,
-              height: 44,
-              overflow: "hidden",
-              transition: "max-width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease",
-              maxWidth: searchActive ? 0 : 120,
-              padding: searchActive ? "0" : "0 14px",
-              opacity: searchActive ? 0 : 1,
-              pointerEvents: searchActive ? "none" : "auto",
-            }}
-          >
-            <Bell size={15} />
-            {t.pendingEditsBtn}
-            {pendingEdits.length > 0 && (
-              <span
-                className="text-xs font-extrabold flex items-center justify-center"
-                style={{
-                  background: "#fff", color: GOLD, borderRadius: 999,
-                  minWidth: 16, height: 16, padding: "0 4px",
-                }}
-              >
-                {pendingEdits.length}
-              </span>
-            )}
-          </button>
+            icon={Bell}
+            label={t.pendingEditsBtn}
+            count={pendingEdits.length}
+            accent={GOLD}
+            badgeBg="#fff"
+            badgeColor={GOLD}
+            searchActive={searchActive}
+          />
         )}
       </div>
 

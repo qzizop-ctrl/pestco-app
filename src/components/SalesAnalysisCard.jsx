@@ -16,6 +16,328 @@ import { pctChange, compareDelta, computeStageConversionRates } from "../dashboa
 // Tabs (not swipe-snap like SwipeableChartCard) because these panels have
 // very different, variable heights — a fixed-height swipe track doesn't
 // fit a table that can be 2 rows or 20.
+// Up/down arrow + absolute percentage for a period-over-period change.
+// `lowerIsBetter` flips which direction is green (rejections going down is
+// good news; offers / pipeline going down is not). The arrow always points
+// the way the number moved.
+function TrendBadge({ value, size, className, lowerIsBetter = false }) {
+  const good = lowerIsBetter ? value <= 0 : value >= 0;
+  const Arrow = value >= 0 ? TrendingUp : TrendingDown;
+  return (
+    <span className={className} style={{ color: good ? SUCCESS : DASH_NEGATIVE }}>
+      <Arrow size={size} />
+      {Math.abs(value).toFixed(0)}%
+    </span>
+  );
+}
+
+// ---- Pipeline tab ---------------------------------------------------------
+
+function PipelineStage({ id, isLast, t, stats, prevStats, compare, stageConversion }) {
+  const label = id === "none" ? t.stageNone : t.stages[id];
+  const color = id === "none" ? MUTED : stageColor(id);
+  const count = stats.pipeline[id] || 0;
+  const isEmpty = count === 0;
+  // Drop-off vs. the previous stage's count — "none" has no
+  // place in that sequence, so it never gets a percentage.
+  const conversion = id === "none" ? null : stageConversion.find((c) => c.id === id);
+  // Pipeline is a stage snapshot (how many customers sit at each
+  // stage right now), not a period-flow metric, but "compare to
+  // previous month" still applies the same way the rest of the
+  // Dashboard does: how many customers were at this stage when
+  // the previous period's snapshot (prevStats) was computed.
+  const prevCount = prevStats ? (prevStats.pipeline[id] || 0) : null;
+  const stageDelta = compareDelta(compare, prevStats, () => pctChange(count, prevCount));
+
+  return (
+    <Fragment>
+      <div className="flex flex-col items-center" style={{ flexShrink: 0, minWidth: 66, opacity: isEmpty ? 0.45 : 1 }}>
+        <div
+          className="flex items-center justify-center font-extrabold"
+          style={{
+            width: isEmpty ? 36 : 44,
+            height: isEmpty ? 36 : 44,
+            borderRadius: "50%",
+            background: isEmpty ? SURFACE_SUBTLE : color,
+            color: isEmpty ? MUTED : "#fff",
+            border: isEmpty ? `1.4px solid ${LINE}` : "none",
+            fontSize: isEmpty ? 13 : 15,
+            transition: "width .15s, height .15s",
+          }}
+        >
+          {count}
+        </div>
+        <span className="text-xs font-bold mt-1 text-center" style={{ color: MUTED }}>{label}</span>
+        {conversion?.pct != null && (
+          <span className="text-xs font-bold" style={{ color: PRIMARY_MID }}>
+            {conversion.pct.toFixed(0)}%
+          </span>
+        )}
+        {stageDelta === null && <span className="text-xs" style={{ color: MUTED }}>—</span>}
+        {stageDelta != null && (
+          <TrendBadge value={stageDelta} size={9} className="flex items-center gap-0.5 text-xs font-bold" />
+        )}
+      </div>
+      {!isLast && (
+        <ChevronLeft
+          size={16}
+          color={LINE}
+          style={{ flexShrink: 0, transform: t.dir === "rtl" ? "none" : "rotate(180deg)" }}
+        />
+      )}
+    </Fragment>
+  );
+}
+
+function PipelineTab({ t, stats, prevStats, compare }) {
+  const stageConversion = computeStageConversionRates(stats.pipeline);
+  const ids = [...STAGE_IDS, "none"];
+  return (
+    <div className="flex items-center" style={{ gap: 4, overflowX: "auto" }}>
+      {ids.map((id, idx) => (
+        <PipelineStage
+          key={id}
+          id={id}
+          isLast={idx === ids.length - 1}
+          t={t}
+          stats={stats}
+          prevStats={prevStats}
+          compare={compare}
+          stageConversion={stageConversion}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---- Sales performance tab ------------------------------------------------
+
+function OfferStatusCard({ id, t, stats, prevStats, compare, exchangeRate, unifyCurrency }) {
+  const info = stats.offersByStatus[id] || { count: 0, totals: {} };
+  const valueText = fmtUnifiedOrSplit(info.totals, t, exchangeRate, unifyCurrency);
+  const prevCount = prevStats ? (prevStats.offersByStatus[id] || { count: 0 }).count : null;
+  const delta = compareDelta(compare, prevStats, () => pctChange(info.count, prevCount));
+
+  return (
+    <div
+      style={{
+        flex: "1 1 45%",
+        minWidth: 140,
+        background: SURFACE_SUBTLE,
+        borderRadius: 12,
+        padding: 10,
+        borderTop: `3px solid ${offerStatusColor(id)}`,
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold" style={{ color: MUTED }}>{t.offerStatuses[id]}</span>
+        <span className="font-extrabold" style={{ fontSize: 20, color: offerStatusColor(id) }}>{info.count}</span>
+      </div>
+      {valueText && (
+        <p className="text-xs font-bold mt-1" style={{ color: TEXT, margin: "4px 0 0" }}>{valueText}</p>
+      )}
+      {delta !== undefined && (
+        <div className="flex items-center gap-1 mt-1">
+          {delta === null ? (
+            <span className="text-xs" style={{ color: MUTED }}>{t.dashNoComparisonData}</span>
+          ) : (
+            <TrendBadge value={delta} size={11} className="flex items-center gap-1 text-xs font-bold" />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PerformanceTab(props) {
+  return (
+    <div className="flex flex-wrap" style={{ gap: 10 }}>
+      {OFFER_STATUS_IDS.map((id) => (
+        <OfferStatusCard key={id} id={id} {...props} />
+      ))}
+    </div>
+  );
+}
+
+// ---- Rejection report tab -------------------------------------------------
+
+function RejectionReasonRow({ r, t, compare, prevRejectionReport, prevReasonCounts }) {
+  const reasonDelta = compareDelta(compare, prevRejectionReport, () => pctChange(r.count, prevReasonCounts.get(r.id) || 0));
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-bold" style={{ color: TEXT }}>{r.label}</span>
+        <span className="flex items-center gap-1.5 text-xs font-bold" style={{ color: MUTED }}>
+          {r.count} · {t.dashRejectionReportPct(r.pct)}
+          {reasonDelta != null && (
+            <TrendBadge value={reasonDelta} size={10} lowerIsBetter className="flex items-center gap-0.5" />
+          )}
+        </span>
+      </div>
+      <div style={{ height: 8, borderRadius: 999, background: SURFACE_SUBTLE, overflow: "hidden" }}>
+        <div style={{ width: `${r.pct}%`, height: "100%", background: DASH_NEGATIVE, borderRadius: 999 }} />
+      </div>
+    </div>
+  );
+}
+
+function RejectionRepRow({ r, compare, prevRejectionReport, prevRepCounts }) {
+  const repDelta = compareDelta(compare, prevRejectionReport, () => pctChange(r.count, prevRepCounts.get(r.name) || 0));
+  return (
+    <div
+      className="flex items-center justify-between"
+      style={{ flex: "1 1 45%", minWidth: 140, background: SURFACE_SUBTLE, borderRadius: 10, padding: "8px 10px" }}
+    >
+      <span className="text-xs font-bold" style={{ color: TEXT }}>{r.name}</span>
+      <span className="flex items-center gap-1.5">
+        <span className="text-xs font-extrabold" style={{ color: DASH_NEGATIVE }}>{r.count}</span>
+        {repDelta != null && (
+          <TrendBadge value={repDelta} size={10} lowerIsBetter className="flex items-center gap-0.5 text-xs font-bold" />
+        )}
+      </span>
+    </div>
+  );
+}
+
+function RejectionTab({ t, compare, rejectionReport, prevRejectionReport }) {
+  // Lookups from the previous period's rejection report, keyed the same
+  // way as the current one, so each reason/rep row can find its own prior
+  // count — a reason/rep with no previous data falls back to 0 rather than
+  // being dropped, which lets pctChange return its existing "no comparison
+  // data" null the same way the other Dashboard cards handle a 0 baseline.
+  const prevReasonCounts = new Map((prevRejectionReport?.byReason || []).map((r) => [r.id, r.count]));
+  const prevRepCounts = new Map((prevRejectionReport?.byRep || []).map((r) => [r.name, r.count]));
+  const totalDelta = compareDelta(compare, prevRejectionReport, () => pctChange(rejectionReport.total, prevRejectionReport.total));
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs" style={{ color: MUTED }}>{t.dashRejectionReportHint}</p>
+        {totalDelta === null && (
+          <span className="text-xs font-bold" style={{ color: MUTED }}>{t.dashNoComparisonData}</span>
+        )}
+        {totalDelta != null && (
+          <TrendBadge value={totalDelta} size={11} lowerIsBetter className="flex items-center gap-1 text-xs font-bold" />
+        )}
+      </div>
+
+      {rejectionReport.total === 0 && (
+        <p className="text-sm text-center py-3" style={{ color: MUTED }}>{t.dashRejectionReportEmpty}</p>
+      )}
+
+      {rejectionReport.total !== 0 && (
+        <>
+          <div className="flex flex-col gap-2 mb-4">
+            {rejectionReport.byReason.map((r) => (
+              <RejectionReasonRow
+                key={r.id}
+                r={r}
+                t={t}
+                compare={compare}
+                prevRejectionReport={prevRejectionReport}
+                prevReasonCounts={prevReasonCounts}
+              />
+            ))}
+          </div>
+
+          {rejectionReport.byRep.length > 1 && (
+            <>
+              <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>{t.dashRejectionReportByRep}</p>
+              <div className="flex flex-wrap" style={{ gap: 8 }}>
+                {rejectionReport.byRep.map((r) => (
+                  <RejectionRepRow
+                    key={r.name}
+                    r={r}
+                    compare={compare}
+                    prevRejectionReport={prevRejectionReport}
+                    prevRepCounts={prevRepCounts}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---- Top clients tab ------------------------------------------------------
+
+function TopClientRow({ c, idx, t, compare, prevTopClients, prevClientCounts, visits, onOpenCustomer, exchangeRate, unifyCurrency }) {
+  // Offer count (not the mixed-currency value total) is what's
+  // compared here — same reasoning computeTopClients itself
+  // documents for why it never sorts by a combined EGP+USD
+  // number: a single "value changed by X%" would be meaningless
+  // across currencies. A client not present at all in the
+  // previous period reads as a 0 baseline, which pctChange
+  // already renders as "no comparison data" below.
+  const key = c.customerId || c.customerName;
+  const clientDelta = compareDelta(compare, prevTopClients, () => pctChange(c.offersCount, prevClientCounts.get(key) || 0));
+
+  const openCustomer = () => {
+    const parent = visits.find((v) => v.id === c.customerId);
+    if (parent && onOpenCustomer) onOpenCustomer(parent);
+  };
+
+  return (
+    <button
+      onClick={openCustomer}
+      className={`btn-press w-full flex items-center gap-2 ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+      style={{ padding: "8px 2px", borderTop: idx > 0 ? `1px dashed ${LINE}` : "none" }}
+    >
+      <span
+        className="flex items-center justify-center font-extrabold text-xs"
+        style={{ width: 22, height: 22, borderRadius: "50%", background: SURFACE_SUBTLE, color: MUTED, flexShrink: 0 }}
+      >
+        {idx + 1}
+      </span>
+      <span className="flex-1" style={{ minWidth: 0 }}>
+        <span className="block font-bold text-sm truncate" style={{ color: TEXT }}>{c.customerName}</span>
+        <span className="flex items-center gap-1.5 text-xs" style={{ color: MUTED }}>
+          {t.dashTopClientsOffersCount(c.offersCount)}
+          {clientDelta === null && <span>· {t.dashNoComparisonData}</span>}
+          {clientDelta != null && (
+            <TrendBadge value={clientDelta} size={10} className="flex items-center gap-0.5 font-bold" />
+          )}
+        </span>
+      </span>
+      <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID, flexShrink: 0 }}>
+        {fmtUnifiedOrSplit(c.totals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`}
+      </span>
+    </button>
+  );
+}
+
+function TopClientsTab({ topClients, prevTopClients, ...rest }) {
+  if (topClients.length === 0) {
+    return (
+      <div className="flex flex-col">
+        <p className="text-sm text-center py-3" style={{ color: MUTED }}>{rest.t.dashTopClientsEmpty}</p>
+      </div>
+    );
+  }
+  // Same idea as the rejection lookups — looked up by the same key
+  // computeTopClients groups by, over the FULL previous-period list (not
+  // just its own top 5), so a client only just cracking this period's top 5
+  // can still be compared against their own previous-period numbers.
+  const prevClientCounts = new Map((prevTopClients || []).map((c) => [c.customerId || c.customerName, c.offersCount]));
+  return (
+    <div className="flex flex-col">
+      {topClients.map((c, idx) => (
+        <TopClientRow
+          key={c.customerId || c.customerName}
+          c={c}
+          idx={idx}
+          prevTopClients={prevTopClients}
+          prevClientCounts={prevClientCounts}
+          {...rest}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function SalesAnalysisCard({
   t, stats, prevStats, compare, rejectionReport, prevRejectionReport, topClients, prevTopClients, visits, onOpenCustomer,
   exchangeRate, unifyCurrency,
@@ -31,22 +353,7 @@ export default function SalesAnalysisCard({
     { key: "topClients", label: t.dashTopClients },
   ];
   const [active, setActive] = useState("pipeline");
-  const stageConversion = computeStageConversionRates(stats.pipeline);
 
-  // Lookups from the previous period's rejection report, keyed the same
-  // way as the current one, so each reason/rep row can find its own prior
-  // count — a reason/rep with no previous data falls back to 0 rather than
-  // being dropped, which lets pctChange return its existing "no comparison
-  // data" null the same way the other Dashboard cards handle a 0 baseline.
-  const prevReasonCounts = new Map((prevRejectionReport?.byReason || []).map((r) => [r.id, r.count]));
-  const prevRepCounts = new Map((prevRejectionReport?.byRep || []).map((r) => [r.name, r.count]));
-  const rejectionTotalDelta = compareDelta(compare, prevRejectionReport, () => pctChange(rejectionReport.total, prevRejectionReport.total));
-
-  // Same idea for Top Clients — looked up by the same key computeTopClients
-  // groups by, over the FULL previous-period list (not just its own top 5),
-  // so a client only just cracking this period's top 5 can still be
-  // compared against their own previous-period numbers.
-  const prevClientCounts = new Map((prevTopClients || []).map((c) => [c.customerId || c.customerName, c.offersCount]));
 
   return (
     <div style={{ background: SURFACE, border: `1px solid ${LINE}`, borderRadius: 16, padding: 14, marginBottom: 20 }}>
@@ -94,266 +401,28 @@ export default function SalesAnalysisCard({
         })}
       </div>
 
-      {active === "pipeline" && (
-        <div className="flex items-center" style={{ gap: 4, overflowX: "auto" }}>
-          {[...STAGE_IDS, "none"].map((id, idx, arr) => {
-            const isLast = idx === arr.length - 1;
-            const label = id === "none" ? t.stageNone : t.stages[id];
-            const color = id === "none" ? MUTED : stageColor(id);
-            const count = stats.pipeline[id] || 0;
-            const isEmpty = count === 0;
-            // Drop-off vs. the previous stage's count — "none" has no
-            // place in that sequence, so it never gets a percentage.
-            const conversion = id === "none" ? null : stageConversion.find((c) => c.id === id);
-            // Pipeline is a stage snapshot (how many customers sit at each
-            // stage right now), not a period-flow metric, but "compare to
-            // previous month" still applies the same way the rest of the
-            // Dashboard does: how many customers were at this stage when
-            // the previous period's snapshot (prevStats) was computed.
-            const prevCount = prevStats ? (prevStats.pipeline[id] || 0) : null;
-            const stageDelta = compareDelta(compare, prevStats, () => pctChange(count, prevCount));
-            return (
-              <Fragment key={id}>
-                <div className="flex flex-col items-center" style={{ flexShrink: 0, minWidth: 66, opacity: isEmpty ? 0.45 : 1 }}>
-                  <div
-                    className="flex items-center justify-center font-extrabold"
-                    style={{
-                      width: isEmpty ? 36 : 44,
-                      height: isEmpty ? 36 : 44,
-                      borderRadius: "50%",
-                      background: isEmpty ? SURFACE_SUBTLE : color,
-                      color: isEmpty ? MUTED : "#fff",
-                      border: isEmpty ? `1.4px solid ${LINE}` : "none",
-                      fontSize: isEmpty ? 13 : 15,
-                      transition: "width .15s, height .15s",
-                    }}
-                  >
-                    {count}
-                  </div>
-                  <span className="text-xs font-bold mt-1 text-center" style={{ color: MUTED }}>{label}</span>
-                  {conversion && conversion.pct !== null && (
-                    <span className="text-xs font-bold" style={{ color: PRIMARY_MID }}>
-                      {conversion.pct.toFixed(0)}%
-                    </span>
-                  )}
-                  {stageDelta !== undefined && (
-                    stageDelta === null ? (
-                      <span className="text-xs" style={{ color: MUTED }}>—</span>
-                    ) : (
-                      <span
-                        className="flex items-center gap-0.5 text-xs font-bold"
-                        style={{ color: stageDelta >= 0 ? SUCCESS : DASH_NEGATIVE }}
-                      >
-                        {stageDelta >= 0 ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
-                        {Math.abs(stageDelta).toFixed(0)}%
-                      </span>
-                    )
-                  )}
-                </div>
-                {!isLast && (
-                  <ChevronLeft
-                    size={16}
-                    color={LINE}
-                    style={{ flexShrink: 0, transform: t.dir === "rtl" ? "none" : "rotate(180deg)" }}
-                  />
-                )}
-              </Fragment>
-            );
-          })}
-        </div>
-      )}
+      {active === "pipeline" && <PipelineTab t={t} stats={stats} prevStats={prevStats} compare={compare} />}
 
       {active === "performance" && (
-        <div className="flex flex-wrap" style={{ gap: 10 }}>
-          {OFFER_STATUS_IDS.map((id) => {
-            const info = stats.offersByStatus[id] || { count: 0, totals: {} };
-            const valueText = fmtUnifiedOrSplit(info.totals, t, exchangeRate, unifyCurrency);
-            const prevCount = prevStats ? (prevStats.offersByStatus[id] || { count: 0 }).count : null;
-            const delta = compareDelta(compare, prevStats, () => pctChange(info.count, prevCount));
-            return (
-              <div
-                key={id}
-                style={{
-                  flex: "1 1 45%",
-                  minWidth: 140,
-                  background: SURFACE_SUBTLE,
-                  borderRadius: 12,
-                  padding: 10,
-                  borderTop: `3px solid ${offerStatusColor(id)}`,
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold" style={{ color: MUTED }}>{t.offerStatuses[id]}</span>
-                  <span className="font-extrabold" style={{ fontSize: 20, color: offerStatusColor(id) }}>{info.count}</span>
-                </div>
-                {valueText && (
-                  <p className="text-xs font-bold mt-1" style={{ color: TEXT, margin: "4px 0 0" }}>{valueText}</p>
-                )}
-                {delta !== undefined && (
-                  <div className="flex items-center gap-1 mt-1">
-                    {delta === null ? (
-                      <span className="text-xs" style={{ color: MUTED }}>{t.dashNoComparisonData}</span>
-                    ) : (
-                      <span
-                        className="flex items-center gap-1 text-xs font-bold"
-                        style={{ color: delta >= 0 ? SUCCESS : DASH_NEGATIVE }}
-                      >
-                        {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                        {Math.abs(delta).toFixed(0)}%
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <PerformanceTab
+          t={t} stats={stats} prevStats={prevStats} compare={compare}
+          exchangeRate={exchangeRate} unifyCurrency={unifyCurrency}
+        />
       )}
 
       {active === "rejection" && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs" style={{ color: MUTED }}>{t.dashRejectionReportHint}</p>
-            {rejectionTotalDelta !== undefined && (
-              rejectionTotalDelta === null ? (
-                <span className="text-xs font-bold" style={{ color: MUTED }}>{t.dashNoComparisonData}</span>
-              ) : (
-                <span
-                  className="flex items-center gap-1 text-xs font-bold"
-                  style={{ color: rejectionTotalDelta <= 0 ? SUCCESS : DASH_NEGATIVE }}
-                >
-                  {rejectionTotalDelta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                  {Math.abs(rejectionTotalDelta).toFixed(0)}%
-                </span>
-              )
-            )}
-          </div>
-          {rejectionReport.total === 0 ? (
-            <p className="text-sm text-center py-3" style={{ color: MUTED }}>{t.dashRejectionReportEmpty}</p>
-          ) : (
-            <>
-              <div className="flex flex-col gap-2 mb-4">
-                {rejectionReport.byReason.map((r) => {
-                  const reasonDelta = compareDelta(compare, prevRejectionReport, () => pctChange(r.count, prevReasonCounts.get(r.id) || 0));
-                  return (
-                    <div key={r.id}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold" style={{ color: TEXT }}>{r.label}</span>
-                        <span className="flex items-center gap-1.5 text-xs font-bold" style={{ color: MUTED }}>
-                          {r.count} · {t.dashRejectionReportPct(r.pct)}
-                          {reasonDelta !== undefined && reasonDelta !== null && (
-                            <span
-                              className="flex items-center gap-0.5"
-                              style={{ color: reasonDelta <= 0 ? SUCCESS : DASH_NEGATIVE }}
-                            >
-                              {reasonDelta >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                              {Math.abs(reasonDelta).toFixed(0)}%
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      <div style={{ height: 8, borderRadius: 999, background: SURFACE_SUBTLE, overflow: "hidden" }}>
-                        <div style={{ width: `${r.pct}%`, height: "100%", background: DASH_NEGATIVE, borderRadius: 999 }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {rejectionReport.byRep.length > 1 && (
-                <>
-                  <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>{t.dashRejectionReportByRep}</p>
-                  <div className="flex flex-wrap" style={{ gap: 8 }}>
-                    {rejectionReport.byRep.map((r) => {
-                      const repDelta = compareDelta(compare, prevRejectionReport, () => pctChange(r.count, prevRepCounts.get(r.name) || 0));
-                      return (
-                        <div
-                          key={r.name}
-                          className="flex items-center justify-between"
-                          style={{ flex: "1 1 45%", minWidth: 140, background: SURFACE_SUBTLE, borderRadius: 10, padding: "8px 10px" }}
-                        >
-                          <span className="text-xs font-bold" style={{ color: TEXT }}>{r.name}</span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="text-xs font-extrabold" style={{ color: DASH_NEGATIVE }}>{r.count}</span>
-                            {repDelta !== undefined && repDelta !== null && (
-                              <span
-                                className="flex items-center gap-0.5 text-xs font-bold"
-                                style={{ color: repDelta <= 0 ? SUCCESS : DASH_NEGATIVE }}
-                              >
-                                {repDelta >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                {Math.abs(repDelta).toFixed(0)}%
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </div>
+        <RejectionTab
+          t={t} compare={compare}
+          rejectionReport={rejectionReport} prevRejectionReport={prevRejectionReport}
+        />
       )}
 
       {active === "topClients" && (
-        <div className="flex flex-col">
-          {topClients.length === 0 ? (
-            <p className="text-sm text-center py-3" style={{ color: MUTED }}>{t.dashTopClientsEmpty}</p>
-          ) : (
-            topClients.map((c, idx) => {
-              // Offer count (not the mixed-currency value total) is what's
-              // compared here — same reasoning computeTopClients itself
-              // documents for why it never sorts by a combined EGP+USD
-              // number: a single "value changed by X%" would be meaningless
-              // across currencies. A client not present at all in the
-              // previous period reads as a 0 baseline, which pctChange
-              // already renders as "no comparison data" below.
-              const key = c.customerId || c.customerName;
-              const clientDelta = compareDelta(compare, prevTopClients, () => pctChange(c.offersCount, prevClientCounts.get(key) || 0));
-              return (
-                <button
-                  key={key}
-                  onClick={() => {
-                    const parent = visits.find((v) => v.id === c.customerId);
-                    if (parent && onOpenCustomer) onOpenCustomer(parent);
-                  }}
-                  className={`btn-press w-full flex items-center gap-2 ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-                  style={{ padding: "8px 2px", borderTop: idx > 0 ? `1px dashed ${LINE}` : "none" }}
-                >
-                  <span
-                    className="flex items-center justify-center font-extrabold text-xs"
-                    style={{ width: 22, height: 22, borderRadius: "50%", background: SURFACE_SUBTLE, color: MUTED, flexShrink: 0 }}
-                  >
-                    {idx + 1}
-                  </span>
-                  <span className="flex-1" style={{ minWidth: 0 }}>
-                    <span className="block font-bold text-sm truncate" style={{ color: TEXT }}>{c.customerName}</span>
-                    <span className="flex items-center gap-1.5 text-xs" style={{ color: MUTED }}>
-                      {t.dashTopClientsOffersCount(c.offersCount)}
-                      {clientDelta !== undefined && (
-                        clientDelta === null ? (
-                          <span>· {t.dashNoComparisonData}</span>
-                        ) : (
-                          <span
-                            className="flex items-center gap-0.5 font-bold"
-                            style={{ color: clientDelta >= 0 ? SUCCESS : DASH_NEGATIVE }}
-                          >
-                            {clientDelta >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                            {Math.abs(clientDelta).toFixed(0)}%
-                          </span>
-                        )
-                      )}
-                    </span>
-                  </span>
-                  <span className="text-sm font-extrabold" style={{ color: PRIMARY_MID, flexShrink: 0 }}>
-                    {fmtUnifiedOrSplit(c.totals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
+        <TopClientsTab
+          t={t} compare={compare} topClients={topClients} prevTopClients={prevTopClients}
+          visits={visits} onOpenCustomer={onOpenCustomer}
+          exchangeRate={exchangeRate} unifyCurrency={unifyCurrency}
+        />
       )}
     </div>
   );

@@ -6,6 +6,49 @@ import { BrandMark } from "./Shared";
 import { PRIMARY } from "../theme";
 import { resolveBackTarget } from "../backTarget";
 
+// Title shown next to the back button. "list" (the home screen) shows the
+// brand wordmark instead of a text title.
+function screenTitleText(screen, formId, activeSupplierId, t) {
+  const titles = {
+    dashboard: t.titleDashboard,
+    form: formId ? t.titleEdit : t.titleNew,
+    detail: t.titleDetail,
+    suppliers: t.suppliersTitle,
+    "supplier-form": activeSupplierId ? t.titleEditSupplier : t.titleNewSupplier,
+    settings: t.settingsTitle,
+    "audit-log": t.auditLogTitle,
+  };
+  return titles[screen];
+}
+
+function HeaderTitle({ screen, formId, activeSupplierId, t }) {
+  if (screen === "list") {
+    return (
+      <span className="flex items-baseline" style={{ gap: 6 }}>
+        <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: 0.5 }}>PEST</span>
+        <span style={{ fontWeight: 500, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>CRM</span>
+      </span>
+    );
+  }
+  return <span className="font-bold text-lg">{screenTitleText(screen, formId, activeSupplierId, t)}</span>;
+}
+
+function OnlineIndicator({ isOnline, t }) {
+  return (
+    <>
+      <span
+        className="flex items-center"
+        style={{ color: isOnline ? "#6FCF97" : "#fff", opacity: isOnline ? 1 : 0.7 }}
+        aria-label={isOnline ? "online" : "offline"}
+        title={isOnline ? "" : t.offlineBanner}
+      >
+        {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
+      </span>
+      <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
+    </>
+  );
+}
+
 // The sticky top app bar: back button (or brand mark on root screens),
 // screen title, online indicator, dark-mode/language toggles, sign out.
 // Pure presentational + the sign-out action itself (self-contained, not
@@ -39,40 +82,13 @@ export default function AppHeader({
         </div>
       )}
       <span className="flex-1" style={{ color: "#fff" }}>
-        {screen === "list" ? (
-          <span className="flex items-baseline" style={{ gap: 6 }}>
-            <span style={{ fontWeight: 900, fontSize: 18, letterSpacing: 0.5 }}>PEST</span>
-            <span style={{ fontWeight: 500, fontSize: 12, color: "rgba(255,255,255,0.55)" }}>CRM</span>
-          </span>
-        ) : (
-          <span className="font-bold text-lg">
-            {screen === "dashboard" && t.titleDashboard}
-            {screen === "form" && (formId ? t.titleEdit : t.titleNew)}
-            {screen === "detail" && t.titleDetail}
-            {screen === "suppliers" && t.suppliersTitle}
-            {screen === "supplier-form" && (activeSupplierId ? t.titleEditSupplier : t.titleNewSupplier)}
-            {screen === "settings" && t.settingsTitle}
-            {screen === "audit-log" && t.auditLogTitle}
-          </span>
-        )}
+        <HeaderTitle screen={screen} formId={formId} activeSupplierId={activeSupplierId} t={t} />
       </span>
       <div
         className="flex items-center gap-2"
         style={{ background: "rgba(255,255,255,0.14)", borderRadius: 10, padding: "6px 10px" }}
       >
-        {isRootScreen && (
-          <>
-            <span
-              className="flex items-center"
-              style={{ color: isOnline ? "#6FCF97" : "#fff", opacity: isOnline ? 1 : 0.7 }}
-              aria-label={isOnline ? "online" : "offline"}
-              title={isOnline ? "" : t.offlineBanner}
-            >
-              {isOnline ? <Wifi size={15} /> : <WifiOff size={15} />}
-            </span>
-            <span style={{ width: 1, height: 14, background: "rgba(255,255,255,0.25)" }} />
-          </>
-        )}
+        {isRootScreen && <OnlineIndicator isOnline={isOnline} t={t} />}
         <button
           onClick={() => setDarkMode((d) => !d)}
           className="btn-press flex items-center"

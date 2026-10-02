@@ -7,23 +7,15 @@
 
 import { Bell, ChevronRight } from "lucide-react";
 import { TEXT, MUTED, LINE, SURFACE, GOLD } from "../theme";
+import { ModalOverlay, ModalDialog } from "./ModalOverlay";
 import { fmtActivityDate } from "../dateUtils";
 
 export default function PendingEditsSheet({ t, open, onClose, pendingEdits, onOpenItem }) {
   if (!open) return null;
 
   return (
-    <div
-      className="flex items-end justify-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 90 }}
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
+    <ModalOverlay onClose={onClose} align="end" zIndex={90}>
+      <ModalDialog
         style={{
           background: SURFACE,
           borderRadius: "18px 18px 0 0",
@@ -99,7 +91,7 @@ export default function PendingEditsSheet({ t, open, onClose, pendingEdits, onOp
             })}
           </div>
         )}
-      </div>
-    </div>
+      </ModalDialog>
+    </ModalOverlay>
   );
 }

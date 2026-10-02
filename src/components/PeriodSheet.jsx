@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { PRIMARY, TEXT, MUTED, LINE, SURFACE } from "../theme";
+import { ModalOverlay, ModalDialog } from "./ModalOverlay";
 
 // Bottom sheet for choosing the dashboard's period. Edits a local draft
 // (mode / custom type / picked months) that's only written back to the
@@ -36,17 +37,8 @@ export default function PeriodSheet({ t, period, availableYears, onApply, onClos
   }
 
   return (
-    <div
-      className="flex items-end justify-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 90 }}
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
+    <ModalOverlay onClose={onClose} align="end" zIndex={90}>
+      <ModalDialog
         style={{
           background: SURFACE,
           borderRadius: "18px 18px 0 0",
@@ -183,7 +175,7 @@ export default function PeriodSheet({ t, period, availableYears, onApply, onClos
         >
           {t.dashPeriodApply}
         </button>
-      </div>
-    </div>
+      </ModalDialog>
+    </ModalOverlay>
   );
 }

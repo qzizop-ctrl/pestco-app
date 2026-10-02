@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { PRIMARY_MID, TEXT, MUTED, LINE, SURFACE } from "../theme";
+import { ModalOverlay, ModalDialog } from "./ModalOverlay";
 import { REJECTION_REASON_IDS } from "../domain";
 
 export default function RejectionReasonModal({ t, initialReasonId, initialReasonText, onConfirm, onCancel }) {
@@ -41,23 +42,8 @@ export default function RejectionReasonModal({ t, initialReasonId, initialReason
   };
 
   return (
-    <div
-      className="flex items-center justify-center"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.45)",
-        zIndex: 100,
-        padding: 20,
-      }}
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
+    <ModalOverlay onClose={onCancel} align="center" zIndex={100} padding={20}>
+      <ModalDialog
         style={{
           background: SURFACE,
           borderRadius: 16,
@@ -125,7 +111,7 @@ export default function RejectionReasonModal({ t, initialReasonId, initialReason
             {t.rejectionModalConfirm}
           </button>
         </div>
-      </div>
-    </div>
+      </ModalDialog>
+    </ModalOverlay>
   );
 }

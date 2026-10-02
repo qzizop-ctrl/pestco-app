@@ -9,6 +9,7 @@
 
 import { X, Tag, Package } from "lucide-react";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD, LINE, SURFACE, SURFACE_SUBTLE } from "../theme";
+import { ModalOverlay, ModalDialog } from "./ModalOverlay";
 
 function ChipRow({ children }) {
   return (
@@ -65,17 +66,8 @@ export default function SupplierFilterSheet({
   };
 
   return (
-    <div
-      className="flex items-end justify-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 90 }}
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
+    <ModalOverlay onClose={onClose} align="end" zIndex={90}>
+      <ModalDialog
         style={{
           background: SURFACE,
           borderRadius: "18px 18px 0 0",
@@ -164,7 +156,7 @@ export default function SupplierFilterSheet({
             {t.applyFiltersBtn}
           </button>
         </div>
-      </div>
-    </div>
+      </ModalDialog>
+    </ModalOverlay>
   );
 }
