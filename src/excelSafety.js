@@ -36,7 +36,7 @@ export function stripFormulaGuard(value) {
 export function neutralizeFormulas(ws) {
   if (!ws) return ws;
   for (const addr of Object.keys(ws)) {
-    if (addr[0] === "!") continue;
+    if (addr.startsWith("!")) continue;
     const cell = ws[addr];
     if (cell && typeof cell.v === "string") {
       cell.t = "s";

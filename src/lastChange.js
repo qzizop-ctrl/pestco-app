@@ -9,6 +9,7 @@
 // pending edit, so a mistake here silently restores the wrong values
 // instead of throwing.
 // ============================================================================
+import { omitKeys } from "./omitKeys";
 
 // Metadata keys that describe the change itself, never a field to restore.
 // Includes "type" (e.g. "delete" on a pending-delete's last_change, set by
@@ -96,7 +97,10 @@ export function computeRollbackFields(lastChange) {
 // Plain code-unit ordering (what an argument-less sort() does), spelled out so
 // the intent is explicit. Deliberately NOT localeCompare: these orderings must
 // be identical on every device so equal values always compare equal.
-const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+const byCodeUnit = (a, b) => {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+};
 
 // Order-insensitive comparison of two tag lists: re-ordering the same tags is
 // not a change worth sending to the owner for review.
@@ -133,7 +137,8 @@ function stableStringify(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
   const keys = Object.keys(value).sort(byCodeUnit);
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
+  const pairs = keys.map((k) => JSON.stringify(k) + ":" + stableStringify(value[k]));
+  return `{${pairs.join(",")}}`;
 }
 
 // True when `a` and `b` describe the very same pending change. The owner's
@@ -173,7 +178,7 @@ export function mergeLastChange(prev, next) {
     ...(Array.isArray(next.addedVisitEntryIds) ? next.addedVisitEntryIds : []),
   ];
 
-  const { changes: _ignored, addedVisitEntryIds: _ids, ...meta } = next;
+  const meta = omitKeys(next, ["changes", "addedVisitEntryIds"]);
   return {
     ...meta,
     ...(Object.keys(merged).length > 0 ? { changes: merged } : {}),

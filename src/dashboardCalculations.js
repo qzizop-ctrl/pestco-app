@@ -123,6 +123,14 @@ export function pctChange(current, previous) {
   return ((current - previous) / previous) * 100;
 }
 
+// Delta for a comparison badge: undefined when comparison is off (no badge),
+// null when it's on but there is no previous period to compare against, and
+// otherwise whatever `compute()` returns.
+export function compareDelta(compare, hasPrev, compute) {
+  if (!compare) return undefined;
+  return hasPrev ? compute() : null;
+}
+
 // Average deal size, computed from EGP-denominated offers only — mixing
 // currencies into one "average" number would be misleading, so this is
 // intentionally scoped to the dominant currency.
@@ -143,8 +151,8 @@ export function computeAvgDealSizeForCurrency(offersInRange, currency) {
 // most. Offers still pending aren't "decided" yet, so they're excluded from
 // the denominator entirely.
 export function computeWinRate(offersByStatus) {
-  const won = ((offersByStatus.purchased || {}).count || 0) + ((offersByStatus.installed || {}).count || 0);
-  const rejected = (offersByStatus.rejected || {}).count || 0;
+  const won = (offersByStatus.purchased?.count || 0) + (offersByStatus.installed?.count || 0);
+  const rejected = offersByStatus.rejected?.count || 0;
   const decided = won + rejected;
   return decided > 0 ? (won / decided) * 100 : null;
 }
@@ -153,8 +161,8 @@ export function computeWinRate(offersByStatus) {
 // rate computed from very few deals (e.g. 100% from 2 deals) isn't read
 // with the same confidence as one computed from a large sample.
 export function computeDecidedCount(offersByStatus) {
-  const won = ((offersByStatus.purchased || {}).count || 0) + ((offersByStatus.installed || {}).count || 0);
-  const rejected = (offersByStatus.rejected || {}).count || 0;
+  const won = (offersByStatus.purchased?.count || 0) + (offersByStatus.installed?.count || 0);
+  const rejected = offersByStatus.rejected?.count || 0;
   return won + rejected;
 }
 
@@ -172,7 +180,7 @@ export function computeDecidedCount(offersByStatus) {
 function mergeTotals(...totalsList) {
   const merged = {};
   CURRENCY_IDS.forEach((id) => {
-    merged[id] = totalsList.reduce((sum, t) => sum + ((t && t[id]) || 0), 0);
+    merged[id] = totalsList.reduce((sum, t) => sum + (t?.[id] || 0), 0);
   });
   return merged;
 }

@@ -19,7 +19,7 @@ function showFatalError(err) {
   title.textContent = "حصل خطأ عند تشغيل التطبيق";
   const details = document.createElement("pre");
   details.style.cssText = "white-space:pre-wrap;font-size:13px;background:#f5f5f5;padding:12px;border-radius:6px";
-  details.textContent = String((err && err.stack) || err);
+  details.textContent = String(err?.stack || err);
   box.append(title, details);
   rootEl.replaceChildren(box);
 }

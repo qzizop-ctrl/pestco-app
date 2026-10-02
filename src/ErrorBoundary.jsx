@@ -135,11 +135,11 @@ export default class ErrorBoundary extends React.Component {
             >
               <div style={{ marginBottom: 10 }}>
                 <strong>Error:</strong>
-                <div>{String(this.state.error && this.state.error.message)}</div>
+                <div>{String(this.state.error?.message)}</div>
               </div>
               <div style={{ marginBottom: 10 }}>
                 <strong>Stack:</strong>
-                <div>{this.state.error && this.state.error.stack}</div>
+                <div>{this.state.error?.stack}</div>
               </div>
               {this.state.info && (
                 <div>

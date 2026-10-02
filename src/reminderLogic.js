@@ -37,7 +37,7 @@ export function splitDueReminders(pending, { now, seen, freshWindowMs = REMINDER
   const fresh = [];
   const missed = [];
   for (const v of pending) {
-    if (!v || !v.callDateTime) continue;
+    if (!v?.callDateTime) continue;
     const due = new Date(v.callDateTime).getTime();
     if (Number.isNaN(due) || due > now) continue;
     if (seen.has(reminderKey(v))) continue;

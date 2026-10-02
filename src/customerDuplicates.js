@@ -6,7 +6,7 @@ import { parseVisitDate, toJsDate } from "./dateUtils";
 
 // Normalizes a phone number to its core digits, ignoring +2 / 0020 / leading 0 variations
 export function corePhoneDigits(phone) {
-  let d = (phone || "").replace(/[^0-9]/g, "");
+  let d = (phone || "").replace(/\D/g, "");
   if (!d) return "";
   if (d.startsWith("00")) d = d.slice(2);
   if (d.startsWith("20") && d.length > 10) d = d.slice(2);
@@ -20,7 +20,7 @@ export function corePhoneDigits(phone) {
 // normalization below, never as a substring, so a company genuinely named
 // just "مجموعة" isn't reduced to nothing. Written in their normalized form
 // (ة already folded to ه) since that's what they're compared against.
-const AR_ENTITY_WORDS = ["شركه", "مؤسسه", "مجموعه", "مصنع", "معرض", "مكتب"];
+const AR_ENTITY_WORDS = new Set(["شركه", "مؤسسه", "مجموعه", "مصنع", "معرض", "مكتب"]);
 
 // Normalizes a company name for duplicate-matching. Trims/collapses
 // whitespace and lowercases as before, plus Arabic-specific folding so
@@ -47,7 +47,7 @@ function normalizeCompanyName(name) {
 
   return s
     .split(" ")
-    .filter((w) => w && !AR_ENTITY_WORDS.includes(w))
+    .filter((w) => w && !AR_ENTITY_WORDS.has(w))
     .join(" ");
 }
 

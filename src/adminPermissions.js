@@ -34,8 +34,8 @@ export function isAdminEmail(adminEmails, userEmail) {
 export function resolvePrimaryAdminEmail(primaryEmailField, adminEmails) {
   const explicit = normalizeEmail(primaryEmailField);
   if (explicit) return explicit;
-  const emails = (adminEmails || []).map(normalizeEmail).filter(Boolean);
-  return emails[0] || null;
+  const firstAdmin = (adminEmails || []).map(normalizeEmail).find(Boolean);
+  return firstAdmin || null;
 }
 
 // Is this the primary admin? primaryAdminEmail should already be the
@@ -63,7 +63,7 @@ export function canRemoveAdmin({ requesterIsPrimaryAdmin, targetEmail, primaryAd
 // The only two roles an owner can grant a workspace member (see
 // firestore.rules' canRead()/canWrite() — 'owner' is never granted, it's
 // implicit from being the doc's own uid).
-const ACCESS_ROLES = ["editor", "viewer"];
+const ACCESS_ROLES = new Set(["editor", "viewer"]);
 
 // Guards useWorkspace.js's grantAccess(): only the workspace owner may
 // grant access, only to a real (non-empty, once normalized) email, and only
@@ -73,7 +73,7 @@ const ACCESS_ROLES = ["editor", "viewer"];
 export function canGrantAccess({ isOwnerAccount, email, role }) {
   if (!isOwnerAccount) return false;
   if (!normalizeEmail(email)) return false;
-  return ACCESS_ROLES.includes(role);
+  return ACCESS_ROLES.has(role);
 }
 
 // Guards useWorkspace.js's revokeAccess(): only the owner, and only for a

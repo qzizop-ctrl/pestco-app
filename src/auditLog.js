@@ -18,10 +18,10 @@
 // not an actual field — same list as lastChange.js's
 // IGNORED_LAST_CHANGE_KEYS, kept separate since the two files are meant to
 // stay independent.
-const IGNORED_CHANGE_KEYS = [
+const IGNORED_CHANGE_KEYS = new Set([
   "changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt",
   "changes", "details", "type",
-];
+]);
 
 // Strips metadata keys out of a last_change-shaped `changes` object, so the
 // audit entry's `changes` field only ever holds actual field diffs.
@@ -29,7 +29,7 @@ function cleanChanges(changes) {
   if (!changes || typeof changes !== "object") return null;
   const cleaned = {};
   Object.entries(changes).forEach(([key, val]) => {
-    if (IGNORED_CHANGE_KEYS.includes(key)) return;
+    if (IGNORED_CHANGE_KEYS.has(key)) return;
     cleaned[key] = val;
   });
   return Object.keys(cleaned).length > 0 ? cleaned : null;

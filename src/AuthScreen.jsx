@@ -110,10 +110,10 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
   useEffect(() => {
     if (authError === "unverified") {
       if (!registeringRef.current) setError(t.unverifiedError);
-      onClearAuthError && onClearAuthError();
+      onClearAuthError?.();
     } else if (authError) {
       setError(errMsg("auth/user-not-found"));
-      onClearAuthError && onClearAuthError();
+      onClearAuthError?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authError]);
@@ -328,7 +328,7 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
               border: "none",
             }}
           >
-            {mode === "login" ? t.loginBtn : mode === "register" ? t.registerBtn : t.sendReset}
+            {{ login: t.loginBtn, register: t.registerBtn }[mode] ?? t.sendReset}
           </button>
 
           {mode === "login" && (

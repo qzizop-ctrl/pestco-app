@@ -80,11 +80,18 @@ function simpleTable({ headers, rows, align }) {
   if (rows.length === 0) return "";
   const thStyle = `text-align:${align};font-size:11px;font-weight:700;color:${MUTED_HEX};background:${SUBTLE_HEX};padding:8px 10px;border-bottom:1px solid ${LINE_HEX};`;
   const tdStyle = `text-align:${align};font-size:12px;color:${TEXT_HEX};padding:7px 10px;border-bottom:1px solid ${LINE_HEX};`;
+  const headCells = headers.map((h) => `<th style="${thStyle}">${esc(h)}</th>`).join("");
+  const bodyRows = rows
+    .map((r) => {
+      const cells = r.map((c) => `<td style="${tdStyle}">${esc(c)}</td>`).join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
   return `
     <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
-      <thead><tr>${headers.map((h) => `<th style="${thStyle}">${esc(h)}</th>`).join("")}</tr></thead>
+      <thead><tr>${headCells}</tr></thead>
       <tbody>
-        ${rows.map((r) => `<tr>${r.map((c) => `<td style="${tdStyle}">${esc(c)}</td>`).join("")}</tr>`).join("")}
+        ${bodyRows}
       </tbody>
     </table>
   `;
@@ -159,14 +166,16 @@ function buildFrontMatterHtml({
     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", numberingSystem: "latn",
   });
 
+  const avgDealSizeUsdSuffix = avgDealSizeUSD === null ? "" : ` / ${fmtMoney(avgDealSizeUSD)} ${t.currencies.USD}`;
+  const avgDealSizeText = avgDealSize === null
+    ? t.dashNoOffersYet
+    : `${fmtMoney(avgDealSize)} ${t.dashCurrency}${avgDealSizeUsdSuffix}`;
   const summaryItems = [
     [t.dashCardVisits, String(stats.visitsCount)],
     [t.dashPeriodCustomersLabel, String(stats.customersCount)],
     [t.dashCardOffersCount, String(stats.offersCount)],
     [t.dashCardOffersValue, fmtUnifiedOrSplit(stats.offersValueTotals, t, exchangeRate, unifyCurrency) || `0 ${t.dashCurrency}`],
-    [t.dashAvgDealSize, avgDealSize === null
-      ? t.dashNoOffersYet
-      : `${fmtMoney(avgDealSize)} ${t.dashCurrency}${avgDealSizeUSD !== null ? ` / ${fmtMoney(avgDealSizeUSD)} ${t.currencies.USD}` : ""}`],
+    [t.dashAvgDealSize, avgDealSizeText],
     [t.dashWinRate, winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}% (${t.dashWinRateSample(winRateDecidedCount)})`],
   ];
 
@@ -320,7 +329,7 @@ export async function generateDashboardPdf(opts) {
         anyPageAdded = true;
       }
     } finally {
-      document.body.removeChild(container);
+      container.remove();
     }
   }
 
@@ -413,7 +422,7 @@ async function addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight }) {
       pdf.setPage(page);
       pdf.addImage(imgData, "PNG", (pageWidth - imgWidth) / 2, pageHeight - imgHeight - 16, imgWidth, imgHeight);
     } finally {
-      document.body.removeChild(container);
+      container.remove();
     }
   }
 }

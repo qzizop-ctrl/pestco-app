@@ -19,7 +19,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 const WhatsApp = registerPlugin("WhatsApp");
 
 export async function openWhatsApp(phone) {
-  const digits = (phone || "").replace(/[^0-9]/g, "");
+  const digits = (phone || "").replace(/\D/g, "");
   if (!digits) return;
 
   if (Capacitor.getPlatform() === "android") {

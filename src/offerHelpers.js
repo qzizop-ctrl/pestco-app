@@ -63,7 +63,8 @@ export function sumOffersByCurrency(offers) {
 // currency at 0 (e.g. "0 جنيه + 0 دولار") instead of collapsing to "".
 export function fmtOffersTotals(totals, t, { showAllIfEmpty = false } = {}) {
   const nonZeroIds = CURRENCY_IDS.filter((id) => totals[id]);
-  const ids = nonZeroIds.length > 0 ? nonZeroIds : (showAllIfEmpty ? CURRENCY_IDS : []);
+  const fallbackIds = showAllIfEmpty ? CURRENCY_IDS : [];
+  const ids = nonZeroIds.length > 0 ? nonZeroIds : fallbackIds;
   const joined = ids
     .map((id) => `${fmtMoney(totals[id] || 0, t.locale)} ${t.currencies[id]}`)
     .join(" + ");
@@ -86,7 +87,7 @@ export function fmtOffersTotals(totals, t, { showAllIfEmpty = false } = {}) {
 // per-currency display in that case, same as if the toggle were off.
 export function unifyOffersTotal(totals, rate) {
   const r = Number(rate);
-  if (!(r > 0)) return null;
+  if (Number.isNaN(r) || r <= 0) return null;
   const egp = totals.EGP || 0;
   const usd = totals.USD || 0;
   return egp + usd * r;
@@ -118,7 +119,7 @@ export function describeOfferForAudit(offer, t) {
     offer.name || "—",
     offer.offerNumber ? `#${offer.offerNumber}` : "",
     `${fmtMoney(offer.amount || 0, t.locale)} ${currency}`.trim(),
-    (t.offerStatuses && t.offerStatuses[offer.status]) || offer.status || "",
+    t.offerStatuses?.[offer.status] || offer.status || "",
   ];
   if (offer.status === "rejected" && offer.rejectionReason) {
     parts.push(`(${offer.rejectionReason})`);

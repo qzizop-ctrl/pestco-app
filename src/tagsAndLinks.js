@@ -38,6 +38,6 @@ export function collectSupplierCategories(suppliers) {
 // URL looks like it should work, but Capacitor's WebView doesn't parse that
 // special Chrome-only syntax, so it silently does nothing).
 export function buildWhatsAppLink(phone) {
-  const digits = (phone || "").replace(/[^0-9]/g, "");
+  const digits = (phone || "").replace(/\D/g, "");
   return `https://wa.me/${digits}`;
 }

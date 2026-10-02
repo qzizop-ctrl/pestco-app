@@ -30,7 +30,7 @@ export function buildVisitEntry(date) {
 // event built from visitDate for customers that predate visit-history
 // tracking, so old data still counts correctly.
 export function getVisitEvents(visit) {
-  if (visit.visitHistory && visit.visitHistory.length) return visit.visitHistory;
+  if (visit.visitHistory?.length) return visit.visitHistory;
   if (visit.visitDate) return [{ id: "legacy", date: visit.visitDate, at: null }];
   return [];
 }

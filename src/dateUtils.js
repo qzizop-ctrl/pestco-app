@@ -11,12 +11,12 @@
 export function parseVisitDate(str) {
   if (!str) return null;
   const s = String(str).trim();
-  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
   if (iso) {
     const d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
     return Number.isNaN(Number(d)) ? null : d;
   }
-  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  const dmy = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(s);
   if (dmy) {
     const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
     return Number.isNaN(Number(d)) ? null : d;
