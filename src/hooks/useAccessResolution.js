@@ -22,6 +22,10 @@ const ACCESS_HARD_TIMEOUT_MS = 15000;
 // cache: terminating Firestore drops writes that haven't reached the server.
 const SELF_HEAL_WAIT_MS = 5000;
 
+// consumeSignOutReason() returns a string; authError uses true for "no
+// access" and "unverified" for an unverified email (false = no error).
+const REASON_TO_AUTH_ERROR = { "no-access": true, unverified: "unverified" };
+
 // Carries out the sign-out half of a "this account has no workspace" outcome
 // (see resolveNoOwnersOutcome in workspaceAccess.js). The state resets stay in
 // applyAccessSnap; only the sign-out / self-heal side effects live here.
@@ -128,11 +132,7 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
   // wipe the local data cache), so the reason has to survive the reload.
   // authError keeps its original shape: true ("no access"), "unverified", or
   // false — consumeSignOutReason() returns a string, so map it back here.
-  const [authError, setAuthError] = useState(() => {
-    const reason = consumeSignOutReason();
-    if (reason === "no-access") return true;
-    return reason || false;
-  });
+  const [authError, setAuthError] = useState(() => REASON_TO_AUTH_ERROR[consumeSignOutReason()] ?? false);
   // True when access could not be resolved within ACCESS_HARD_TIMEOUT_MS
   // (offline / very slow first round trip). permissionLoading stays true —
   // nobody gets edit rights from a guess — but the UI can say what is
