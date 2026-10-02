@@ -121,7 +121,7 @@ export function useCustomerRecords({
     if (!requireOnline()) return;
     if (!validate() || !user || !ownerUid) return;
 
-    const proceedSave = async () => {
+    const runSave = async () => {
       const { id, tagsInput, activityLog: _activityLog, offers: _offers, visitHistory: _visitHistory, last_change: _last_change, originalCustomer: _originalCustomer, ...rest } = form;
       const data = { ...rest, tags: parseTagsCell(tagsInput) };
       const original = id ? visits.find((v) => v.id === id) : null;
@@ -259,6 +259,15 @@ export function useCustomerRecords({
       }
     };
 
+    // Fire-and-forget entry point for runSave. Most of runSave is inside its
+    // own try/catch, but the field-diffing above it is not — the .catch here
+    // guarantees nothing it throws can become an unhandled promise rejection.
+    // Returns nothing, so callers (and confirm-modal callbacks) have no
+    // promise left to forget.
+    const proceedSave = () => {
+      runSave().catch(reportSaveError);
+    };
+
     // Chain: phone-missing warning -> duplicate-phone warning -> actual save.
     // Each step only runs once the previous one's confirm modal is accepted.
     const checkDuplicateThenSave = () => {
@@ -309,10 +318,14 @@ export function useCustomerRecords({
     if (!p) return;
     clearTimeout(p.timeoutId);
     pendingDeleteRef.current = null;
-    commitDeleteVisit(p.id, p.companyName);
+    // commitDeleteVisit reports its own failures (try/catch -> reportSaveError)
+    // and never rejects, so there is nothing to await or catch here.
+    void commitDeleteVisit(p.id, p.companyName);
   });
 
-  const proceedDeleteVisit = async (id) => {
+  // Not async: nothing in here awaits (the write happens later, in the
+  // timeout below), so it has no promise for callers to forget.
+  const proceedDeleteVisit = (id) => {
     const visit = visits.find((v) => v.id === id);
     setScreen("list");
 
@@ -327,7 +340,8 @@ export function useCustomerRecords({
     const companyName = visit ? visit.companyName : "";
     const timeoutId = setTimeout(() => {
       pendingDeleteRef.current = null;
-      commitDeleteVisit(id, companyName);
+      // Reports its own failures and never rejects (see commitDeleteVisit).
+      void commitDeleteVisit(id, companyName);
     }, 5000);
 
     const pending = { id, companyName, timeoutId };
@@ -430,7 +444,13 @@ export function useCustomerRecords({
       reportSaveError(e);
       return;
     }
-    cancelCallReminder(visit.id);
+    // Cancelling the local notification is not worth losing the activity
+    // entry over: a failure is logged, and the "call done" entry still follows.
+    try {
+      await cancelCallReminder(visit.id);
+    } catch (e) {
+      console.warn("Could not cancel call reminder:", visit.id, e?.code ?? e);
+    }
     await appendActivity(visit.id, buildActivity("call", t.activityCallDone));
   };
 

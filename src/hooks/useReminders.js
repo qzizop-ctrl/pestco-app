@@ -33,12 +33,19 @@ export function useReminders({ visits, user, ownerUid, canEdit, t, visitsLoaded 
   useEffect(() => {
     try {
       if (window.Notification && Notification.permission === "default") {
-        Notification.requestPermission();
+        // Modern browsers return a promise, old Safari returns undefined —
+        // Promise.resolve() handles both, and the catch keeps a rejection
+        // from becoming an unhandled promise.
+        Promise.resolve(Notification.requestPermission()).catch(() => {
+          // Permission prompt blocked or unsupported — safe to ignore.
+        });
       }
     } catch {
       // Requesting notification permission may be unsupported or blocked — safe to ignore.
     }
-    requestNotificationPermission();
+    Promise.resolve(requestNotificationPermission()).catch((e) => {
+      console.warn("Could not request notification permission:", e?.code ?? e);
+    });
   }, []);
 
   // Reminder checks only need to look at visits that actually have a
@@ -90,7 +97,11 @@ export function useReminders({ visits, user, ownerUid, canEdit, t, visitsLoaded 
 
   useEffect(() => {
     if (!user || !ownerUid || !visitsLoaded) return;
-    syncCallReminders(visits, t);
+    // syncCallReminders reports its own failures; this catch is a safety net
+    // so an unexpected rejection can never become an unhandled promise.
+    Promise.resolve(syncCallReminders(visits, t)).catch((e) => {
+      console.warn("Call reminder sync failed unexpectedly:", e?.code ?? e);
+    });
   }, [visits, t, user, ownerUid, visitsLoaded]);
 
   return { pendingReminders };
