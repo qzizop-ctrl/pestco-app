@@ -308,7 +308,9 @@ export async function generateDashboardPdf(opts) {
         const sliceY = page * cssPxPerPage;
         const sliceHeightPx = Math.min(cssPxPerPage, totalHeightPx - sliceY);
 
-        const canvas = await html2canvas(container, {
+        // Sequential on purpose: every slice is cut from the same container and
+        // appended to the PDF in page order.
+        const canvas = await html2canvas(container, { // NOSONAR
           scale: RENDER_SCALE,
           backgroundColor: "#FFFFFF",
           useCORS: true,
@@ -355,7 +357,9 @@ export async function generateDashboardPdf(opts) {
   // never ends on a near-blank page holding only that one line.
   for (let i = 0; i < offerChunks.length; i++) {
     const isLastChunk = i === offerChunks.length - 1;
-    await renderHtmlChunk(buildOffersChunkHtml({
+    // Sequential on purpose: each chunk becomes the next PDF page(s), in order,
+    // and they all share one off-screen container.
+    await renderHtmlChunk(buildOffersChunkHtml({ // NOSONAR
       t, rows: offerChunks[i], isFirstChunk: i === 0, isLastChunk,
       trailingHtml: isLastChunk ? footerHtml : "",
     }));
@@ -410,7 +414,8 @@ async function addPageNumbers({ pdf, t, html2canvas, pageWidth, pageHeight }) {
     document.body.appendChild(container);
 
     try {
-      const canvas = await html2canvas(container, {
+      // Sequential on purpose: one shared page-number stamp per page, in order.
+      const canvas = await html2canvas(container, { // NOSONAR
         scale: RENDER_SCALE,
         backgroundColor: null,
         useCORS: true,

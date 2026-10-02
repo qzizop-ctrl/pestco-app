@@ -13,25 +13,29 @@
 // ============================================================================
 
 const KEY = "pestco_signout_reason";
+const NO_ACCESS = "no-access";
 
 // reason: true ("no access / not registered") | "unverified"
 export function rememberSignOutReason(reason) {
   if (!reason) return;
   try {
-    sessionStorage.setItem(KEY, reason === true ? "1" : String(reason));
+    sessionStorage.setItem(KEY, reason === true ? NO_ACCESS : String(reason));
   } catch {
     // sessionStorage may be unavailable — the message is just not shown.
   }
 }
 
-// Returns the remembered reason (true | "unverified") or false, and forgets it.
+// Returns the remembered reason as a string — "no-access" | "unverified" —
+// or "" when there is none (falsy, so `if (reason)` still works), and
+// forgets it. Always a string so callers get one consistent type.
 export function consumeSignOutReason() {
   try {
     const raw = sessionStorage.getItem(KEY);
-    if (raw === null) return false;
+    if (raw === null) return "";
     sessionStorage.removeItem(KEY);
-    return raw === "1" ? true : raw;
+    // "1" is what older builds stored for the "no access" case.
+    return raw === "1" ? NO_ACCESS : raw;
   } catch {
-    return false;
+    return "";
   }
 }

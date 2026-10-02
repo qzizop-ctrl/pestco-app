@@ -74,11 +74,8 @@ export function fmtCreatedAt(ts, locale) {
   }
 }
 
+// Activity-log timestamps use the same short "day month, hh:mm" format as
+// reminders — delegate instead of keeping a second identical copy.
 export function fmtActivityDate(dt, locale) {
-  try {
-    const d = new Date(dt);
-    return d.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", numberingSystem: "latn" });
-  } catch {
-    return dt;
-  }
+  return fmtReminder(dt, locale);
 }

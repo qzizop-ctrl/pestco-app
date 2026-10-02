@@ -215,8 +215,9 @@ function idsForVisits(visitIds) {
   return out;
 }
 
-async function runCallReminderSync(visits, t) {
-  const now = Date.now();
+// The (at most MAX_SCHEDULED_REMINDERS) soonest upcoming reminders worth
+// having scheduled right now.
+function pickActiveReminders(visits, now) {
   const wanted = [];
   for (const v of visits) {
     if (!v || v.deleted || v.notified || !v.callDateTime) continue;
@@ -225,9 +226,12 @@ async function runCallReminderSync(visits, t) {
     wanted.push({ v, at });
   }
   wanted.sort((a, b) => a.at - b.at);
-  const active = wanted.slice(0, MAX_SCHEDULED_REMINDERS);
-  const activeIds = new Set(active.map((w) => w.v.id));
+  return wanted.slice(0, MAX_SCHEDULED_REMINDERS);
+}
 
+// Native reminders that exist for a visit which should no longer have one.
+// Records the cancellation so the same id is not cancelled again next sync.
+function collectCancellations(visits, activeIds) {
   const idMap = readIdMap();
   const toCancel = [];
   for (const v of visits) {
@@ -238,7 +242,12 @@ async function runCallReminderSync(visits, t) {
     cancelledIds.add(v.id);
     scheduledSigs.delete(v.id);
   }
+  return toCancel;
+}
 
+// Active reminders whose time / title / body differ from what is already
+// scheduled (a signature per visit tells us).
+function collectChanged(active, t) {
   const changed = [];
   for (const { v, at } of active) {
     const title = `${t.reminderTitle} ${v.companyName}`;
@@ -247,37 +256,52 @@ async function runCallReminderSync(visits, t) {
     if (scheduledSigs.get(v.id) === sig) continue;
     changed.push({ visitId: v.id, at, title, body, sig });
   }
+  return changed;
+}
+
+async function applyReminderChanges(toCancel, changed) {
+  const ids = idsForVisits(changed.map((c) => c.visitId));
+  // Cancel first so a rescheduled reminder can never end up pending twice.
+  const cancelList = [...toCancel, ...changed.map((c) => ({ id: ids.get(c.visitId) }))];
+  if (cancelList.length) await LocalNotifications.cancel({ notifications: cancelList });
+  if (changed.length === 0) return;
+
+  await LocalNotifications.schedule({
+    notifications: changed.map((c) => ({
+      id: ids.get(c.visitId),
+      title: c.title,
+      body: c.body,
+      schedule: { at: c.at, allowWhileIdle: true },
+    })),
+  });
+  changed.forEach((c) => {
+    scheduledSigs.set(c.visitId, c.sig);
+    cancelledIds.delete(c.visitId);
+  });
+}
+
+function reportSyncFailure(err) {
+  console.warn("syncCallReminders failed:", err);
+  // Reported once per session: this runs on every data change, and a
+  // persistent cause (e.g. notification permission denied) would otherwise
+  // flood the error tracker.
+  if (syncErrorReported) return;
+  syncErrorReported = true;
+  reportException(err, { context: "syncCallReminders failed" });
+}
+
+async function runCallReminderSync(visits, t) {
+  const active = pickActiveReminders(visits, Date.now());
+  const activeIds = new Set(active.map((w) => w.v.id));
+  const toCancel = collectCancellations(visits, activeIds);
+  const changed = collectChanged(active, t);
 
   if (toCancel.length === 0 && changed.length === 0) return;
 
   try {
-    const ids = idsForVisits(changed.map((c) => c.visitId));
-    // Cancel first so a rescheduled reminder can never end up pending twice.
-    const cancelList = [...toCancel, ...changed.map((c) => ({ id: ids.get(c.visitId) }))];
-    if (cancelList.length) await LocalNotifications.cancel({ notifications: cancelList });
-    if (changed.length) {
-      await LocalNotifications.schedule({
-        notifications: changed.map((c) => ({
-          id: ids.get(c.visitId),
-          title: c.title,
-          body: c.body,
-          schedule: { at: c.at, allowWhileIdle: true },
-        })),
-      });
-      changed.forEach((c) => {
-        scheduledSigs.set(c.visitId, c.sig);
-        cancelledIds.delete(c.visitId);
-      });
-    }
+    await applyReminderChanges(toCancel, changed);
   } catch (err) {
-    console.warn("syncCallReminders failed:", err);
-    // Reported once per session: this runs on every data change, and a
-    // persistent cause (e.g. notification permission denied) would otherwise
-    // flood the error tracker.
-    if (!syncErrorReported) {
-      syncErrorReported = true;
-      reportException(err, { context: "syncCallReminders failed" });
-    }
+    reportSyncFailure(err);
   }
 }
 
