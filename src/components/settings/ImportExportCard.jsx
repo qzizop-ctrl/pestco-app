@@ -6,6 +6,8 @@ export default function ImportExportCard({
   t,
   exportAllToExcel,
   exportFullBackupJson,
+  restoreBackup,
+  confirmAction,
   exportFilteredToExcel,
   filteredCount,
   triggerImportPicker,
@@ -93,6 +95,82 @@ export default function ImportExportCard({
             <Download size={16} /> {t.fullBackupBtn}
           </button>
           <p className="text-xs mt-2" style={{ color: MUTED }}>{t.fullBackupHint}</p>
+
+          {/* Restore from that file — owner only, same as the backup button. */}
+          {restoreBackup && (
+            <>
+              <button
+                onClick={restoreBackup.triggerRestorePicker}
+                disabled={restoreBackup.restoring}
+                className="btn-press flex items-center justify-center gap-2 font-bold"
+                style={{
+                  background: SURFACE,
+                  border: `1px solid ${PRIMARY_MID}`,
+                  color: PRIMARY_MID,
+                  borderRadius: 14,
+                  padding: "12px 0",
+                  width: "100%",
+                  marginTop: 12,
+                  opacity: restoreBackup.restoring ? 0.6 : 1,
+                }}
+              >
+                <Upload size={16} />{" "}
+                {restoreBackup.restoring && restoreBackup.restoreProgress
+                  ? t.restoreProgress(restoreBackup.restoreProgress.done, restoreBackup.restoreProgress.total)
+                  : t.restoreBtn}
+              </button>
+              <input
+                ref={restoreBackup.restoreFileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={restoreBackup.handleRestoreFile}
+                style={{ display: "none" }}
+              />
+              <p className="text-xs mt-2" style={{ color: MUTED }}>{t.restoreHint}</p>
+
+              {restoreBackup.restorePending && (
+                <div style={{ background: SURFACE_SUBTLE, border: `1px solid ${LINE}`, borderRadius: 14, padding: 12, marginTop: 12 }}>
+                  <p className="font-bold text-sm mb-1" style={{ color: TEXT }}>{t.restorePanelTitle}</p>
+                  <p className="text-xs mb-3" style={{ color: MUTED, wordBreak: "break-word" }}>
+                    {t.restoreFileSummary(
+                      restoreBackup.restorePending.fileName,
+                      restoreBackup.restorePending.counts,
+                      restoreBackup.restorePending.exportedAt ? restoreBackup.restorePending.exportedAt.slice(0, 10) : ""
+                    )}
+                  </p>
+
+                  <button
+                    onClick={() => restoreBackup.runRestore("merge")}
+                    disabled={restoreBackup.restoring}
+                    className="btn-press font-bold"
+                    style={{ background: PRIMARY_MID, color: "#fff", borderRadius: 12, padding: "10px 0", width: "100%", opacity: restoreBackup.restoring ? 0.6 : 1 }}
+                  >
+                    {t.restoreMergeBtn}
+                  </button>
+                  <p className="text-xs mt-1 mb-3" style={{ color: MUTED }}>{t.restoreMergeHint}</p>
+
+                  <button
+                    onClick={() => confirmAction(t.restoreReplaceConfirm, () => restoreBackup.runRestore("replace"), { danger: true })}
+                    disabled={restoreBackup.restoring}
+                    className="btn-press font-bold"
+                    style={{ background: SURFACE, border: "1px solid #c0392b", color: "#c0392b", borderRadius: 12, padding: "10px 0", width: "100%", opacity: restoreBackup.restoring ? 0.6 : 1 }}
+                  >
+                    {t.restoreReplaceBtn}
+                  </button>
+                  <p className="text-xs mt-1 mb-3" style={{ color: MUTED }}>{t.restoreReplaceHint}</p>
+
+                  <button
+                    onClick={restoreBackup.cancelRestore}
+                    disabled={restoreBackup.restoring}
+                    className="btn-press text-sm font-bold"
+                    style={{ color: MUTED, width: "100%", padding: "6px 0" }}
+                  >
+                    {t.restoreCancelBtn}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
