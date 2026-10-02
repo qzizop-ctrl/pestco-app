@@ -21,7 +21,7 @@ export default function CustomerContactRows({ t, active, canEdit, logVisitToday 
           href={buildWhatsAppLink(active.phone)}
           onClick={(e) => {
             e.preventDefault();
-            openWhatsApp(active.phone);
+            void openWhatsApp(active.phone);
           }}
           className="flex items-center justify-between"
           style={{ color: "#25A245", textDecoration: "none" }}
