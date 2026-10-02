@@ -19,7 +19,7 @@
 
 ```bash
 npm ci
-npm install --no-save @firebase/rules-unit-testing@^3 firebase-tools   # مرة واحدة
+npm install --no-save @firebase/rules-unit-testing@3.0.4 firebase-tools@13.35.1   # مرة واحدة
 npm run test:rules
 ```
 
