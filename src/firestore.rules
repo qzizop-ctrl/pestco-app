@@ -242,8 +242,8 @@ service cloud.firestore {
     // "مركزي للأدمن" (admin-only, central) shape it was asked for as.
     // Any editor who can write the underlying customer/supplier record can
     // also append its audit entry — canWrite(ownerUid) already covers
-    // owner + reviewer + editor. Entries can never be edited or deleted by
-    // any client once written, so the trail can't be quietly tampered with.
+    // owner + reviewer + editor. Entries can never be edited once written,
+    // and only the owner can delete (to trim old ones), so the trail can't be quietly tampered with.
     //
     // Beyond the identity check (changedById must be the caller — already
     // in place), this also now constrains the shape of what can be
@@ -273,7 +273,10 @@ service cloud.firestore {
         && request.resource.data.entityId.size() <= 128
         && request.resource.data.at == request.time;
 
-      allow update, delete: if false;
+      // Entries can't be edited. Only the workspace owner may delete them —
+      // that is how the app trims the log to the newest 40 entries.
+      allow update: if false;
+      allow delete: if isOwner(ownerUid);
     }
 
 
