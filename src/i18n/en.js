@@ -513,7 +513,7 @@ export const EN = {
   // src/hooks/useAuditLog.js.
   auditLogTitle: "Audit Log",
   auditLogBtn: "Audit Log",
-  auditLogHint: "Every customer and supplier change, in one place",
+  auditLogHint: "The latest 40 customer and supplier changes, in one place",
   auditLogEmpty: "No activity logged yet",
   auditLogLoadError: "Failed to load the audit log",
   auditLogFilterUser: "User",

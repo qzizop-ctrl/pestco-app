@@ -528,7 +528,7 @@ export const AR = {
   // src/hooks/useAuditLog.js.
   auditLogTitle: "سجل النشاط",
   auditLogBtn: "سجل النشاط",
-  auditLogHint: "كل التعديلات على بيانات العملاء والموردين في مكان واحد",
+  auditLogHint: "آخر 40 تعديل على بيانات العملاء والموردين في مكان واحد",
   auditLogEmpty: "لا يوجد نشاط مسجل بعد",
   auditLogLoadError: "حصل خطأ أثناء تحميل سجل النشاط",
   auditLogFilterUser: "المستخدم",
