@@ -13,6 +13,7 @@
 // ============================================================================
 
 import { useMemo, useState } from "react";
+import { formatChangeValue } from "../lastChange";
 import { History, ChevronDown, ChevronUp, ChevronRight, Building2, Truck } from "lucide-react";
 import { TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE, PRIMARY, DANGER, SUCCESS } from "../theme";
 import { AUDIT_ACTION_IDS } from "../domain";
@@ -221,13 +222,13 @@ export default function AuditLogScreen({
                               {oldValue !== undefined && (
                                 <>
                                   <span className="line-through font-bold px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: DANGER }}>
-                                    {String(oldValue || "—")}
+                                    {formatChangeValue(oldValue)}
                                   </span>
                                   <span>←</span>
                                 </>
                               )}
                               <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: "#D1FAE5", color: "#047857" }}>
-                                {String(newValue !== undefined && newValue !== null ? newValue : "—")}
+                                {formatChangeValue(newValue)}
                               </span>
                             </div>
                           );

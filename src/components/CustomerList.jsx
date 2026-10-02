@@ -44,6 +44,8 @@ export default function CustomerListScreen({
   availableAddedMonths,
   dateAddedScopeTotal,
   loaded,
+  loadTimedOut,
+  onRetryLoad,
   filtered,
   togglePin,
   canEdit,
@@ -218,7 +220,25 @@ export default function CustomerListScreen({
         </div>
       </div>
 
-      {!loaded && <SkeletonList count={5} />}
+      {!loaded && !loadTimedOut && <SkeletonList count={5} />}
+
+      {/* Could not get an answer in time (offline / slow start): say so and
+          offer a retry, instead of an endless skeleton or a false
+          "no customers" message. */}
+      {!loaded && loadTimedOut && (
+        <div className="text-center py-16">
+          <Building2 size={40} color="#C7C4B6" className="mx-auto mb-2" />
+          <p className="font-bold" style={{ color: TEXT }}>{t.connectionIssueTitle}</p>
+          <p className="text-sm mt-1 mb-4" style={{ color: MUTED }}>{t.connectionIssueHint}</p>
+          <button
+            onClick={onRetryLoad}
+            className="btn-press font-bold"
+            style={{ background: PRIMARY, color: "#fff", borderRadius: 12, padding: "10px 24px" }}
+          >
+            {t.retryBtn}
+          </button>
+        </div>
+      )}
 
       {loaded && filtered.length === 0 && (
         <div className="text-center py-16">

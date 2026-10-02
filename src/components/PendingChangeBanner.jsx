@@ -1,5 +1,6 @@
 import { Trash2, AlertTriangle, Check, RotateCcw } from "lucide-react";
 import { DANGER, SUCCESS, TEXT, MUTED, LINE, SURFACE } from "../theme";
+import { formatChangeValue } from "../lastChange";
 
 // Shown to the workspace owner (or reviewer) only, on either a customer or
 // a supplier record that has a pending last_change: either a pending delete
@@ -72,7 +73,7 @@ export default function PendingChangeBanner({
     );
   }
 
-  const ignoreKeys = ["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details", "last_change"];
+  const ignoreKeys = ["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details", "last_change", "addedVisitEntryIds"];
   const rawChanges = lastChange.changes || lastChange.details || lastChange;
   const entries =
     rawChanges && typeof rawChanges === "object"
@@ -108,13 +109,13 @@ export default function PendingChangeBanner({
                 {oldValue !== undefined && (
                   <>
                     <span className="line-through font-bold px-1.5 py-0.5 rounded" style={{ background: "#FEE2E2", color: DANGER }}>
-                      {String(oldValue || "—")}
+                      {formatChangeValue(oldValue)}
                     </span>
                     <span>←</span>
                   </>
                 )}
                 <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: "#D1FAE5", color: "#047857" }}>
-                  {String(newValue !== undefined && newValue !== null ? newValue : "—")}
+                  {formatChangeValue(newValue)}
                 </span>
               </div>
             );

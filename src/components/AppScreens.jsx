@@ -52,6 +52,7 @@ export default function AppScreens({
   exchangeRate,
   expandedOfferId,
   exportAllToExcel,
+  exportFullBackupJson,
   exportFilteredToExcel,
   exportSuppliersAllToExcel,
   exportSuppliersFilteredToExcel,
@@ -72,6 +73,8 @@ export default function AppScreens({
   isSaving,
   lang,
   loaded,
+  loadTimedOut,
+  retryLoad,
   logVisitToday,
   members,
   missingDataCount,
@@ -213,6 +216,8 @@ export default function AppScreens({
         availableAddedMonths={availableAddedMonths}
         dateAddedScopeTotal={dateAddedScopeTotal}
         loaded={loaded}
+        loadTimedOut={loadTimedOut}
+        onRetryLoad={retryLoad}
         filtered={filtered}
         togglePin={togglePin}
         canEdit={canEdit}
@@ -344,6 +349,7 @@ export default function AppScreens({
         dismissSignup={dismissSignup}
         confirmAction={confirmAction}
         exportAllToExcel={exportAllToExcel}
+        exportFullBackupJson={isOwnerAccount ? exportFullBackupJson : undefined}
         exportFilteredToExcel={exportFilteredToExcel}
         filteredCount={filtered.length}
         triggerImportPicker={triggerImportPicker}
