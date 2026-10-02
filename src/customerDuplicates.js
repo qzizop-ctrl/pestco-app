@@ -39,8 +39,8 @@ function normalizeCompanyName(name) {
     .toLowerCase()
     .replace(/[\u064B-\u0652\u0670\u0640]/g, "")
     .replace(/[إأآٱ]/g, "ا")
-    .replace(/ة/g, "ه")
-    .replace(/ى/g, "ي")
+    // taa marbuta -> ه and alef maksura -> ي in a single pass
+    .replace(/[ةى]/g, (c) => (c === "ة" ? "ه" : "ي"))
     .replace(/[-_.,،]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
