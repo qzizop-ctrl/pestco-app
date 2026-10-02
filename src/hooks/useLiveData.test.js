@@ -33,8 +33,12 @@ function snapOf(docs, { fromCache = false } = {}) {
 
 let listeners; // path -> { next, error }
 
+// Stable reference: a new object on every render would change the hook's
+// effect dependency each time and make it re-subscribe and reset its state.
+const USER = { uid: "u" };
+
 function setup() {
-  return renderHook(() => useLiveData({ uid: "u" }, "owner1"));
+  return renderHook(() => useLiveData(USER, "owner1"));
 }
 
 const send = (path, snap) => act(() => listeners[path].next(snap));
