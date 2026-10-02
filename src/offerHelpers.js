@@ -3,6 +3,7 @@
 // ============================================================================
 import { CURRENCY_IDS } from "./domain";
 import { fmtMoney } from "./formatMoney";
+import { randomSuffix } from "./randomId";
 
 // Builds a unique offer entry for a customer's offers list
 export function buildOffer({
@@ -10,7 +11,7 @@ export function buildOffer({
   rejectionReason, rejectionReasonId, rejectedBy, rejectedById, rejectedAt,
 }) {
   const offer = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `${Date.now()}-${randomSuffix()}`,
     name: name || "",
     offerNumber: offerNumber || "",
     amount: Number(amount) || 0,

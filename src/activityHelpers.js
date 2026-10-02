@@ -3,11 +3,12 @@
 // Split out of the old helpers.js.
 // ============================================================================
 import { todayLocalISO } from "./dateUtils";
+import { randomSuffix } from "./randomId";
 
 // Builds a unique activity-log entry for a visit's timeline
 export function buildActivity(type, text) {
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `${Date.now()}-${randomSuffix()}`,
     type,
     text,
     at: new Date().toISOString(),
@@ -19,7 +20,7 @@ export function buildActivity(type, text) {
 // so the Dashboard can count real visit events per customer over time.
 export function buildVisitEntry(date) {
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `${Date.now()}-${randomSuffix()}`,
     date: date || todayLocalISO(),
     at: new Date().toISOString(),
   };
