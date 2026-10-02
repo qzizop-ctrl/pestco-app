@@ -5,6 +5,7 @@ import { TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE, PRIMARY_MID } from "../../t
 export default function ImportExportCard({
   t,
   exportAllToExcel,
+  exportFullBackupJson,
   exportFilteredToExcel,
   filteredCount,
   triggerImportPicker,
@@ -59,6 +60,28 @@ export default function ImportExportCard({
           {t.exportTabSuppliers}
         </button>
       </div>
+
+      {/* Full lossless backup — owner only (the prop is only passed to the
+          owner). Sits above the tabs: it covers customers AND suppliers. */}
+      {exportFullBackupJson && (
+        <div style={{ marginBottom: 14 }}>
+          <button
+            onClick={exportFullBackupJson}
+            className="btn-press flex items-center justify-center gap-2 font-bold"
+            style={{
+              background: SURFACE,
+              border: `1px solid ${PRIMARY_MID}`,
+              color: PRIMARY_MID,
+              borderRadius: 14,
+              padding: "12px 0",
+              width: "100%",
+            }}
+          >
+            <Download size={16} /> {t.fullBackupBtn}
+          </button>
+          <p className="text-xs mt-2" style={{ color: MUTED }}>{t.fullBackupHint}</p>
+        </div>
+      )}
 
       {exportTab === "customers" ? (
         <>
