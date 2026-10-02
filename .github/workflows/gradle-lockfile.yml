@@ -43,13 +43,14 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # Wires the Capacitor plugins into the Android project (no web build or
-      # asset copy needed just to resolve dependencies).
-      # `cap update` writes capacitor.plugins.json into this folder, which is
-      # normally created by a web build + `cap copy`; create it up front.
+      # Wires the Capacitor plugins into the Android project.
+      # Capacitor insists on a web build folder with an index.html. Resolving
+      # Gradle dependencies doesn't need the real app, so a placeholder is
+      # enough (nothing from dist/ or the generated assets is committed).
       - name: Update Capacitor Android project
         run: |
-          mkdir -p android/app/src/main/assets
+          mkdir -p dist android/app/src/main/assets
+          echo '<!doctype html><title>placeholder</title>' > dist/index.html
           npx --no-install cap update android
 
       - name: Grant execute permission for gradlew
