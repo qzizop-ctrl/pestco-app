@@ -59,6 +59,12 @@ function warnIfLarge(label, count) {
 const isUnconfirmedEmpty = (snap) => snap.metadata.fromCache && snap.empty;
 
 export function useLiveData(user, ownerUid) {
+  // The effects below only need to know WHO is signed in, not the identity of
+  // the `user` object. Depending on the object itself would tear down and
+  // re-create the listeners (resetting loaded / the timeout) every time the
+  // auth layer hands back a new object for the same person.
+  const uid = user?.uid;
+
   const [visits, setVisits] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [visitsError, setVisitsError] = useState(null);
@@ -71,7 +77,7 @@ export function useLiveData(user, ownerUid) {
   const [suppliersError, setSuppliersError] = useState(null);
 
   useEffect(() => {
-    if (!user || !ownerUid) {
+    if (!uid || !ownerUid) {
       setVisits([]);
       setLoaded(false);
       setVisitsError(null);
@@ -119,10 +125,10 @@ export function useLiveData(user, ownerUid) {
       clearTimeout(timer);
       unsub();
     };
-  }, [user, ownerUid, retryKey]);
+  }, [uid, ownerUid, retryKey]);
 
   useEffect(() => {
-    if (!user || !ownerUid) {
+    if (!uid || !ownerUid) {
       setSuppliers([]);
       setSuppliersLoaded(false);
       setSuppliersError(null);
@@ -150,7 +156,7 @@ export function useLiveData(user, ownerUid) {
       }
     );
     return () => unsub();
-  }, [user, ownerUid, retryKey]);
+  }, [uid, ownerUid, retryKey]);
 
   return {
     visits, loaded, visitsError, visitsTimedOut, retryLiveData,
