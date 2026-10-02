@@ -22,9 +22,9 @@
 // Re-run this deliberately (and re-commit the file) whenever package.json
 // is updated to point at a new xlsx version.
 // ============================================================================
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+const crypto = require("node:crypto");
 
 const XLSX_DIR = path.join(__dirname, "..", "node_modules", "xlsx");
 // The files that actually ship the library's logic — not package.json or

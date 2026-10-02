@@ -18,9 +18,9 @@
 // fresh `npm install` in a new environment that just hasn't been pinned
 // yet.
 // ============================================================================
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+const crypto = require("node:crypto");
 
 const XLSX_DIR = path.join(__dirname, "..", "node_modules", "xlsx");
 const INTEGRITY_FILE = path.join(__dirname, "..", "xlsx-integrity.json");
