@@ -56,9 +56,17 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
+      # `dependencies --write-locks` alone did not produce any file on this
+      # project, so lock while doing the same real build the APK workflow
+      # does (release variant). Gradle writes a lock entry for every
+      # configuration the build resolves. Unsigned is fine here.
       - name: Write the lockfile(s)
         working-directory: android
-        run: ./gradlew dependencies --write-locks
+        run: |
+          ./gradlew dependencies --write-locks --no-daemon || true
+          ./gradlew assembleRelease --write-locks --no-daemon --stacktrace
+          echo "--- anything lock-related Gradle wrote:"
+          find . -iname "*lockfile*" -not -path "*/build/*" -not -path "*/.gradle/*" || true
 
       - name: Commit lockfile(s)
         env:
@@ -66,7 +74,7 @@ jobs:
           # name can't inject shell commands.
           BRANCH: ${{ inputs.branch }}
         run: |
-          files=$(find android -name gradle.lockfile -not -path "*/node_modules/*" -not -path "*/build/*")
+          files=$(find android -name "*gradle.lockfile" -not -path "*/node_modules/*" -not -path "*/build/*" -not -path "*/.gradle/*")
           if [ -z "$files" ]; then
             echo "Gradle did not write any gradle.lockfile — nothing to commit."
             exit 1
