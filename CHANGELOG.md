@@ -1,3 +1,15 @@
+# تحديث المكتبات الأمنية (Electron / electron-builder / jsPDF) + سياسة Dependabot
+
+- `electron` من 31 إلى 44 (31 خرجت من الدعم الأمني؛ الدعم بيغطي آخر 3 إصدارات بس). `electron.js` ما احتاجش تعديل.
+  - **تنبيه:** من Electron 44 اتشالت نسخ 32-بت (ia32) على ويندوز، ويحتاج ويندوز 10 أو أحدث. نسخة الـ installer كانت أصلًا بتتبني 64-بت على `windows-latest`.
+- `electron-builder` من 24 إلى 26، بدون أي تغيير في إعدادات `build` في `package.json`.
+- `jspdf` من 2.5.2 إلى 4.2.1 أو أحدث (ثغرات اتصلحت في 4.0 و4.1 و4.2 و4.2.1). الدوال اللي التطبيق بيستخدمها (`addImage` / `addPage` / `setPage` / `output` / `save`) ما اتغيّرتش في `pdfReport.js`.
+- `.github/dependabot.yml`: السياسة القديمة كانت بتمنع أي تحديث غير الـ patch فالتحديثات الأمنية الكبيرة عمرها ما كانت هتيجي. دلوقتي الـ minor/patch في PR أسبوعي واحد، وكل major في PR لوحده، وElectron وأدواته في مجموعة مستقلة. `lucide-react` فقط فضل مقفول على minor/major لأنه 0.x وكسر البناء قبل كده.
+- **لازم بعد الاستلام:** `package-lock.json` لسه بيشاور على الإصدارات القديمة، فـ `npm ci` هيفشل لحد ما تشغّل `npm install` محليًا وتعمل commit للـ lock (أو workflow «Sync package-lock.json»)، وبعدين `npm run lint && npm test && npm run electron:build` وجرّب تصدير PDF يدويًا.
+- **لسه مأجّل عمدًا:** Capacitor 6 ← 8 (محتاج ترحيل أندرويد الأصلي بـ `npx cap migrate`) وVite 5 ← أحدث (محتاج رفع Vitest معاه).
+
+---
+
 # تدقيق العروض + إصدار أندرويد + تنظيف
 
 ## العروض في الـ audit log
