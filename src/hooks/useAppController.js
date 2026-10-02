@@ -5,6 +5,7 @@ import { useAccessManagement } from "./useAccessManagement";
 import { useLiveData } from "./useLiveData";
 import { useExcelExport } from "./useExcelExport";
 import { useJsonBackup } from "./useJsonBackup";
+import { useJsonRestore } from "./useJsonRestore";
 import { useExcelImport } from "./useExcelImport";
 import { useAutoBackup } from "./useAutoBackup";
 import { useReminders } from "./useReminders";
@@ -260,6 +261,13 @@ export function useAppController() {
     visits, suppliers, t, notify: showAlert,
   });
 
+  // Restore from that JSON file (merge or replace), owner-only — see
+  // src/hooks/useJsonRestore.js.
+  const restoreBackup = useJsonRestore({
+    ownerUid, isOwnerAccount, ready: loaded && suppliersLoaded,
+    visits, suppliers, saveFullBackup, requireOnline, t, notify: showAlert,
+  });
+
   // Weekly backup (Excel + full JSON), owner-only — see src/hooks/useAutoBackup.js.
   useAutoBackup({
     isOwnerAccount,
@@ -308,7 +316,7 @@ export function useAppController() {
     availableAddedMonths, availableOwners, canEdit, canViewDashboard, changeStage, clearCallReminder,
     confirmAction, dashboardAccess, dateAddedFilter, dateAddedScopeTotal, deleteActivity, deleteOffer,
     deleteSupplier, deleteVisit, dismissSignup, dueReminders, duplicateGroups, errors, exchangeRate,
-    expandedOfferId, exportAllToExcel, exportFilteredToExcel, exportSuppliersAllToExcel, exportSuppliersFilteredToExcel, exportFullBackupJson,
+    expandedOfferId, exportAllToExcel, exportFilteredToExcel, exportSuppliersAllToExcel, exportSuppliersFilteredToExcel, exportFullBackupJson, restoreBackup,
     fileInputRef, filtered, filteredSuppliers, form, grantAccess, handleImportFile, handleImportSupplierFile,
     importProgress, importing, importingSuppliers, isOnline, isOwnerAccount, isPrimaryAdmin, isReviewer, isSaving,
     lang, loaded, loadTimedOut, retryLoad, logVisitToday, members, missingDataCount, missingDataOnly, newActivityText, newMemberEmail,
