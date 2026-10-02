@@ -84,3 +84,90 @@ export function utf8ToBase64(text) {
   }
   return btoa(binary);
 }
+
+// ============================================================================
+// Restore side (see hooks/useJsonRestore.js). Also pure — no React / Firebase.
+// ============================================================================
+
+// Reads the text of a chosen file and checks it really is one of OUR backups
+// before anything touches Firestore. Returns { ok: true, backup } or
+// { ok: false, reason } where reason is one of:
+//   "invalid_json" | "wrong_format" | "newer_version" | "bad_records" | "empty"
+export function parseBackupText(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: "invalid_json" };
+  }
+  if (!data || typeof data !== "object" || data.format !== BACKUP_FORMAT) {
+    return { ok: false, reason: "wrong_format" };
+  }
+  if (typeof data.version !== "number" || data.version > BACKUP_VERSION) {
+    return { ok: false, reason: "newer_version" };
+  }
+  const visits = Array.isArray(data.visits) ? data.visits : [];
+  const suppliers = Array.isArray(data.suppliers) ? data.suppliers : [];
+  const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+  // Every record needs a usable document id, and the same name field the
+  // Firestore rules require on create (companyName / name must be a string).
+  const okId = (r) => isObj(r) && typeof r.id === "string" && r.id.length > 0 && !r.id.includes("/");
+  const visitsOk = visits.every((r) => okId(r) && typeof r.companyName === "string");
+  const suppliersOk = suppliers.every((r) => okId(r) && typeof r.name === "string");
+  if (!visitsOk || !suppliersOk) return { ok: false, reason: "bad_records" };
+  if (visits.length === 0 && suppliers.length === 0) return { ok: false, reason: "empty" };
+  return { ok: true, backup: { ...data, visits, suppliers } };
+}
+
+// A backup record -> { id, data } ready for setDoc(). The backup turned the
+// Firestore Timestamp `createdAt` into an ISO string; it goes back as a Date
+// (the SDK stores a Date as a Timestamp), so the record looks exactly as it
+// did before. Every other field is copied as it is — the app itself stores
+// updatedAt / activity dates / call times as ISO strings.
+//
+// One exception: the Firestore rules only let a writer create/replace a
+// record carrying a `last_change` (a member's edit waiting for approval) when
+// that last_change names the writer as `updatedById`. A restore is written by
+// the owner, so a pending edit made by another member would be rejected — and
+// with it the whole chunk. Those records are restored WITHOUT the pending
+// marker (i.e. the edited values stay, as if approved) and `droppedPending`
+// is set so the caller can tell the user how many it was.
+export function prepareRestoreDoc(record, ownerUid) {
+  const { id, createdAt, ...rest } = record;
+  const data = { ...rest };
+  let droppedPending = false;
+  if (data.last_change && data.last_change.updatedById !== ownerUid) {
+    delete data.last_change;
+    droppedPending = true;
+  }
+  if (createdAt) {
+    const d = new Date(createdAt);
+    if (!Number.isNaN(d.getTime())) data.createdAt = d;
+  }
+  return { id, data, droppedPending };
+}
+
+// What a restore will do, given what is in the workspace right now.
+//  mode "merge":   add records whose id is not there yet; never touch or
+//                  delete what already exists.
+//  mode "replace": make the workspace match the backup — every backup record
+//                  is written over its id, and records that are NOT in the
+//                  backup are deleted.
+export function planRestore(backup, existingVisits, existingSuppliers, mode, ownerUid) {
+  const plan = (records, existing) => {
+    const have = new Set((existing || []).map((r) => r.id));
+    const inBackup = new Set(records.map((r) => r.id));
+    const prep = (r) => prepareRestoreDoc(r, ownerUid);
+    if (mode === "replace") {
+      return {
+        write: records.map(prep),
+        remove: [...have].filter((id) => !inBackup.has(id)),
+      };
+    }
+    return { write: records.filter((r) => !have.has(r.id)).map(prep), remove: [] };
+  };
+  return {
+    visits: plan(backup.visits, existingVisits),
+    suppliers: plan(backup.suppliers, existingSuppliers),
+  };
+}

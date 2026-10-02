@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   serializeForBackup, buildBackup, backupFileName, utf8ToBase64, BACKUP_FORMAT, BACKUP_VERSION,
+  parseBackupText, prepareRestoreDoc, planRestore,
 } from "./backupJson";
 
 const ts = (iso) => ({ toDate: () => new Date(iso) });
@@ -93,5 +94,78 @@ describe("file helpers", () => {
     const text = "ع".repeat(300000);
     const decoded = new TextDecoder().decode(Uint8Array.from(atob(utf8ToBase64(text)), (c) => c.charCodeAt(0)));
     expect(decoded).toBe(text);
+  });
+});
+
+
+describe("parseBackupText", () => {
+  const good = (over = {}) => JSON.stringify({
+    format: BACKUP_FORMAT, version: BACKUP_VERSION,
+    visits: [{ id: "v1", companyName: "شركة" }], suppliers: [{ id: "s1", name: "مورد" }], ...over,
+  });
+
+  it("accepts a file produced by buildBackup", () => {
+    const text = JSON.stringify(buildBackup({
+      visits: [{ id: "v1", companyName: "شركة" }], suppliers: [], auditLog: null,
+    }));
+    const res = parseBackupText(text);
+    expect(res.ok).toBe(true);
+    expect(res.backup.visits).toHaveLength(1);
+  });
+
+  it("rejects things that are not our backup", () => {
+    expect(parseBackupText("not json").reason).toBe("invalid_json");
+    expect(parseBackupText("[1,2]").reason).toBe("wrong_format");
+    expect(parseBackupText(JSON.stringify({ format: "other", version: 1 })).reason).toBe("wrong_format");
+    expect(parseBackupText(good({ version: BACKUP_VERSION + 1 })).reason).toBe("newer_version");
+    expect(parseBackupText(good({ visits: [{ companyName: "no id" }] })).reason).toBe("bad_records");
+    expect(parseBackupText(good({ suppliers: [{ id: "s1" }] })).reason).toBe("bad_records");
+    expect(parseBackupText(good({ visits: [], suppliers: [] })).reason).toBe("empty");
+  });
+});
+
+describe("prepareRestoreDoc", () => {
+  it("moves id out and turns createdAt back into a Date", () => {
+    const { id, data } = prepareRestoreDoc({ id: "v1", companyName: "x", createdAt: "2026-01-02T03:04:05.000Z", updatedAt: "2026-02-01T00:00:00.000Z" }, "owner1");
+    expect(id).toBe("v1");
+    expect(data.id).toBeUndefined();
+    expect(data.createdAt).toBeInstanceOf(Date);
+    expect(data.createdAt.toISOString()).toBe("2026-01-02T03:04:05.000Z");
+    expect(data.updatedAt).toBe("2026-02-01T00:00:00.000Z");
+  });
+
+  it("drops an unreadable createdAt instead of writing garbage", () => {
+    expect(prepareRestoreDoc({ id: "v1", companyName: "x", createdAt: "nope" }, "owner1").data.createdAt).toBeUndefined();
+  });
+
+  it("keeps the owner's own last_change but drops another member's (the rules would reject it)", () => {
+    const mine = prepareRestoreDoc({ id: "v1", companyName: "x", last_change: { updatedById: "owner1" } }, "owner1");
+    expect(mine.data.last_change).toBeDefined();
+    expect(mine.droppedPending).toBe(false);
+    const theirs = prepareRestoreDoc({ id: "v2", companyName: "x", last_change: { updatedById: "editor9" } }, "owner1");
+    expect(theirs.data.last_change).toBeUndefined();
+    expect(theirs.droppedPending).toBe(true);
+  });
+});
+
+describe("planRestore", () => {
+  const backup = {
+    visits: [{ id: "a", companyName: "A" }, { id: "b", companyName: "B" }],
+    suppliers: [{ id: "s1", name: "S1" }],
+  };
+  const existingVisits = [{ id: "b" }, { id: "c" }];
+
+  it("merge adds only missing records and deletes nothing", () => {
+    const p = planRestore(backup, existingVisits, [], "merge", "owner1");
+    expect(p.visits.write.map((w) => w.id)).toEqual(["a"]);
+    expect(p.visits.remove).toEqual([]);
+    expect(p.suppliers.write.map((w) => w.id)).toEqual(["s1"]);
+  });
+
+  it("replace writes everything in the backup and removes the rest", () => {
+    const p = planRestore(backup, existingVisits, [{ id: "old" }], "replace", "owner1");
+    expect(p.visits.write.map((w) => w.id)).toEqual(["a", "b"]);
+    expect(p.visits.remove).toEqual(["c"]);
+    expect(p.suppliers.remove).toEqual(["old"]);
   });
 });
