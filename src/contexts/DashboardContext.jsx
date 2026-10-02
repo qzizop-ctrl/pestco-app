@@ -1,4 +1,4 @@
-import { createContext, useState } from "react";
+import { createContext, useMemo, useState } from "react";
 
 // Holds Dashboard's own tab state (activeTab, customersSubTab,
 // salesTabVisited) outside of the Dashboard component itself.
@@ -20,11 +20,11 @@ export function DashboardProvider({ children }) {
   const [customersSubTab, setCustomersSubTab] = useState("offers");
   const [salesTabVisited, setSalesTabVisited] = useState(false);
 
-  const value = {
+  const value = useMemo(() => ({
     activeTab, setActiveTab,
     customersSubTab, setCustomersSubTab,
     salesTabVisited, setSalesTabVisited,
-  };
+  }), [activeTab, customersSubTab, salesTabVisited]);
 
   return (
     <DashboardContext.Provider value={value}>
