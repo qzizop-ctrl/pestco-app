@@ -125,7 +125,7 @@ export async function pruneAuditLog(ownerUid) {
 export function useAuditLogPrune({ ownerUid, enabled }) {
   useEffect(() => {
     if (!enabled || !ownerUid) return;
-    pruneAuditLog(ownerUid);
+    void pruneAuditLog(ownerUid);
   }, [ownerUid, enabled]);
 }
 
