@@ -4,7 +4,7 @@
 // Each test states WHY a request must succeed or fail. The "regression" ones
 // pin down holes that used to exist in the rules.
 import { readFileSync } from "node:fs";
-import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   initializeTestEnvironment,
   assertFails,
@@ -65,211 +65,211 @@ beforeEach(async () => {
 describe("verified email is required (regression: rules ignored email_verified)", () => {
   it("an UNVERIFIED account with an admin's address gets nothing", async () => {
     const fs = as(ADMIN, false);
-    await assertFails(getDoc(doc(fs, "config/admins")));
-    await assertFails(getDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`)));
+    await expect(assertFails(getDoc(doc(fs, "config/admins")))).resolves.toBeDefined();
+    await expect(assertFails(getDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`)))).resolves.toBeDefined();
   });
 
   it("an UNVERIFIED account with a member's address can't read the workspace", async () => {
-    await assertFails(getDoc(doc(as(EDITOR, false), `users/${ADMIN.uid}/visits/v2`)));
+    await expect(assertFails(getDoc(doc(as(EDITOR, false), `users/${ADMIN.uid}/visits/v2`)))).resolves.toBeDefined();
   });
 
   it("the same accounts work once verified", async () => {
-    await assertSucceeds(getDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v2`)));
-    await assertSucceeds(getDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v2`)));
+    await expect(assertSucceeds(getDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v2`)))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(getDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v2`)))).resolves.not.toBeInstanceOf(Error);
   });
 });
 
 describe("only admins own workspaces (regression: any signed-in user could fill their own tree)", () => {
   it("a verified non-admin can't write into users/{their uid}/...", async () => {
-    await assertFails(setDoc(doc(as(STRANGER), `users/${STRANGER.uid}/visits/x`), { companyName: "spam" }));
+    await expect(assertFails(setDoc(doc(as(STRANGER), `users/${STRANGER.uid}/visits/x`), { companyName: "spam" }))).resolves.toBeDefined();
   });
 
   it("a verified non-admin can't create their own access documents", async () => {
-    await assertFails(setDoc(doc(as(STRANGER), `access/${STRANGER.uid}`), { members: {} }));
-    await assertFails(
+    await expect(assertFails(setDoc(doc(as(STRANGER), `access/${STRANGER.uid}`), { members: {} }))).resolves.toBeDefined();
+    await expect(assertFails(
       setDoc(doc(as(STRANGER), `access_by_email/${STRANGER.email}`), { owners: { [STRANGER.uid]: "editor" } })
-    );
+    )).resolves.toBeDefined();
   });
 
   it("an admin can write to their own workspace", async () => {
-    await assertSucceeds(setDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/new`), { companyName: "New" }));
+    await expect(assertSucceeds(setDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/new`), { companyName: "New" }))).resolves.not.toBeInstanceOf(Error);
   });
 });
 
 describe("roles", () => {
   it("editor can create (with a pending change) and edit customers through review", async () => {
     const fs = as(EDITOR);
-    await assertSucceeds(
+    await expect(assertSucceeds(
       setDoc(doc(fs, `users/${ADMIN.uid}/visits/e1`), { companyName: "E", last_change: PENDING })
-    );
-    await assertSucceeds(
+    )).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(
       updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { notes: "hello", last_change: PENDING })
-    );
+    )).resolves.not.toBeInstanceOf(Error);
   });
 
   it("editor can use the quick actions (offers, stage, pin) without a review", async () => {
     const fs = as(EDITOR);
-    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { offers: arrayUnion({ id: "o1" }) }));
-    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { stage: "quote" }));
-    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { isPinned: true }));
+    await expect(assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { offers: arrayUnion({ id: "o1" }) }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { stage: "quote" }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { isPinned: true }))).resolves.not.toBeInstanceOf(Error);
   });
 
   it("viewer can read but not write", async () => {
     const fs = as(VIEWER);
-    await assertSucceeds(getDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`)));
-    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { notes: "x" }));
-    await assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/visits/new`), { companyName: "x" }));
+    await expect(assertSucceeds(getDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`)))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { notes: "x" }))).resolves.toBeDefined();
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/visits/new`), { companyName: "x" }))).resolves.toBeDefined();
   });
 
   it("someone with no role can't read", async () => {
-    await assertFails(getDoc(doc(as(STRANGER), `users/${ADMIN.uid}/visits/v2`)));
+    await expect(assertFails(getDoc(doc(as(STRANGER), `users/${ADMIN.uid}/visits/v2`)))).resolves.toBeDefined();
   });
 
   it("an editor can't hard-delete (regression: editors could skip the owner's approval)", async () => {
-    await assertFails(deleteDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v2`)));
-    await assertFails(deleteDoc(doc(as(EDITOR), `users/${ADMIN.uid}/suppliers/s1`)));
+    await expect(assertFails(deleteDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v2`)))).resolves.toBeDefined();
+    await expect(assertFails(deleteDoc(doc(as(EDITOR), `users/${ADMIN.uid}/suppliers/s1`)))).resolves.toBeDefined();
   });
 
   it("the admin can hard-delete (approving a delete)", async () => {
-    await assertSucceeds(deleteDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v2`)));
+    await expect(assertSucceeds(deleteDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v2`)))).resolves.not.toBeInstanceOf(Error);
   });
 
   it("an editor can soft-delete by flagging the record", async () => {
-    await assertSucceeds(
+    await expect(assertSucceeds(
       updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v2`), {
         deleted: true,
         last_change: { type: "delete", ...PENDING },
       })
-    );
+    )).resolves.not.toBeInstanceOf(Error);
   });
 });
 
 describe("pending changes (last_change)", () => {
   it("editor can attach a last_change that names themselves", async () => {
-    await assertSucceeds(
+    await expect(assertSucceeds(
       updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v2`), { notes: "x", last_change: PENDING })
-    );
+    )).resolves.not.toBeInstanceOf(Error);
   });
 
   it("editor can't attribute a change to someone else (regression)", async () => {
-    await assertFails(
+    await expect(assertFails(
       updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v2`), {
         notes: "x", last_change: { ...PENDING, updatedById: ADMIN.uid },
       })
-    );
-    await assertFails(
+    )).resolves.toBeDefined();
+    await expect(assertFails(
       setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/spoof`), {
         companyName: "x", last_change: { ...PENDING, updatedById: ADMIN.uid },
       })
-    );
+    )).resolves.toBeDefined();
   });
 
   it("editor can't approve/roll back (clear) a pending change", async () => {
-    await assertFails(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { last_change: deleteField() }));
+    await expect(assertFails(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { last_change: deleteField() }))).resolves.toBeDefined();
   });
 
   it("admin can approve (clear) a pending change", async () => {
-    await assertSucceeds(updateDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v1`), { last_change: deleteField() }));
+    await expect(assertSucceeds(updateDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v1`), { last_change: deleteField() }))).resolves.not.toBeInstanceOf(Error);
   });
 
   it("editor can still make an update that leaves last_change untouched (pin, stage)", async () => {
-    await assertSucceeds(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { isPinned: true }));
+    await expect(assertSucceeds(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { isPinned: true }))).resolves.not.toBeInstanceOf(Error);
   });
 });
 
 describe("review workflow can't be bypassed through the SDK (regression)", () => {
   it("editor can't change reviewed fields without raising a last_change", async () => {
     const fs = as(EDITOR);
-    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { companyName: "Hacked" }));
-    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { notes: "silent edit" }));
-    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { name: "Hacked" }));
+    await expect(assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { companyName: "Hacked" }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { notes: "silent edit" }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { name: "Hacked" }))).resolves.toBeDefined();
   });
 
   it("editor can't un-delete or delete a record silently", async () => {
     const fs = as(EDITOR);
-    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { deleted: true }));
-    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { deleted: false }));
+    await expect(assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { deleted: true }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { deleted: false }))).resolves.toBeDefined();
   });
 
   it("editor can't edit reviewed fields on a record with someone else's pending change unless they raise their own", async () => {
-    await assertFails(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { notes: "x" }));
-    await assertSucceeds(
+    await expect(assertFails(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { notes: "x" }))).resolves.toBeDefined();
+    await expect(assertSucceeds(
       updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { notes: "x", last_change: PENDING })
-    );
+    )).resolves.not.toBeInstanceOf(Error);
   });
 
   it("a last_change can't be used to smuggle in createdAt or unknown fields", async () => {
     const fs = as(EDITOR);
-    await assertFails(
+    await expect(assertFails(
       updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { createdAt: new Date(0), last_change: PENDING })
-    );
-    await assertFails(
+    )).resolves.toBeDefined();
+    await expect(assertFails(
       updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { isAdmin: true, last_change: PENDING })
-    );
+    )).resolves.toBeDefined();
   });
 
   it("an editor can't create a customer or supplier without a last_change", async () => {
     const fs = as(EDITOR);
-    await assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/visits/nolc`), { companyName: "x" }));
-    await assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/suppliers/nolc`), { name: "x" }));
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/visits/nolc`), { companyName: "x" }))).resolves.toBeDefined();
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/suppliers/nolc`), { name: "x" }))).resolves.toBeDefined();
   });
 
   it("an editor's create can't carry unknown fields", async () => {
-    await assertFails(
+    await expect(assertFails(
       setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/extra`), {
         companyName: "x", last_change: PENDING, junk: "y",
       })
-    );
+    )).resolves.toBeDefined();
   });
 
   it("suppliers: reviewed edit and pin work, arbitrary fields don't", async () => {
     const fs = as(EDITOR);
-    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { name: "New", last_change: PENDING }));
-    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { isPinned: true }));
-    await assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { role: "x", last_change: PENDING }));
+    await expect(assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { name: "New", last_change: PENDING }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { isPinned: true }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { role: "x", last_change: PENDING }))).resolves.toBeDefined();
   });
 
   it("the admin is not restricted (import, tag rename, rollback)", async () => {
     const fs = as(ADMIN);
-    await assertSucceeds(setDoc(doc(fs, `users/${ADMIN.uid}/visits/imp`), { companyName: "Imported", createdAt: serverTimestamp() }));
-    await assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { tags: ["a"], companyName: "Renamed" }));
+    await expect(assertSucceeds(setDoc(doc(fs, `users/${ADMIN.uid}/visits/imp`), { companyName: "Imported", createdAt: serverTimestamp() }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { tags: ["a"], companyName: "Renamed" }))).resolves.not.toBeInstanceOf(Error);
   });
 
   it("audit entries can't carry unknown fields", async () => {
-    await assertFails(
+    await expect(assertFails(
       setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/junk`), {
         entityType: "customer", entityId: "v2", entityName: "Beta", action: "update",
         changedBy: "x", changedById: EDITOR.uid, at: serverTimestamp(), payload: "x".repeat(50),
       })
-    );
+    )).resolves.toBeDefined();
   });
 });
 
 describe("access_by_email", () => {
   it("only admins can hand out access", async () => {
-    await assertSucceeds(
+    await expect(assertSucceeds(
       setDoc(doc(as(ADMIN), "access_by_email/new@pest.test"), { owners: { [ADMIN.uid]: "editor" }, dashboardAccess: false })
-    );
+    )).resolves.not.toBeInstanceOf(Error);
   });
 
   it("a non-admin can't plant an entry in someone else's picker (regression)", async () => {
-    await assertFails(
+    await expect(assertFails(
       setDoc(doc(as(STRANGER), `access_by_email/${EDITOR.email}`), { owners: { [STRANGER.uid]: "viewer" } })
-    );
-    await assertFails(
+    )).resolves.toBeDefined();
+    await expect(assertFails(
       updateDoc(doc(as(STRANGER), `access_by_email/${EDITOR.email}`), { [`owners.${STRANGER.uid}`]: "viewer" })
-    );
+    )).resolves.toBeDefined();
   });
 
   it("a member can read only their own entry", async () => {
-    await assertSucceeds(getDoc(doc(as(EDITOR), `access_by_email/${EDITOR.email}`)));
-    await assertFails(getDoc(doc(as(VIEWER), `access_by_email/${EDITOR.email}`)));
+    await expect(assertSucceeds(getDoc(doc(as(EDITOR), `access_by_email/${EDITOR.email}`)))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertFails(getDoc(doc(as(VIEWER), `access_by_email/${EDITOR.email}`)))).resolves.toBeDefined();
   });
 
   it("an admin can revoke access", async () => {
-    await assertSucceeds(
+    await expect(assertSucceeds(
       setDoc(doc(as(ADMIN), `access_by_email/${EDITOR.email}`), { owners: {}, dashboardAccess: false })
-    );
+    )).resolves.not.toBeInstanceOf(Error);
   });
 });
 
@@ -280,52 +280,52 @@ describe("audit log", () => {
   });
 
   it("an editor can append an entry about themselves", async () => {
-    await assertSucceeds(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n1`), entry(EDITOR)));
+    await expect(assertSucceeds(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n1`), entry(EDITOR)))).resolves.not.toBeInstanceOf(Error);
   });
 
   it("can't write as someone else, or with a made-up action", async () => {
-    await assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n2`), entry(ADMIN)));
-    await assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n3`), entry(EDITOR, { action: "purge" })));
+    await expect(assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n2`), entry(ADMIN)))).resolves.toBeDefined();
+    await expect(assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n3`), entry(EDITOR, { action: "purge" })))).resolves.toBeDefined();
   });
 
   it("can't backdate an entry (at must be the server time)", async () => {
-    await assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n4`), entry(EDITOR, { at: new Date(0) })));
+    await expect(assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n4`), entry(EDITOR, { at: new Date(0) })))).resolves.toBeDefined();
   });
 
   it("entries are immutable, even for the admin", async () => {
-    await assertFails(updateDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`), { action: "create" }));
-    await assertFails(deleteDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`)));
+    await expect(assertFails(updateDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`), { action: "create" }))).resolves.toBeDefined();
+    await expect(assertFails(deleteDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`)))).resolves.toBeDefined();
   });
 
   it("only admins read the log", async () => {
-    await assertSucceeds(getDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`)));
-    await assertFails(getDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/a1`)));
+    await expect(assertSucceeds(getDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`)))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertFails(getDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/a1`)))).resolves.toBeDefined();
   });
 });
 
 describe("admin list", () => {
   it("a non-admin can't make themselves an admin", async () => {
-    await assertFails(
+    await expect(assertFails(
       updateDoc(doc(as(STRANGER), "config/admins"), { emails: [ADMIN.email, STRANGER.email] })
-    );
+    )).resolves.toBeDefined();
   });
 
   it("an admin can add another admin", async () => {
-    await assertSucceeds(
+    await expect(assertSucceeds(
       updateDoc(doc(as(ADMIN), "config/admins"), { emails: [ADMIN.email, EDITOR.email] })
-    );
+    )).resolves.not.toBeInstanceOf(Error);
   });
 });
 
 describe("admin list read (regression: any verified user could read the full admin list)", () => {
   it("a verified non-admin (editor, viewer, or a stranger) can't read it", async () => {
-    await assertFails(getDoc(doc(as(EDITOR), "config/admins")));
-    await assertFails(getDoc(doc(as(VIEWER), "config/admins")));
-    await assertFails(getDoc(doc(as(STRANGER), "config/admins")));
+    await expect(assertFails(getDoc(doc(as(EDITOR), "config/admins")))).resolves.toBeDefined();
+    await expect(assertFails(getDoc(doc(as(VIEWER), "config/admins")))).resolves.toBeDefined();
+    await expect(assertFails(getDoc(doc(as(STRANGER), "config/admins")))).resolves.toBeDefined();
   });
 
   it("an admin can still read it (Settings needs the full list to manage admins)", async () => {
-    await assertSucceeds(getDoc(doc(as(ADMIN), "config/admins")));
+    await expect(assertSucceeds(getDoc(doc(as(ADMIN), "config/admins")))).resolves.not.toBeInstanceOf(Error);
   });
 });
 
@@ -354,39 +354,39 @@ describe("admins are isolated from each other's workspaces (regression: isReview
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), `access/${ADMIN.uid}`), { members: {}, dashboardAccess: {} });
     });
-    await assertFails(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)));
-    await assertFails(getDoc(doc(as(ADMIN), `users/${ADMIN2.uid}/visits/w1`)));
+    await expect(assertFails(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)))).resolves.toBeDefined();
+    await expect(assertFails(getDoc(doc(as(ADMIN), `users/${ADMIN2.uid}/visits/w1`)))).resolves.toBeDefined();
   });
 
   it("an admin with only a 'viewer' grant reads but can't write, approve or hard-delete", async () => {
-    await assertSucceeds(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)));
-    await assertFails(updateDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`), { isPinned: true }));
-    await assertFails(
+    await expect(assertSucceeds(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertFails(updateDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`), { isPinned: true }))).resolves.toBeDefined();
+    await expect(assertFails(
       updateDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v1`), { last_change: deleteField() })
-    );
-    await assertFails(deleteDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)));
+    )).resolves.toBeDefined();
+    await expect(assertFails(deleteDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/visits/v2`)))).resolves.toBeDefined();
   });
 
   it("an admin without a grant can't write into another admin's workspace", async () => {
-    await assertFails(
+    await expect(assertFails(
       updateDoc(doc(as(ADMIN), `users/${ADMIN2.uid}/visits/w1`), { notes: "hijack" })
-    );
-    await assertFails(deleteDoc(doc(as(ADMIN), `users/${ADMIN2.uid}/visits/w1`)));
+    )).resolves.toBeDefined();
+    await expect(assertFails(deleteDoc(doc(as(ADMIN), `users/${ADMIN2.uid}/visits/w1`)))).resolves.toBeDefined();
   });
 
   it("an admin can't rewrite or read another admin's access document", async () => {
-    await assertFails(
+    await expect(assertFails(
       setDoc(doc(as(ADMIN2), `access/${ADMIN.uid}`), { members: { [ADMIN2.email]: "editor" } })
-    );
-    await assertFails(getDoc(doc(as(ADMIN2), `access/${ADMIN.uid}`)));
+    )).resolves.toBeDefined();
+    await expect(assertFails(getDoc(doc(as(ADMIN2), `access/${ADMIN.uid}`)))).resolves.toBeDefined();
   });
 
   it("an admin can't read another admin's audit log", async () => {
-    await assertFails(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/auditLog/a1`)));
+    await expect(assertFails(getDoc(doc(as(ADMIN2), `users/${ADMIN.uid}/auditLog/a1`)))).resolves.toBeDefined();
   });
 
   it("each admin still has full control of their own workspace", async () => {
-    await assertSucceeds(updateDoc(doc(as(ADMIN2), `users/${ADMIN2.uid}/visits/w1`), { notes: "mine" }));
-    await assertSucceeds(updateDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v2`), { notes: "mine" }));
+    await expect(assertSucceeds(updateDoc(doc(as(ADMIN2), `users/${ADMIN2.uid}/visits/w1`), { notes: "mine" }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(updateDoc(doc(as(ADMIN), `users/${ADMIN.uid}/visits/v2`), { notes: "mine" }))).resolves.not.toBeInstanceOf(Error);
   });
 });
