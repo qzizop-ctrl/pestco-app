@@ -48,7 +48,7 @@ export function SupplierFormScreen({
     t,
     deleteSuccessMsg: t.deleteApprovedMsgSupplier,
     restoreSuccessMsg: t.deleteRestoredMsgSupplier,
-    onFinally: () => setScreen && setScreen("suppliers"),
+    onFinally: () => setScreen?.("suppliers"),
     showAlert,
     onAudit: (action) => logAudit(ownerUid, {
       entityType: "supplier", entityId: activeSupplierId, entityName: supplierForm?.name,
