@@ -297,9 +297,13 @@ describe("audit log", () => {
     await expect(assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n4`), entry(EDITOR, { at: new Date(0) })))).resolves.toBeDefined();
   });
 
-  it("entries are immutable, even for the admin", async () => {
+  it("entries can't be edited, even by the admin", async () => {
     await expect(assertFails(updateDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`), { action: "create" }))).resolves.toBeDefined();
-    await expect(assertFails(deleteDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`)))).resolves.toBeDefined();
+  });
+
+  it("only the owner can delete entries (auto-trim to the newest 40)", async () => {
+    await expect(assertFails(deleteDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/a1`)))).resolves.toBeDefined();
+    await expect(assertSucceeds(deleteDoc(doc(as(ADMIN), `users/${ADMIN.uid}/auditLog/a1`)))).resolves.not.toBeInstanceOf(Error);
   });
 
   it("only admins read the log", async () => {
