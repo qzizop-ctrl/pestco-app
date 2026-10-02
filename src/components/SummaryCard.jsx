@@ -27,8 +27,9 @@ function DeltaBadge({ delta, t }) {
   const amount = isPoints ? delta.points : delta;
   const positive = amount >= 0;
   const TrendIcon = positive ? TrendingUp : TrendingDown;
+  const sign = positive ? "+" : "";
   const text = isPoints
-    ? `${positive ? "+" : ""}${amount.toFixed(0)} ${t.dashPointsSuffix}`
+    ? `${sign}${amount.toFixed(0)} ${t.dashPointsSuffix}`
     : `${Math.abs(amount).toFixed(0)}%`;
 
   return (
