@@ -52,7 +52,7 @@ jobs:
       # Exact versions (no ^ / latest) so every run installs the same tooling;
       # bump them deliberately here and in tests/rules/README.md + README.md.
       - name: Install rules-test tooling
-        run: npm install --no-save --ignore-scripts @firebase/rules-unit-testing@3.0.4 firebase-tools@13.35.1
+        run: npm install --no-save --ignore-scripts @firebase/rules-unit-testing@5.0.1 firebase-tools@13.35.1
 
       - name: Run rules tests
         run: npm run test:rules
