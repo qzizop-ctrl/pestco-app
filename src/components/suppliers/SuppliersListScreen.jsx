@@ -78,6 +78,61 @@ function SupplierCard({ s, t, canEdit, onTogglePin, onOpen }) {
           <div className="flex items-center flex-wrap gap-1 mt-2">
             {s.tags.map((tag) => (
               <TagChip key={tag} label={tag} />
+            ))}
+          </div>
+        )}
+        <div
+          className="flex items-center justify-between"
+          style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}
+        >
+          <div>
+            <p className="text-sm" style={{ margin: 0, color: MUTED }}>{s.phone || "—"}</p>
+            {s.email && (
+              <p className="text-xs" style={{ margin: "2px 0 0", color: MUTED }}>{s.email}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {s.email && (
+              <a
+                href={`mailto:${s.email}`}
+                onClick={(e) => e.stopPropagation()}
+                className="btn-press flex items-center justify-center"
+                style={{ width: 32, height: 32, borderRadius: 10, background: "#E7EEF8", color: PRIMARY_MID }}
+                aria-label={t.emailRow}
+              >
+                <Mail size={14} />
+              </a>
+            )}
+            {s.phone && (
+              <a
+                href={`tel:${s.phone}`}
+                onClick={(e) => e.stopPropagation()}
+                className="btn-press flex items-center justify-center"
+                style={{ width: 32, height: 32, borderRadius: 10, background: "#E5F1EA", color: "#2F9E58" }}
+                aria-label={t.phoneRow}
+              >
+                <Phone size={14} />
+              </a>
+            )}
+            {s.phone && (
+              <a
+                href={buildWhatsAppLink(s.phone)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  void openWhatsApp(s.phone);
+                }}
+                className="btn-press flex items-center justify-center"
+                style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
+                aria-label={t.whatsapp}
+              >
+                <MessageCircle size={14} />
+              </a>
+            )}
+          </div>
+        </div>
+      </button>
+    </div>
   );
 }
 
@@ -199,61 +254,6 @@ export function SuppliersListScreen({
           onTogglePin={togglePinSupplier}
           onOpen={openEditSupplier}
         />
-      ))}
-              </div>
-            )}
-            <div
-              className="flex items-center justify-between"
-              style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}
-            >
-              <div>
-                <p className="text-sm" style={{ margin: 0, color: MUTED }}>{s.phone || "—"}</p>
-                {s.email && (
-                  <p className="text-xs" style={{ margin: "2px 0 0", color: MUTED }}>{s.email}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {s.email && (
-                  <a
-                    href={`mailto:${s.email}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="btn-press flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: 10, background: "#E7EEF8", color: PRIMARY_MID }}
-                    aria-label={t.emailRow}
-                  >
-                    <Mail size={14} />
-                  </a>
-                )}
-                {s.phone && (
-                  <a
-                    href={`tel:${s.phone}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="btn-press flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: 10, background: "#E5F1EA", color: "#2F9E58" }}
-                    aria-label={t.phoneRow}
-                  >
-                    <Phone size={14} />
-                  </a>
-                )}
-                {s.phone && (
-                  <a
-                    href={buildWhatsAppLink(s.phone)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      void openWhatsApp(s.phone);
-                    }}
-                    className="btn-press flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
-                    aria-label={t.whatsapp}
-                  >
-                    <MessageCircle size={14} />
-                  </a>
-                )}
-              </div>
-            </div>
-          </button>
-        </div>
       ))}
 
       {hasMore && <div ref={sentinelRef} style={{ height: 1 }} aria-hidden="true" />}
