@@ -41,4 +41,5 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+// bootstrap() catches everything itself and shows a fatal-error screen.
+void bootstrap();

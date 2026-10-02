@@ -121,7 +121,7 @@ export async function requestNotificationPermission() {
 export async function scheduleCallReminder(visitId, callDateTime, title, body) {
   if (!isNative() || !callDateTime) return;
   const when = new Date(callDateTime);
-  if (isNaN(when.getTime()) || when.getTime() <= Date.now()) return;
+  if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) return;
   try {
     await LocalNotifications.schedule({
       notifications: [

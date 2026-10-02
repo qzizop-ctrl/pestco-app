@@ -27,7 +27,7 @@ export function serializeForBackup(value) {
       return null;
     }
   }
-  if (value instanceof Date) return isNaN(value) ? null : value.toISOString();
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
   if (Array.isArray(value)) {
     return value.map((v) => {
       const out = serializeForBackup(v);
@@ -80,7 +80,7 @@ export function utf8ToBase64(text) {
   let binary = "";
   const CHUNK = 0x8000;
   for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    binary += String.fromCodePoint.apply(null, bytes.subarray(i, i + CHUNK));
   }
   return btoa(binary);
 }

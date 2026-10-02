@@ -3,6 +3,20 @@
 // it's used from almost every other module (offers, dashboard, PDF export).
 // ============================================================================
 
+// Inserts a comma every three digits, counting from the right. A plain loop
+// instead of the usual /\B(?=(\d{3})+(?!\d))/g regex, which backtracks
+// super-linearly on long digit strings. Anything that is not purely digits
+// (e.g. exponent notation like "1e+21") is returned untouched, as before.
+function groupThousands(intPart) {
+  if (!/^\d+$/.test(intPart)) return intPart;
+  let out = "";
+  for (let i = 0; i < intPart.length; i++) {
+    if (i > 0 && (intPart.length - i) % 3 === 0) out += ",";
+    out += intPart[i];
+  }
+  return out;
+}
+
 // Always renders Western (Latin) digits, even under the "ar-EG" locale,
 // which would otherwise switch to Arabic-Indic numerals (٠١٢٣...) and mix
 // with the plain Western digits used elsewhere in the app (e.g. raw counts
@@ -22,13 +36,13 @@
 export function fmtMoney(n, _locale) {
   try {
     let num = Number(n);
-    if (!isFinite(num)) num = 0;
+    if (!Number.isFinite(num)) num = 0;
     const negative = num < 0;
     num = Math.abs(num);
     // Match toLocaleString's default rounding (up to 3 fraction digits).
     num = Math.round(num * 1000) / 1000;
     const [intPart, decPart] = num.toString().split(".");
-    const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const withThousands = groupThousands(intPart);
     return (negative ? "-" : "") + withThousands + (decPart ? "." + decPart : "");
   } catch {
     return String(n || 0);

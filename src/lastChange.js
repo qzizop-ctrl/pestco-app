@@ -93,10 +93,15 @@ export function computeRollbackFields(lastChange) {
 // Value comparison helpers (used when recording and merging pending changes)
 // ---------------------------------------------------------------------------
 
+// Plain code-unit ordering (what an argument-less sort() does), spelled out so
+// the intent is explicit. Deliberately NOT localeCompare: these orderings must
+// be identical on every device so equal values always compare equal.
+const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 // Order-insensitive comparison of two tag lists: re-ordering the same tags is
 // not a change worth sending to the owner for review.
 export function tagsChanged(oldTags, newTags) {
-  const norm = (v) => (Array.isArray(v) ? [...v].map(String).sort() : []);
+  const norm = (v) => (Array.isArray(v) ? [...v].map(String).sort(byCodeUnit) : []);
   const a = norm(oldTags);
   const b = norm(newTags);
   return a.length !== b.length || a.some((x, i) => x !== b[i]);
@@ -127,7 +132,7 @@ function stableStringify(value) {
   if (value === undefined) return "null";
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  const keys = Object.keys(value).sort();
+  const keys = Object.keys(value).sort(byCodeUnit);
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
 }
 

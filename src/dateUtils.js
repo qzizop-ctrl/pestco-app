@@ -14,15 +14,15 @@ export function parseVisitDate(str) {
   const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (iso) {
     const d = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-    return isNaN(d) ? null : d;
+    return Number.isNaN(Number(d)) ? null : d;
   }
   const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (dmy) {
     const d = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
-    return isNaN(d) ? null : d;
+    return Number.isNaN(Number(d)) ? null : d;
   }
   const d = new Date(s);
-  return isNaN(d) ? null : d;
+  return Number.isNaN(Number(d)) ? null : d;
 }
 
 // Normalizes any supported date format back to ISO yyyy-mm-dd, the format
@@ -61,7 +61,7 @@ export function fmtReminder(dt, locale) {
 export function toJsDate(ts) {
   if (!ts) return null;
   const d = typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
-  return isNaN(d) ? null : d;
+  return Number.isNaN(Number(d)) ? null : d;
 }
 
 export function fmtCreatedAt(ts, locale) {

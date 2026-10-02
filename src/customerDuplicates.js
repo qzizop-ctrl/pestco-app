@@ -114,7 +114,7 @@ const lastActivityMs = memoByObject((visit) => {
   const take = (d) => {
     if (!d) return;
     const ms = d.getTime();
-    if (!isNaN(ms) && (max === null || ms > max)) max = ms;
+    if (!Number.isNaN(ms) && (max === null || ms > max)) max = ms;
   };
   take(parseVisitDate(visit.visitDate));
   if (visit.callDateTime) take(new Date(visit.callDateTime));
