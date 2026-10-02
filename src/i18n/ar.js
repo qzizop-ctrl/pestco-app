@@ -152,7 +152,10 @@ export const AR = {
       entityType === "supplier"
         ? { one: "مورد واحد", two: "موردين", many: (n) => `${n} موردين` }
         : { one: "عميل واحد", two: "عميلين", many: (n) => `${n} عملاء` };
-    const who = count === 1 ? nouns.one : count === 2 ? nouns.two : nouns.many(count);
+    let who;
+    if (count === 1) who = nouns.one;
+    else if (count === 2) who = nouns.two;
+    else who = nouns.many(count);
     return `هيتغيّر التاج "${oldTag}" إلى "${newTag}" في ${who}. تأكيد؟`;
   },
   exchangeRateLabel: "دولار إلى جنيه",
