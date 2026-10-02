@@ -194,7 +194,12 @@ describe("review workflow can't be bypassed through the SDK (regression)", () =>
   it("editor can't edit reviewed fields on a record with someone else's pending change unless they raise their own", async () => {
     await expect(assertFails(updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { notes: "x" }))).resolves.toBeDefined();
     await expect(assertSucceeds(
-      updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), { notes: "x", last_change: PENDING })
+      updateDoc(doc(as(EDITOR), `users/${ADMIN.uid}/visits/v1`), {
+        notes: "x",
+        // A NEW last_change (different updatedAt). Re-sending the identical one
+        // that is already stored does not count as "raising" a change.
+        last_change: { ...PENDING, updatedAt: "2026-02-02T00:00:00.000Z" },
+      })
     )).resolves.not.toBeInstanceOf(Error);
   });
 
