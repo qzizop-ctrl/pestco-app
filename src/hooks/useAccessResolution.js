@@ -126,7 +126,13 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
   // once we've signed the account back out. Cleared by clearAuthError().
   // Seeded from sessionStorage: a forced sign-out now reloads the page (to
   // wipe the local data cache), so the reason has to survive the reload.
-  const [authError, setAuthError] = useState(() => consumeSignOutReason());
+  // authError keeps its original shape: true ("no access"), "unverified", or
+  // false — consumeSignOutReason() returns a string, so map it back here.
+  const [authError, setAuthError] = useState(() => {
+    const reason = consumeSignOutReason();
+    if (reason === "no-access") return true;
+    return reason || false;
+  });
   // True when access could not be resolved within ACCESS_HARD_TIMEOUT_MS
   // (offline / very slow first round trip). permissionLoading stays true —
   // nobody gets edit rights from a guess — but the UI can say what is
