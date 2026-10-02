@@ -5,6 +5,7 @@ import {
   memoryLocalCache, getFirestore,
   terminate, clearIndexedDbPersistence,
 } from "firebase/firestore";
+import { rememberSignOutReason } from "./signOutReason";
 
 /* ---------------------------------------------------------------
    إعدادات Firebase — بتتقرأ من متغيرات البيئة (Environment Variables)
@@ -129,7 +130,10 @@ export const db = createFirestore();
 // can legitimately fail — e.g. the app is open in a second tab — so each
 // step is best-effort and the reload happens regardless; the user is
 // signed out either way. The in-memory (Electron) cache needs no clearing.
-export async function signOutAndClearLocalData() {
+export async function signOutAndClearLocalData({ reason } = {}) {
+  // `reason` (optional) is the AuthScreen message to show after the reload —
+  // see signOutReason.js.
+  rememberSignOutReason(reason);
   try {
     await signOut(auth);
   } catch (e) {
