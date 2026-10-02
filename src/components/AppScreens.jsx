@@ -53,6 +53,7 @@ export default function AppScreens({
   expandedOfferId,
   exportAllToExcel,
   exportFullBackupJson,
+  restoreBackup,
   exportFilteredToExcel,
   exportSuppliersAllToExcel,
   exportSuppliersFilteredToExcel,
@@ -350,6 +351,7 @@ export default function AppScreens({
         confirmAction={confirmAction}
         exportAllToExcel={exportAllToExcel}
         exportFullBackupJson={isOwnerAccount ? exportFullBackupJson : undefined}
+        restoreBackup={isOwnerAccount ? restoreBackup : undefined}
         exportFilteredToExcel={exportFilteredToExcel}
         filteredCount={filtered.length}
         triggerImportPicker={triggerImportPicker}

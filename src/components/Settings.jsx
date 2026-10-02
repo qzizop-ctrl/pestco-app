@@ -53,6 +53,7 @@ export default function SettingsScreen({
   confirmAction,
   exportAllToExcel,
   exportFullBackupJson,
+  restoreBackup,
   exportFilteredToExcel,
   filteredCount,
   triggerImportPicker,
@@ -158,6 +159,8 @@ export default function SettingsScreen({
           t={t}
           exportAllToExcel={exportAllToExcel}
           exportFullBackupJson={exportFullBackupJson}
+          restoreBackup={restoreBackup}
+          confirmAction={confirmAction}
           exportFilteredToExcel={exportFilteredToExcel}
           filteredCount={filteredCount}
           triggerImportPicker={triggerImportPicker}
