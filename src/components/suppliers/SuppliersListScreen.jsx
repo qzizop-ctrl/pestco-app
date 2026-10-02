@@ -272,7 +272,7 @@ export function SuppliersListScreen({
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      openWhatsApp(s.phone);
+                      void openWhatsApp(s.phone);
                     }}
                     className="btn-press flex items-center justify-center"
                     style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}
