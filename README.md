@@ -97,7 +97,7 @@ npm run firebase:deploy-rules
 
 ### اختبار القواعد
 ```bash
-npm install --no-save @firebase/rules-unit-testing@^3 firebase-tools   # مرة واحدة
+npm install --no-save @firebase/rules-unit-testing@3.0.4 firebase-tools@13.35.1   # مرة واحدة
 npm run test:rules
 ```
 بيشتغل كمان في GitHub Actions (`.github/workflows/test-rules.yml`) كل ما القواعد أو الاختبارات تتغيّر. التفاصيل في [`tests/rules/README.md`](./tests/rules/README.md).
