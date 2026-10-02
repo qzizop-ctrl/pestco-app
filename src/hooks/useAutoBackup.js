@@ -5,7 +5,9 @@ const STORAGE_KEY = "pestco_last_auto_backup";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Once a week, asks the workspace owner (only — not every signed-in user)
-// whether to save a full Excel backup (visits + suppliers) to this device.
+// whether to save a backup to this device: the Excel workbook (visits +
+// suppliers, human-readable) AND, when `saveBackupJson` is provided, the full
+// lossless JSON dump (offers, activity, visit history, audit trail).
 // Nothing is saved unless they confirm the prompt. The last-run timestamp
 // lives in localStorage, so it's per device: the owner opening the app on
 // a second phone/PC gets its own independent weekly prompt there too.
@@ -17,7 +19,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 // Deliberately does NOT touch Firestore or any shared config — this is a
 // personal safety net for the owner, not a workspace-wide setting other
 // members could see or be affected by.
-export function useAutoBackup({ isOwnerAccount, ready, visits, suppliers, saveBackupWorkbook, confirmAction, notify, t }) {
+export function useAutoBackup({ isOwnerAccount, ready, visits, suppliers, saveBackupWorkbook, saveBackupJson, confirmAction, notify, t }) {
   const askedThisSession = useRef(false);
 
   useEffect(() => {
@@ -36,6 +38,7 @@ export function useAutoBackup({ isOwnerAccount, ready, visits, suppliers, saveBa
     confirmAction(t.autoBackupPrompt, async () => {
       try {
         await saveBackupWorkbook(visits, suppliers);
+        if (saveBackupJson) await saveBackupJson();
         try {
           localStorage.setItem(STORAGE_KEY, String(Date.now()));
         } catch {
@@ -48,5 +51,5 @@ export function useAutoBackup({ isOwnerAccount, ready, visits, suppliers, saveBa
         notify(t.autoBackupFailed);
       }
     });
-  }, [isOwnerAccount, ready, visits, suppliers, saveBackupWorkbook, confirmAction, notify, t]);
+  }, [isOwnerAccount, ready, visits, suppliers, saveBackupWorkbook, saveBackupJson, confirmAction, notify, t]);
 }

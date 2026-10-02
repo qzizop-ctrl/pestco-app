@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { signOut } from "firebase/auth";
 import { doc, onSnapshot, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth, db, signOutAndClearLocalData } from "../firebase";
+import { consumeSignOutReason } from "../signOutReason";
 import { resolveNextOwners, selectOwner, resolveNoOwnersOutcome } from "../workspaceAccess";
 import { reportException } from "../sentry";
 
@@ -13,6 +14,14 @@ import { reportException } from "../sentry";
 // this piece is the one that actually does the owner/role resolution and
 // the sign-out-on-no-access decisions, so it's kept together as a unit
 // rather than split further.
+// If neither a confirmed answer nor a usable cached one has arrived after this
+// long, stop showing an endless skeleton and let the UI offer "retry".
+const ACCESS_HARD_TIMEOUT_MS = 15000;
+
+// How long to wait for the signups self-heal write before wiping the local
+// cache: terminating Firestore drops writes that haven't reached the server.
+const SELF_HEAL_WAIT_MS = 5000;
+
 export function useAccessResolution({ user, adminEmails, screen, setScreen, setActiveId }) {
   const [ownerUid, setOwnerUid] = useState(null);
   const [myRole, setMyRole] = useState(null);
@@ -28,7 +37,16 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
   // (never granted, still pending review, or a dismissed/removed signup) —
   // AuthScreen surfaces this as an "email not registered" style message
   // once we've signed the account back out. Cleared by clearAuthError().
-  const [authError, setAuthError] = useState(false);
+  // Seeded from sessionStorage: a forced sign-out now reloads the page (to
+  // wipe the local data cache), so the reason has to survive the reload.
+  const [authError, setAuthError] = useState(() => consumeSignOutReason());
+  // True when access could not be resolved within ACCESS_HARD_TIMEOUT_MS
+  // (offline / very slow first round trip). permissionLoading stays true —
+  // nobody gets edit rights from a guess — but the UI can say what is
+  // happening and offer retryAccess() instead of spinning forever.
+  const [accessTimedOut, setAccessTimedOut] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const retryAccess = () => setRetryKey((k) => k + 1);
   const previousResolvedOwnerRef = useRef(null);
   const clearAuthError = () => setAuthError(false);
 
@@ -51,6 +69,7 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
     }
 
     setPermissionLoading(true);
+    setAccessTimedOut(false);
     const emailKey = (user.email || "").trim().toLowerCase();
 
     if (!emailKey) {
@@ -86,10 +105,19 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
       return;
     }
 
+    // Upper bound for everything below (including the wait for the admin
+    // list and the "wait" outcome further down): without it a cold start
+    // with no connection left the app on a skeleton forever.
+    const hardTimer = setTimeout(() => setAccessTimedOut(true), ACCESS_HARD_TIMEOUT_MS);
+    const resolved = () => {
+      clearTimeout(hardTimer);
+      setAccessTimedOut(false);
+    };
+
     // Wait for the admin list before resolving anything — see useAdminConfig.js.
     // permissionLoading stays true a moment longer instead of risking a
     // wrong (and disruptive) sign-out decision below.
-    if (adminEmails === null) return;
+    if (adminEmails === null) return () => clearTimeout(hardTimer);
 
     const lookupRef = doc(db, "access_by_email", emailKey);
 
@@ -171,6 +199,7 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
           return;
         }
 
+        resolved();
         setOwnerUid(null);
         setMyRole(null);
         setMyDashboardAccess(false);
@@ -204,6 +233,15 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
 
         if (outcome === "sign_out_and_self_heal" || outcome === "sign_out_only") {
           setAuthError(true);
+          // Wipe this device's cached customer / supplier data too: a member
+          // whose access was revoked (or who never had any) must not keep a
+          // readable copy of the workspace on their phone. The page reloads
+          // afterwards; the reason is carried across it (signOutReason.js).
+          const endSession = () =>
+            signOutAndClearLocalData({ reason: true }).catch((e) => {
+              console.error("Sign-out for unauthorized account failed:", e);
+              reportException(e, { context: "Sign-out for unauthorized account failed" });
+            });
           if (outcome === "sign_out_and_self_heal") {
             // Self-heal: AuthScreen's registration flow sends the
             // verification email right after creating the account, but
@@ -231,7 +269,7 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
             // a missing doc (the actual repair case), while `allow
             // update: if false` rejects this exact same call as a no-op
             // whenever the doc already exists and is correct.
-            setDoc(doc(db, "signups", user.uid), {
+            const healWrite = setDoc(doc(db, "signups", user.uid), {
               email: emailKey,
               createdAt: serverTimestamp(),
             }).catch((e) => {
@@ -244,11 +282,12 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
                 reportException(e, { context: "Signup self-heal failed" });
               }
             });
+            // Let the write reach the server (bounded) BEFORE the cache is
+            // wiped — terminating Firestore would otherwise discard it.
+            Promise.race([healWrite, new Promise((r) => setTimeout(r, SELF_HEAL_WAIT_MS))]).then(endSession);
+          } else {
+            endSession();
           }
-          signOut(auth).catch((e) => {
-            console.error("Sign-out for unauthorized account failed:", e);
-            reportException(e, { context: "Sign-out for unauthorized account failed" });
-          });
         }
         // outcome === "reviewer_no_owners": nothing further to do — a
         // reviewer with no resolved workspace still stays signed in.
@@ -277,6 +316,7 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
       } catch {
         // localStorage may be unavailable (e.g. private browsing) — safe to ignore.
       }
+      resolved();
       setPermissionLoading(false);
     };
 
@@ -304,6 +344,7 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
           clearTimeout(staleFallbackTimer);
           staleFallbackTimer = null;
         }
+        resolved();
         console.error("Permission listener failed:", error);
         reportException(error, { context: "Permission listener failed" });
         setOwnerUid(null);
@@ -318,10 +359,11 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
     );
 
     return () => {
+      clearTimeout(hardTimer);
       if (staleFallbackTimer) clearTimeout(staleFallbackTimer);
       unsub();
     };
-  }, [user, adminEmails, setActiveId, setScreen]);
+  }, [user, adminEmails, setActiveId, setScreen, retryKey]);
 
   // Keep the selected workspace and role synchronized when the user changes
   // workspace from Settings.
@@ -348,6 +390,8 @@ export function useAccessResolution({ user, adminEmails, screen, setScreen, setA
     permissionLoading,
     authError,
     clearAuthError,
+    accessTimedOut,
+    retryAccess,
     switchOwnerWorkspace,
   };
 }

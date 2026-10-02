@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   setDoc: vi.fn(() => Promise.resolve()),
   serverTimestamp: vi.fn(() => "SERVER_TS"),
   signOut: vi.fn(() => Promise.resolve()),
+  // Forced sign-outs (no access / revoked) now also wipe the device's local
+  // data cache — see signOutAndClearLocalData in firebase.js.
+  signOutAndClearLocalData: vi.fn(() => Promise.resolve()),
   reportException: vi.fn(),
 }));
 
@@ -24,7 +27,7 @@ vi.mock("firebase/firestore", () => ({
   serverTimestamp: mocks.serverTimestamp,
 }));
 vi.mock("firebase/auth", () => ({ signOut: mocks.signOut }));
-vi.mock("../firebase", () => ({ auth: {}, db: {} }));
+vi.mock("../firebase", () => ({ auth: {}, db: {}, signOutAndClearLocalData: mocks.signOutAndClearLocalData }));
 vi.mock("../sentry", () => ({ reportException: mocks.reportException }));
 
 import { useAccessResolution } from "./useAccessResolution";
@@ -63,6 +66,7 @@ const deliver = (data, opts) => act(() => listener.next(snapOf(data, opts)));
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
   listener = null;
   mocks.onSnapshot.mockImplementation((_ref, next, error) => {
     listener = { next, error };
@@ -96,6 +100,8 @@ describe("before there is anything to resolve", () => {
   it("an UNVERIFIED account is signed out with the 'unverified' error and never reads access", () => {
     const { result, setScreen } = setup({ user: makeUser({ emailVerified: false }), adminEmails: ["me@pest.test"] });
     expect(mocks.signOut).toHaveBeenCalledTimes(1);
+    // Never had access, so there is no workspace data on the device to wipe.
+    expect(mocks.signOutAndClearLocalData).not.toHaveBeenCalled();
     expect(result.current.authError).toBe("unverified");
     expect(result.current.ownerUid).toBeNull();
     expect(result.current.permissionLoading).toBe(false);
@@ -182,10 +188,12 @@ describe("admins", () => {
 });
 
 describe("accounts with no access", () => {
-  it("a non-admin nobody granted anything to is signed out with the 'not registered' error", () => {
+  it("a non-admin nobody granted anything to is signed out (local cache wiped) with the 'not registered' error", async () => {
     const { result, setActiveId } = setup();
     deliver(null);
-    expect(mocks.signOut).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mocks.signOutAndClearLocalData).toHaveBeenCalledTimes(1));
+    expect(mocks.signOutAndClearLocalData).toHaveBeenCalledWith({ reason: true });
+    expect(mocks.signOut).not.toHaveBeenCalled();
     expect(result.current.authError).toBe(true);
     expect(result.current.ownerUid).toBeNull();
     expect(result.current.availableOwners).toEqual([]);
@@ -193,7 +201,7 @@ describe("accounts with no access", () => {
     expect(setActiveId).toHaveBeenCalledWith(null);
   });
 
-  it("a NEW verified account gets its pending signup (re)written before sign-out", () => {
+  it("a NEW verified account gets its pending signup (re)written BEFORE the cache is wiped", async () => {
     setup();
     deliver(null);
     expect(mocks.setDoc).toHaveBeenCalledTimes(1);
@@ -201,12 +209,28 @@ describe("accounts with no access", () => {
       { path: "signups/me" },
       { email: "me@pest.test", createdAt: "SERVER_TS" }
     );
+    await vi.waitFor(() => expect(mocks.signOutAndClearLocalData).toHaveBeenCalledTimes(1));
+    // Terminating Firestore drops writes that haven't reached the server, so
+    // the write must have been issued (and awaited) first.
+    expect(mocks.setDoc.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.signOutAndClearLocalData.mock.invocationCallOrder[0]);
+  });
+
+  it("the signup rewrite is only waited for a bounded time before the cache is wiped", async () => {
+    vi.useFakeTimers();
+    mocks.setDoc.mockImplementationOnce(() => new Promise(() => {})); // never settles
+    setup();
+    deliver(null);
+    expect(mocks.signOutAndClearLocalData).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
+    expect(mocks.signOutAndClearLocalData).toHaveBeenCalledTimes(1);
   });
 
   it("an OLD account (dismissed / revoked) is signed out without resurrecting a pending signup", () => {
     setup({ user: makeUser({ metadata: { creationTime: new Date(Date.now() - 3 * DAY).toISOString() } }) });
     deliver(null);
-    expect(mocks.signOut).toHaveBeenCalledTimes(1);
+    expect(mocks.signOutAndClearLocalData).toHaveBeenCalledTimes(1);
+    expect(mocks.signOut).not.toHaveBeenCalled();
     expect(mocks.setDoc).not.toHaveBeenCalled();
   });
 
@@ -226,12 +250,12 @@ describe("accounts with no access", () => {
     expect(mocks.reportException).toHaveBeenCalledTimes(1);
   });
 
-  it("revoking access live signs the member out", () => {
+  it("revoking access live signs the member out AND wipes the data cached on this device", async () => {
     const { result } = setup();
     deliver({ owners: { ownerA: "editor" } });
     expect(result.current.ownerUid).toBe("ownerA");
     deliver({ owners: {} });
-    expect(mocks.signOut).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mocks.signOutAndClearLocalData).toHaveBeenCalledTimes(1));
     expect(result.current.ownerUid).toBeNull();
     expect(result.current.myRole).toBeNull();
   });
@@ -242,6 +266,7 @@ describe("accounts with no access", () => {
     expect(result.current.ownerUid).toBe("ownerA");
     deliver({ owners: {} });
     expect(mocks.signOut).not.toHaveBeenCalled();
+    expect(mocks.signOutAndClearLocalData).not.toHaveBeenCalled();
     expect(result.current.ownerUid).toBeNull();
     expect(result.current.availableOwners).toEqual([]);
     expect(result.current.permissionLoading).toBe(false);
@@ -253,6 +278,7 @@ describe("stale cache vs. confirmed server data", () => {
     const { result } = setup();
     deliver(null, { fromCache: true });
     expect(mocks.signOut).not.toHaveBeenCalled();
+    expect(mocks.signOutAndClearLocalData).not.toHaveBeenCalled();
     expect(result.current.permissionLoading).toBe(true);
   });
 
@@ -280,6 +306,55 @@ describe("stale cache vs. confirmed server data", () => {
     deliver(null, { fromCache: true });
     act(() => vi.advanceTimersByTime(10000));
     expect(mocks.signOut).not.toHaveBeenCalled();
+    expect(mocks.signOutAndClearLocalData).not.toHaveBeenCalled();
+  });
+
+  it("gives up waiting after 15s: accessTimedOut is set, but nobody gets access from a guess", () => {
+    vi.useFakeTimers();
+    const { result } = setup();
+    deliver(null, { fromCache: true });
+    act(() => vi.advanceTimersByTime(14999));
+    expect(result.current.accessTimedOut).toBe(false);
+    act(() => vi.advanceTimersByTime(2));
+    expect(result.current.accessTimedOut).toBe(true);
+    expect(result.current.permissionLoading).toBe(true);
+    expect(result.current.ownerUid).toBeNull();
+    expect(mocks.signOutAndClearLocalData).not.toHaveBeenCalled();
+  });
+
+  it("also times out when nothing at all arrives (no cached snapshot either)", () => {
+    vi.useFakeTimers();
+    const { result } = setup();
+    act(() => vi.advanceTimersByTime(15001));
+    expect(result.current.accessTimedOut).toBe(true);
+  });
+
+  it("a confirmed answer arriving later clears the timed-out state", () => {
+    vi.useFakeTimers();
+    const { result } = setup();
+    act(() => vi.advanceTimersByTime(15001));
+    expect(result.current.accessTimedOut).toBe(true);
+    deliver({ owners: { ownerA: "editor" } });
+    expect(result.current.accessTimedOut).toBe(false);
+    expect(result.current.permissionLoading).toBe(false);
+  });
+
+  it("retryAccess subscribes again and resets the timed-out state", () => {
+    vi.useFakeTimers();
+    const { result } = setup();
+    act(() => vi.advanceTimersByTime(15001));
+    expect(mocks.onSnapshot).toHaveBeenCalledTimes(1);
+    act(() => result.current.retryAccess());
+    expect(mocks.onSnapshot).toHaveBeenCalledTimes(2);
+    expect(result.current.accessTimedOut).toBe(false);
+  });
+
+  it("no timer is left running once access has resolved", () => {
+    vi.useFakeTimers();
+    const { result } = setup();
+    deliver({ owners: { ownerA: "editor" } });
+    act(() => vi.advanceTimersByTime(60000));
+    expect(result.current.accessTimedOut).toBe(false);
   });
 
   it("a confirmed server snapshot cancels the fallback and wins over the cached one", () => {
@@ -305,6 +380,7 @@ describe("listener failure", () => {
     expect(result.current.permissionLoading).toBe(false);
     expect(mocks.reportException).toHaveBeenCalledTimes(1);
     expect(mocks.signOut).not.toHaveBeenCalled();
+    expect(mocks.signOutAndClearLocalData).not.toHaveBeenCalled();
     expect(setScreen).toHaveBeenCalledWith("list");
     errSpy.mockRestore();
   });
@@ -346,5 +422,20 @@ describe("email-less accounts", () => {
     expect(result.current.myRole).toBe("owner");
     expect(result.current.permissionLoading).toBe(false);
     expect(mocks.onSnapshot).not.toHaveBeenCalled();
+  });
+});
+
+describe("the sign-out reason survives the reload", () => {
+  it("shows the 'not registered' message that was remembered before the page reloaded", () => {
+    sessionStorage.setItem("pestco_signout_reason", "1");
+    const { result } = setup({ user: null });
+    expect(result.current.authError).toBe(true);
+    // Read once: a later app start must not show it again.
+    expect(sessionStorage.getItem("pestco_signout_reason")).toBeNull();
+  });
+
+  it("starts with no error when nothing was remembered", () => {
+    const { result } = setup({ user: null });
+    expect(result.current.authError).toBe(false);
   });
 });

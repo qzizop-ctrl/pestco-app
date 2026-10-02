@@ -3,7 +3,7 @@ import { collection, doc, updateDoc, writeBatch, serverTimestamp } from "firebas
 import { db } from "../firebase";
 import { emptySupplierForm } from "../domain";
 import { diffVisitFields } from "../formHelpers";
-import { mergeLastChange } from "../lastChange";
+import { mergeLastChange, tagsChanged } from "../lastChange";
 import { parseTagsCell } from "../tagsAndLinks";
 import { queueAudit } from "./useAuditLog";
 import { useFlushOnHide } from "./useFlushOnHide";
@@ -94,11 +94,19 @@ export function useSupplierRecords({
     // last_change.changes carries real old/new values, and flag the record
     // with last_change so it surfaces in the owner's pending-edits bell
     // (shared with customer edits) for review.
-    const auditIgnoreKeys = ["tags", "createdAt", "updatedAt", "isPinned", "deleted"];
+    const auditIgnoreKeys = ["createdAt", "updatedAt", "isPinned", "deleted"];
     const changes = {};
     if (original) {
       Object.keys(editFields).forEach((key) => {
         if (auditIgnoreKeys.includes(key)) return;
+        // Tag edits are reviewable / reversible like any other field (they
+        // used to be skipped). Compared as lists, ignoring order.
+        if (key === "tags") {
+          if (tagsChanged(original.tags, data.tags)) {
+            changes.tags = { old_value: original.tags || [], new_value: data.tags };
+          }
+          return;
+        }
         const oldVal = original[key];
         const newVal = data[key];
         const oldCompare = oldVal ?? "";

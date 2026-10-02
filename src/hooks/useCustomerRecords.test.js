@@ -267,6 +267,57 @@ describe("useCustomerRecords — editing a customer", () => {
     );
   });
 
+  // Opens `visit` for editing, applies `changes` to the form, saves, and
+  // returns the payload written by the batch update.
+  async function editAndSave(visit, changes) {
+    const props = makeProps({ visits: [visit] });
+    const { result } = renderHook(() => useCustomerRecords(props));
+    act(() => {
+      result.current.openEdit(visit);
+    });
+    act(() => {
+      result.current.setForm({ ...result.current.form, ...changes });
+    });
+    act(() => {
+      result.current.saveForm();
+    });
+    await waitFor(() => expect(props.setScreen).toHaveBeenCalledWith("list"));
+    return mocks.batch.update.mock.calls[0][1];
+  }
+
+  it("records a tag edit in last_change and in the audit entry, so it can be reviewed and rolled back", async () => {
+    const payload = await editAndSave(existing, { tagsInput: "vip, cctv" });
+    expect(payload.tags).toEqual(["vip", "cctv"]);
+    expect(payload.last_change.changes.tags).toEqual({ old_value: ["vip"], new_value: ["vip", "cctv"] });
+    expect(mocks.queueAudit).toHaveBeenCalledWith(
+      mocks.batch,
+      "owner1",
+      expect.objectContaining({
+        action: "update",
+        changes: expect.objectContaining({ tags: { old_value: ["vip"], new_value: ["vip", "cctv"] } }),
+      })
+    );
+  });
+
+  it("re-ordering the same tags is saved but is not a change worth reviewing", async () => {
+    const payload = await editAndSave({ ...existing, tags: ["a", "b"] }, { tagsInput: "b, a" });
+    expect(payload.last_change.changes).toBeUndefined();
+  });
+
+  it("a changed visit date logs a visit-history entry and stores its id in last_change (for rollback)", async () => {
+    const payload = await editAndSave(existing, { visitDate: "2026-06-20" });
+    const [entry] = payload.visitHistory.__arrayUnion;
+    expect(entry).toMatchObject({ date: "2026-06-20" });
+    expect(payload.last_change.addedVisitEntryIds).toEqual([entry.id]);
+    expect(payload.last_change.changes.visitDate).toEqual({ old_value: "2026-06-01", new_value: "2026-06-20" });
+  });
+
+  it("an edit that doesn't touch the visit date records no entry id", async () => {
+    const payload = await editAndSave(existing, { notes: "other" });
+    expect(payload).not.toHaveProperty("visitHistory");
+    expect(payload.last_change).not.toHaveProperty("addedVisitEntryIds");
+  });
+
   it("logs a timeline entry when the stage changes", async () => {
     const props = makeProps({ visits: [existing] });
     const { result } = renderHook(() => useCustomerRecords(props));

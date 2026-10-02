@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { mergeLastChange } from "../lastChange";
+import { mergeLastChange, tagsChanged } from "../lastChange";
 import {
   collection, doc, updateDoc, writeBatch, serverTimestamp, arrayUnion,
 } from "firebase/firestore";
@@ -138,11 +138,20 @@ export function useCustomerRecords({
       // تجهيز كائن التتبع (Audit Log) — بيقارن كل حقل في البيانات الجديدة
       // بالسجل الأصلي الموجود فعليًا في Firestore (visits state)، عشان
       // القيم القديمة في last_change.changes تبقى حقيقية، مش "فارغ" لكل حقل.
-      const auditIgnoreKeys = ["tags", "createdAt", "updatedAt", "notified"];
+      const auditIgnoreKeys = ["createdAt", "updatedAt", "notified"];
       const changes = {};
       if (original) {
         Object.keys(editFields).forEach((key) => {
           if (auditIgnoreKeys.includes(key)) return;
+          // Tags are arrays: they used to be skipped here, so a tag edit never
+          // reached the owner's review (or the audit trail) and could not be
+          // rolled back. Compared as lists, ignoring order.
+          if (key === "tags") {
+            if (tagsChanged(original.tags, data.tags)) {
+              changes.tags = { old_value: original.tags || [], new_value: data.tags };
+            }
+            return;
+          }
           const oldVal = original[key];
           const newVal = data[key];
           const oldCompare = oldVal ?? "";
@@ -153,11 +162,21 @@ export function useCustomerRecords({
         });
       }
 
+      // A changed visit date also logs a visit-history entry (so the
+      // Dashboard counts it). The entry's id travels with last_change so the
+      // owner's rollback can remove exactly that entry — otherwise rolling
+      // back restored the date but left the cancelled visit counted.
+      const newVisitEntry = id && original && original.visitDate !== data.visitDate
+        && data.visitDate && Object.prototype.hasOwnProperty.call(editFields, "visitDate")
+        ? buildVisitEntry(data.visitDate)
+        : null;
+
       const lastChangeData = {
         updatedBy: user?.displayName || user?.email || "موظف غير معروف",
         updatedById: user?.uid || null,
         updatedAt: new Date().toISOString(),
         ...(Object.keys(changes).length > 0 ? { changes } : {}),
+        ...(newVisitEntry ? { addedVisitEntryIds: [newVisitEntry.id] } : {}),
       };
 
       setIsSaving(true);
@@ -178,8 +197,8 @@ export function useCustomerRecords({
             last_change: mergeLastChange(original?.last_change, lastChangeData),
             updatedAt: new Date().toISOString()
           };
-          if (original && original.visitDate !== data.visitDate && data.visitDate) {
-            updatePayload.visitHistory = arrayUnion(buildVisitEntry(data.visitDate));
+          if (newVisitEntry) {
+            updatePayload.visitHistory = arrayUnion(newVisitEntry);
           }
           batch.update(doc(db, "users", ownerUid, "visits", id), updatePayload);
           queueAudit(batch, ownerUid, {

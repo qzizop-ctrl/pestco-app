@@ -4,6 +4,7 @@ import { useWorkspace } from "./useWorkspace";
 import { useAccessManagement } from "./useAccessManagement";
 import { useLiveData } from "./useLiveData";
 import { useExcelExport } from "./useExcelExport";
+import { useJsonBackup } from "./useJsonBackup";
 import { useExcelImport } from "./useExcelImport";
 import { useAutoBackup } from "./useAutoBackup";
 import { useReminders } from "./useReminders";
@@ -115,7 +116,7 @@ export function useAppController() {
     authChecked, user, authError, clearAuthError, ownerUid, availableOwners, permissionLoading,
     canEdit, isOwnerAccount, canViewDashboard, members, dashboardAccess,
     pendingSignups, isReviewer, isPrimaryAdmin, primaryAdminEmail, adminEmails,
-    switchOwnerWorkspace,
+    accessTimedOut, retryAccess, switchOwnerWorkspace,
   } = useWorkspace({ requireOnline, reportError: reportWorkspaceError, screen, setScreen, setActiveId });
 
   const {
@@ -126,7 +127,19 @@ export function useAppController() {
     requireOnline, reportError: reportWorkspaceError,
   });
 
-  const { visits, loaded, visitsError, suppliers, suppliersLoaded } = useLiveData(user, ownerUid);
+  const {
+    visits, loaded, visitsError, visitsTimedOut, retryLiveData, suppliers, suppliersLoaded,
+  } = useLiveData(user, ownerUid);
+
+  // Neither the access check nor the customer list could be completed in time
+  // (typically: offline on a cold start). The list screen shows a "couldn't
+  // load — try again" card instead of an endless skeleton or a false
+  // "no customers" message.
+  const loadTimedOut = !loaded && (accessTimedOut || visitsTimedOut);
+  const retryLoad = () => {
+    retryAccess();
+    retryLiveData();
+  };
 
   useReminders({ visits, user, ownerUid, canEdit, t, visitsLoaded: loaded && !visitsError });
 
@@ -235,13 +248,23 @@ export function useAppController() {
 
   const exportSuppliersFilteredToExcel = () => exportSuppliers(filteredSuppliers, "filtered");
 
-  // Weekly Excel backup, owner-only — see src/hooks/useAutoBackup.js.
+  // Full lossless JSON backup (raw documents incl. offers / activity / visit
+  // history / audit trail), owner-only — see src/hooks/useJsonBackup.js. Uses
+  // the raw `visits` / `suppliers` (soft-deleted records included), not the
+  // filtered views the lists show.
+  const { saveFullBackup, exportFullBackupJson } = useJsonBackup({
+    ownerUid, user, isOwnerAccount, ready: loaded && suppliersLoaded,
+    visits, suppliers, t, notify: showAlert,
+  });
+
+  // Weekly backup (Excel + full JSON), owner-only — see src/hooks/useAutoBackup.js.
   useAutoBackup({
     isOwnerAccount,
     ready: loaded && suppliersLoaded,
     visits: visibleVisits,
     suppliers: visibleSuppliers,
     saveBackupWorkbook,
+    saveBackupJson: saveFullBackup,
     confirmAction,
     notify: showAlert,
     t,
@@ -282,10 +305,10 @@ export function useAppController() {
     availableAddedMonths, availableOwners, canEdit, canViewDashboard, changeStage, clearCallReminder,
     confirmAction, dashboardAccess, dateAddedFilter, dateAddedScopeTotal, deleteActivity, deleteOffer,
     deleteSupplier, deleteVisit, dismissSignup, dueReminders, duplicateGroups, errors, exchangeRate,
-    expandedOfferId, exportAllToExcel, exportFilteredToExcel, exportSuppliersAllToExcel, exportSuppliersFilteredToExcel,
+    expandedOfferId, exportAllToExcel, exportFilteredToExcel, exportSuppliersAllToExcel, exportSuppliersFilteredToExcel, exportFullBackupJson,
     fileInputRef, filtered, filteredSuppliers, form, grantAccess, handleImportFile, handleImportSupplierFile,
     importProgress, importing, importingSuppliers, isOnline, isOwnerAccount, isPrimaryAdmin, isReviewer, isSaving,
-    lang, loaded, logVisitToday, members, missingDataCount, missingDataOnly, newActivityText, newMemberEmail,
+    lang, loaded, loadTimedOut, retryLoad, logVisitToday, members, missingDataCount, missingDataOnly, newActivityText, newMemberEmail,
     newMemberRole, newOffer, noVisitsCount, noVisitsOnly, openDetail, openEdit, openEditSupplier, openNew,
     openNewSupplier, openPendingEditItem, openPendingSupplierEditItem, ownerUid, pendingEdits, pendingSignups,
     pendingSupplierEdits, primaryAdminEmail, query, removeAdminEmail, removeTagFromForm, removeTagFromSupplierForm,

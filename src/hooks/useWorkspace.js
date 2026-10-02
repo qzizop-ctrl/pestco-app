@@ -39,7 +39,7 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
 
   const {
     ownerUid, myRole, myDashboardAccess, availableOwners, permissionLoading,
-    authError, clearAuthError, switchOwnerWorkspace,
+    authError, clearAuthError, accessTimedOut, retryAccess, switchOwnerWorkspace,
   } = useAccessResolution({ user, adminEmails, screen, setScreen, setActiveId });
 
   const { members, dashboardAccess } = useMembersAccess(user);
@@ -109,6 +109,8 @@ export function useWorkspace({ requireOnline: _requireOnline, reportError: _repo
     isPrimaryAdmin,
     primaryAdminEmail,
     adminEmails,
+    accessTimedOut,
+    retryAccess,
     switchOwnerWorkspace,
   };
 }

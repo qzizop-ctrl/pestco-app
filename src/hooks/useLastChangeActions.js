@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { updateDoc, deleteDoc, deleteField } from "firebase/firestore";
-import { computeRollbackFields } from "../lastChange";
+import { runTransaction, deleteField } from "firebase/firestore";
+import { computeRollbackFields, sameLastChange } from "../lastChange";
 import { reportException } from "../sentry";
 
 // ============================================================================
@@ -44,6 +44,41 @@ import { reportException } from "../sentry";
 // alert() directly on every branch below, defeating that fix for every
 // approve/rollback/delete/restore flow. Required (not optional) so a call
 // site can't silently fall back to the native dialog by omitting it.
+
+// Thrown inside a review transaction when the record is no longer in the state
+// the owner was looking at. kind: "stale" (an editor saved another change
+// meanwhile) | "nothing" (no pending change any more — already reviewed).
+class ReviewConflictError extends Error {
+  constructor(kind) {
+    super(`review conflict: ${kind}`);
+    this.name = "ReviewConflictError";
+    this.kind = kind;
+  }
+}
+
+// Runs ONE owner review step atomically. The owner decides on the pending
+// change they SEE on screen (`expected`); between that moment and the write an
+// editor may have saved another edit. A plain updateDoc() would then approve
+// (or roll back) a change the owner never looked at, and a rollback would
+// overwrite the newer edit with stale values. Inside the transaction the
+// stored last_change is re-read and compared; any difference aborts the whole
+// step with nothing written. Transactions also retry automatically if the
+// document changes while they run.
+//
+// write(tx, data, current): queues the actual writes; `data` is the freshly
+// read document, `current` its stored last_change (== expected).
+async function runReviewStep(docRef, expected, write) {
+  await runTransaction(docRef.firestore, async (tx) => {
+    const snap = await tx.get(docRef);
+    if (!snap.exists()) throw new ReviewConflictError("nothing");
+    const data = snap.data();
+    const current = data.last_change;
+    if (!current) throw new ReviewConflictError("nothing");
+    if (!sameLastChange(current, expected)) throw new ReviewConflictError("stale");
+    write(tx, data, current);
+  });
+}
+
 export function useLastChangeActions({
   getDocRef, isOwnerAccount, lastChange, t, onFinally, onDeleteSuccess,
   deleteSuccessMsg, restoreSuccessMsg, onAudit, showAlert,
@@ -57,25 +92,41 @@ export function useLastChangeActions({
       return;
     }
     setLoadingAction(true);
+    let skipFinally = false;
     try {
-      await action(docRef);
+      skipFinally = (await action(docRef)) === "conflict";
     } finally {
       setLoadingAction(false);
-      onFinally && onFinally();
+      // After a conflict the owner must stay on the record: the live snapshot
+      // is about to show the newer pending change they still have to review.
+      if (!skipFinally) onFinally && onFinally();
     }
+  };
+
+  // Shared catch-handler: a review conflict is an expected outcome (tell the
+  // owner, report nothing); anything else is a real failure.
+  const handleStepError = (err, context, errorMsg) => {
+    if (err instanceof ReviewConflictError) {
+      showAlert(err.kind === "stale" ? t.reviewStaleMsg : t.reviewNothingPendingMsg);
+      return "conflict";
+    }
+    console.error(`${context}:`, err);
+    reportException(err, { context });
+    showAlert(errorMsg(err.message));
+    return undefined;
   };
 
   const handleApprove = () =>
     run(async (docRef) => {
-      if (!isOwnerAccount) return;
+      if (!isOwnerAccount || !lastChange) return;
       try {
-        await updateDoc(docRef, { last_change: deleteField() });
+        await runReviewStep(docRef, lastChange, (tx) => {
+          tx.update(docRef, { last_change: deleteField() });
+        });
         showAlert(t.approveSuccessMsg);
         onAudit && onAudit("approve");
       } catch (err) {
-        console.error("last_change approve failed:", err);
-        reportException(err, { context: "last_change approve failed" });
-        showAlert(t.approveErrorMsg(err.message));
+        return handleStepError(err, "last_change approve failed", t.approveErrorMsg);
       }
     });
 
@@ -83,23 +134,32 @@ export function useLastChangeActions({
     run(async (docRef) => {
       if (!isOwnerAccount || !lastChange) return;
       try {
-        const rollbackPayload = computeRollbackFields(lastChange);
-        rollbackPayload.last_change = deleteField();
-        await updateDoc(docRef, rollbackPayload);
+        await runReviewStep(docRef, lastChange, (tx, data, current) => {
+          const rollbackPayload = computeRollbackFields(current);
+          // A reviewed visit-date edit also added a visit-history entry:
+          // remove exactly that entry (matched by id on the freshly read
+          // array, so nothing logged since is touched).
+          const addedIds = Array.isArray(current.addedVisitEntryIds) ? current.addedVisitEntryIds : [];
+          if (addedIds.length > 0 && Array.isArray(data.visitHistory)) {
+            rollbackPayload.visitHistory = data.visitHistory.filter((e) => !(e && addedIds.includes(e.id)));
+          }
+          rollbackPayload.last_change = deleteField();
+          tx.update(docRef, rollbackPayload);
+        });
         showAlert(t.rollbackSuccessMsg);
         onAudit && onAudit("rollback");
       } catch (err) {
-        console.error("last_change rollback failed:", err);
-        reportException(err, { context: "last_change rollback failed" });
-        showAlert(t.rollbackErrorMsg(err.message));
+        return handleStepError(err, "last_change rollback failed", t.rollbackErrorMsg);
       }
     });
 
   const handleConfirmDelete = () =>
     run(async (docRef) => {
-      if (!isOwnerAccount) return;
+      if (!isOwnerAccount || !lastChange) return;
       try {
-        await deleteDoc(docRef);
+        await runReviewStep(docRef, lastChange, (tx) => {
+          tx.delete(docRef);
+        });
         if (deleteSuccessMsg) showAlert(deleteSuccessMsg);
         // Was onAudit("approve") — a permanent delete confirmation was being
         // logged in the audit trail as an "approve", indistinguishable from
@@ -108,23 +168,21 @@ export function useLastChangeActions({
         onAudit && onAudit("delete");
         onDeleteSuccess && onDeleteSuccess();
       } catch (err) {
-        console.error("last_change confirm-delete failed:", err);
-        reportException(err, { context: "last_change confirm-delete failed" });
-        showAlert(t.deleteFinalErrorMsg(err.message));
+        return handleStepError(err, "last_change confirm-delete failed", t.deleteFinalErrorMsg);
       }
     });
 
   const handleRestoreDeleted = () =>
     run(async (docRef) => {
-      if (!isOwnerAccount) return;
+      if (!isOwnerAccount || !lastChange) return;
       try {
-        await updateDoc(docRef, { deleted: deleteField(), last_change: deleteField() });
+        await runReviewStep(docRef, lastChange, (tx) => {
+          tx.update(docRef, { deleted: deleteField(), last_change: deleteField() });
+        });
         if (restoreSuccessMsg) showAlert(restoreSuccessMsg);
         onAudit && onAudit("restore");
       } catch (err) {
-        console.error("last_change restore failed:", err);
-        reportException(err, { context: "last_change restore failed" });
-        showAlert(t.restoreErrorMsg(err.message));
+        return handleStepError(err, "last_change restore failed", t.restoreErrorMsg);
       }
     });
 
