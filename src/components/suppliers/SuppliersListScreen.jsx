@@ -11,10 +11,75 @@ import {
 import { TagChip, SkeletonList } from "../Shared";
 import SupplierFilterSheet from "../SupplierFilterSheet";
 import PendingEditsSheet from "../PendingEditsSheet";
+import PillButton from "../PillButton";
 import { PRIMARY, PRIMARY_MID, TEXT, MUTED, GOLD, GOLD_SOFT, LINE, SURFACE } from "../../theme";
 import { buildWhatsAppLink } from "../../tagsAndLinks";
 import { openWhatsApp } from "../../nativeWhatsApp";
 import { useIncrementalReveal } from "../../hooks/useIncrementalReveal";
+
+// One supplier row in the list: pin star, tappable body (opens the edit
+// screen) and the email / phone / WhatsApp quick actions.
+function SupplierCard({ s, t, canEdit, onTogglePin, onOpen }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        background: SURFACE,
+        border: `1px solid ${LINE}`,
+        borderRadius: 16,
+        marginBottom: 12,
+      }}
+    >
+      {canEdit && (
+        <button
+          onClick={() => onTogglePin(s)}
+          className="btn-press flex items-center justify-center"
+          style={{
+            position: "absolute",
+            top: 10,
+            [t.dir === "rtl" ? "left" : "right"]: 10,
+            width: 28,
+            height: 28,
+            zIndex: 2,
+            color: s.isPinned ? GOLD : "#C7C4B6",
+          }}
+          aria-label={s.isPinned ? t.unpinBtn : t.pinBtn}
+        >
+          <Star size={17} fill={s.isPinned ? GOLD : "none"} />
+        </button>
+      )}
+      <button
+        onClick={() => onOpen(s)}
+        className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
+        style={{ display: "block", padding: 14 }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div style={{ [t.dir === "rtl" ? "paddingLeft" : "paddingRight"]: 32 }}>
+            <p className="font-extrabold text-base" style={{ margin: 0, color: TEXT }}>
+              {s.name || t.noSupplierName}
+            </p>
+            {s.contactName && (
+              <p className="text-sm" style={{ margin: "2px 0 0", color: MUTED }}>{s.contactName}</p>
+            )}
+          </div>
+          {s.category && (
+            <span
+              className="text-xs font-bold flex-shrink-0"
+              style={{ background: GOLD_SOFT, color: "#7A5420", borderRadius: 999, padding: "3px 9px" }}
+            >
+              {s.category}
+            </span>
+          )}
+        </div>
+        {s.notes && (
+          <p className="text-sm mt-1" style={{ color: MUTED, margin: "4px 0 0" }}>{s.notes}</p>
+        )}
+        {(s.tags || []).length > 0 && (
+          <div className="flex items-center flex-wrap gap-1 mt-2">
+            {s.tags.map((tag) => (
+              <TagChip key={tag} label={tag} />
+  );
+}
 
 export function SuppliersListScreen({
   t,
@@ -42,9 +107,7 @@ export function SuppliersListScreen({
   const [pendingEditsOpen, setPendingEditsOpen] = useState(false);
   const searchActive = searchFocused || supplierQuery.length > 0;
 
-  const activeFilterCount =
-    (supplierCategoryFilter !== "all" ? 1 : 0) +
-    (supplierTagFilter !== "all" ? 1 : 0);
+  const activeFilterCount = [supplierCategoryFilter, supplierTagFilter].filter((f) => f !== "all").length;
 
   // Same windowed-rendering fix as CustomerList.jsx — see
   // useIncrementalReveal.js. resetKey is the query/filter state, not
@@ -71,72 +134,28 @@ export function SuppliersListScreen({
             style={{ [t.dir === "rtl" ? "paddingRight" : "paddingLeft"]: 34, borderRadius: 14 }}
           />
         </div>
-        <button
+        <PillButton
           onClick={() => setFilterSheetOpen(true)}
-          className="btn-press flex items-center justify-center gap-1 font-bold text-xs flex-shrink-0"
-          style={{
-            position: "relative",
-            border: `1.4px solid ${activeFilterCount > 0 ? PRIMARY : LINE}`,
-            background: activeFilterCount > 0 ? PRIMARY : SURFACE,
-            color: activeFilterCount > 0 ? "#fff" : MUTED,
-            borderRadius: 14,
-            height: 44,
-            overflow: "hidden",
-            transition: "max-width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease",
-            maxWidth: searchActive ? 0 : 120,
-            padding: searchActive ? "0" : "0 14px",
-            opacity: searchActive ? 0 : 1,
-            pointerEvents: searchActive ? "none" : "auto",
-          }}
-        >
-          <SlidersHorizontal size={15} />
-          {t.filtersBtn}
-          {activeFilterCount > 0 && (
-            <span
-              className="text-xs font-extrabold flex items-center justify-center"
-              style={{
-                background: GOLD, color: "#fff", borderRadius: 999,
-                minWidth: 16, height: 16, padding: "0 4px",
-              }}
-            >
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+          icon={SlidersHorizontal}
+          label={t.filtersBtn}
+          count={activeFilterCount}
+          accent={PRIMARY}
+          badgeBg={GOLD}
+          badgeColor="#fff"
+          searchActive={searchActive}
+        />
 
         {isOwnerAccount && (
-          <button
+          <PillButton
             onClick={() => setPendingEditsOpen(true)}
-            className="btn-press flex items-center justify-center gap-1 font-bold text-xs flex-shrink-0"
-            style={{
-              position: "relative",
-              border: `1.4px solid ${pendingEdits.length > 0 ? GOLD : LINE}`,
-              background: pendingEdits.length > 0 ? GOLD : SURFACE,
-              color: pendingEdits.length > 0 ? "#fff" : MUTED,
-              borderRadius: 14,
-              height: 44,
-              overflow: "hidden",
-              transition: "max-width 0.2s ease, opacity 0.2s ease, padding 0.2s ease, margin 0.2s ease",
-              maxWidth: searchActive ? 0 : 120,
-              padding: searchActive ? "0" : "0 14px",
-              opacity: searchActive ? 0 : 1,
-              pointerEvents: searchActive ? "none" : "auto",
-            }}
-          >
-            <Bell size={15} />
-            {t.pendingEditsBtn}
-            {pendingEdits.length > 0 && (
-              <span
-                className="text-xs font-extrabold flex items-center justify-center"
-                style={{
-                  background: "#fff", color: GOLD, borderRadius: 999,
-                  minWidth: 16, height: 16, padding: "0 4px",
-                }}
-              >
-                {pendingEdits.length}
-              </span>
-            )}
-          </button>
+            icon={Bell}
+            label={t.pendingEditsBtn}
+            count={pendingEdits.length}
+            accent={GOLD}
+            badgeBg="#fff"
+            badgeColor={GOLD}
+            searchActive={searchActive}
+          />
         )}
       </div>
 
@@ -172,65 +191,15 @@ export function SuppliersListScreen({
       )}
 
       {visibleSuppliers.map((s) => (
-        <div
+        <SupplierCard
           key={s.id}
-          style={{
-            position: "relative",
-            background: SURFACE,
-            border: `1px solid ${LINE}`,
-            borderRadius: 16,
-            marginBottom: 12,
-          }}
-        >
-          {canEdit && (
-            <button
-              onClick={() => togglePinSupplier(s)}
-              className="btn-press flex items-center justify-center"
-              style={{
-                position: "absolute",
-                top: 10,
-                [t.dir === "rtl" ? "left" : "right"]: 10,
-                width: 28,
-                height: 28,
-                zIndex: 2,
-                color: s.isPinned ? GOLD : "#C7C4B6",
-              }}
-              aria-label={s.isPinned ? t.unpinBtn : t.pinBtn}
-            >
-              <Star size={17} fill={s.isPinned ? GOLD : "none"} />
-            </button>
-          )}
-          <button
-            onClick={() => openEditSupplier(s)}
-            className={`btn-press w-full ${t.dir === "rtl" ? "text-right" : "text-left"}`}
-            style={{ display: "block", padding: 14 }}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div style={{ [t.dir === "rtl" ? "paddingLeft" : "paddingRight"]: 32 }}>
-                <p className="font-extrabold text-base" style={{ margin: 0, color: TEXT }}>
-                  {s.name || t.noSupplierName}
-                </p>
-                {s.contactName && (
-                  <p className="text-sm" style={{ margin: "2px 0 0", color: MUTED }}>{s.contactName}</p>
-                )}
-              </div>
-              {s.category && (
-                <span
-                  className="text-xs font-bold flex-shrink-0"
-                  style={{ background: GOLD_SOFT, color: "#7A5420", borderRadius: 999, padding: "3px 9px" }}
-                >
-                  {s.category}
-                </span>
-              )}
-            </div>
-            {s.notes && (
-              <p className="text-sm mt-1" style={{ color: MUTED, margin: "4px 0 0" }}>{s.notes}</p>
-            )}
-            {(s.tags || []).length > 0 && (
-              <div className="flex items-center flex-wrap gap-1 mt-2">
-                {s.tags.map((tag) => (
-                  <TagChip key={tag} label={tag} />
-                ))}
+          s={s}
+          t={t}
+          canEdit={canEdit}
+          onTogglePin={togglePinSupplier}
+          onOpen={openEditSupplier}
+        />
+      ))}
               </div>
             )}
             <div
