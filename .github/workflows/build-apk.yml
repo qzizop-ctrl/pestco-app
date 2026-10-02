@@ -119,7 +119,7 @@ jobs:
       # locally and commit the updated lock (or run the "Sync
       # package-lock.json" workflow) — `npm ci` fails loudly when they drift.
       - name: Install dependencies
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -180,7 +180,7 @@ jobs:
       # Capacitor Sync
       # =========================
       - name: Sync Capacitor
-        run: npx cap sync android
+        run: npx --no-install cap sync android
 
       # =========================
       # Release keystore
@@ -248,7 +248,7 @@ jobs:
       # =========================
       - name: Create GitHub Release with APK
         if: ${{ steps.meta.outputs.version != '' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
         with:
           tag_name: "android-v${{ steps.meta.outputs.version }}"
           name: "Android v${{ steps.meta.outputs.version }}"

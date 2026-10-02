@@ -34,9 +34,15 @@ jobs:
           cache: "npm"
 
       - name: Install (updates package-lock.json)
-        run: npm install
+        # --package-lock-only: only rewrites package-lock.json, nothing is
+        # unpacked into node_modules; --ignore-scripts: no lifecycle scripts.
+        run: npm install --package-lock-only --ignore-scripts
 
       - name: Commit updated lock file
+        env:
+          # Passed via env (not interpolated into the script) so a crafted
+          # branch name can't inject shell commands.
+          BRANCH: ${{ inputs.branch }}
         run: |
           if git diff --quiet -- package-lock.json; then
             echo "package-lock.json already up to date — nothing to commit."
@@ -46,4 +52,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package-lock.json
           git commit -m "chore: sync package-lock.json with package.json"
-          git push origin HEAD:${{ inputs.branch }}
+          git push origin "HEAD:${BRANCH}"

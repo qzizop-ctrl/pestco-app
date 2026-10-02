@@ -25,8 +25,14 @@ jobs:
           node-version: 20
           cache: "npm"
 
+      # `--ignore-scripts` blocks dependency lifecycle scripts (supply-chain
+      # hardening). This repo's own postinstall (xlsx integrity check) is
+      # therefore run explicitly in the next step.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Verify xlsx integrity
+        run: npm run xlsx:verify
 
       - name: Lint
         run: npm run lint
