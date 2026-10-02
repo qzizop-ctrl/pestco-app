@@ -22,6 +22,11 @@ allprojects {
         google()
         mavenCentral()
     }
+    // Pin resolved dependency versions in gradle.lockfile. Generate/refresh with:
+    //   ./gradlew dependencies --write-locks   (run in android/) and commit the lockfiles.
+    dependencyLocking {
+        lockAllConfigurations()
+    }
 }
 
 task clean(type: Delete) {
