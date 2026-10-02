@@ -3,7 +3,7 @@ import { ChevronLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { stageColor, offerStatusColor, PRIMARY, PRIMARY_MID, TEXT, MUTED, LINE, SURFACE, SURFACE_SUBTLE, SUCCESS, DASH_NEGATIVE } from "../theme";
 import { STAGE_IDS, OFFER_STATUS_IDS } from "../domain";
 import { fmtUnifiedOrSplit } from "../offerHelpers";
-import { pctChange, computeStageConversionRates } from "../dashboardCalculations";
+import { pctChange, compareDelta, computeStageConversionRates } from "../dashboardCalculations";
 
 // Merges what used to be three separate full-width cards on the Dashboard
 // (Sales Pipeline, Sales Performance, Rejection Reasons Analytics) into one
@@ -40,7 +40,7 @@ export default function SalesAnalysisCard({
   // data" null the same way the other Dashboard cards handle a 0 baseline.
   const prevReasonCounts = new Map((prevRejectionReport?.byReason || []).map((r) => [r.id, r.count]));
   const prevRepCounts = new Map((prevRejectionReport?.byRep || []).map((r) => [r.name, r.count]));
-  const rejectionTotalDelta = compare ? (prevRejectionReport ? pctChange(rejectionReport.total, prevRejectionReport.total) : null) : undefined;
+  const rejectionTotalDelta = compareDelta(compare, prevRejectionReport, () => pctChange(rejectionReport.total, prevRejectionReport.total));
 
   // Same idea for Top Clients — looked up by the same key computeTopClients
   // groups by, over the FULL previous-period list (not just its own top 5),
@@ -111,7 +111,7 @@ export default function SalesAnalysisCard({
             // Dashboard does: how many customers were at this stage when
             // the previous period's snapshot (prevStats) was computed.
             const prevCount = prevStats ? (prevStats.pipeline[id] || 0) : null;
-            const stageDelta = compare ? (prevStats ? pctChange(count, prevCount) : null) : undefined;
+            const stageDelta = compareDelta(compare, prevStats, () => pctChange(count, prevCount));
             return (
               <Fragment key={id}>
                 <div className="flex flex-col items-center" style={{ flexShrink: 0, minWidth: 66, opacity: isEmpty ? 0.45 : 1 }}>
@@ -169,7 +169,7 @@ export default function SalesAnalysisCard({
             const info = stats.offersByStatus[id] || { count: 0, totals: {} };
             const valueText = fmtUnifiedOrSplit(info.totals, t, exchangeRate, unifyCurrency);
             const prevCount = prevStats ? (prevStats.offersByStatus[id] || { count: 0 }).count : null;
-            const delta = compare ? (prevStats ? pctChange(info.count, prevCount) : null) : undefined;
+            const delta = compareDelta(compare, prevStats, () => pctChange(info.count, prevCount));
             return (
               <div
                 key={id}
@@ -234,7 +234,7 @@ export default function SalesAnalysisCard({
             <>
               <div className="flex flex-col gap-2 mb-4">
                 {rejectionReport.byReason.map((r) => {
-                  const reasonDelta = compare ? (prevRejectionReport ? pctChange(r.count, prevReasonCounts.get(r.id) || 0) : null) : undefined;
+                  const reasonDelta = compareDelta(compare, prevRejectionReport, () => pctChange(r.count, prevReasonCounts.get(r.id) || 0));
                   return (
                     <div key={r.id}>
                       <div className="flex items-center justify-between mb-1">
@@ -265,7 +265,7 @@ export default function SalesAnalysisCard({
                   <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>{t.dashRejectionReportByRep}</p>
                   <div className="flex flex-wrap" style={{ gap: 8 }}>
                     {rejectionReport.byRep.map((r) => {
-                      const repDelta = compare ? (prevRejectionReport ? pctChange(r.count, prevRepCounts.get(r.name) || 0) : null) : undefined;
+                      const repDelta = compareDelta(compare, prevRejectionReport, () => pctChange(r.count, prevRepCounts.get(r.name) || 0));
                       return (
                         <div
                           key={r.name}
@@ -310,7 +310,7 @@ export default function SalesAnalysisCard({
               // previous period reads as a 0 baseline, which pctChange
               // already renders as "no comparison data" below.
               const key = c.customerId || c.customerName;
-              const clientDelta = compare ? (prevTopClients ? pctChange(c.offersCount, prevClientCounts.get(key) || 0) : null) : undefined;
+              const clientDelta = compareDelta(compare, prevTopClients, () => pctChange(c.offersCount, prevClientCounts.get(key) || 0));
               return (
                 <button
                   key={key}

@@ -4,6 +4,7 @@ import {
 import { signOutAndClearLocalData } from "../firebase";
 import { BrandMark } from "./Shared";
 import { PRIMARY } from "../theme";
+import { resolveBackTarget } from "../backTarget";
 
 // The sticky top app bar: back button (or brand mark on root screens),
 // screen title, online indicator, dark-mode/language toggles, sign out.
@@ -21,11 +22,7 @@ export default function AppHeader({
       {!isRootScreen ? (
         <button
           onClick={() => setScreen(
-            screen === "form" && formId ? "detail" :
-            screen === "detail" ? detailBackTarget :
-            screen === "supplier-form" ? "suppliers" :
-            screen === "audit-log" ? "settings" :
-            "list"
+            resolveBackTarget(screen, { hasFormId: Boolean(formId), detailBackTarget, auditLogTarget: "settings" })
           )}
           className="btn-press"
           style={{ color: "#fff" }}

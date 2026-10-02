@@ -24,9 +24,9 @@ import { openWhatsApp } from "../nativeWhatsApp";
 export function SkeletonList({ count = 4 }) {
   return (
     <div className="flex flex-col gap-3" aria-hidden="true">
-      {Array.from({ length: count }).map((_, i) => (
+      {Array.from({ length: count }, (_, n) => n).map((slot) => (
         <div
-          key={i}
+          key={slot}
           className="p-4 rounded-2xl"
           style={{ background: SURFACE, border: `1px solid ${LINE}` }}
         >

@@ -2,7 +2,7 @@ import { Calendar, Users, FileText, Wallet, Percent, DollarSign } from "lucide-r
 import { MUTED, LINE, SURFACE } from "../theme";
 import { fmtMoney } from "../formatMoney";
 import { fmtUnifiedOrSplit } from "../offerHelpers";
-import { pctChange } from "../dashboardCalculations";
+import { pctChange, compareDelta } from "../dashboardCalculations";
 import StaleOffersCard from "./StaleOffersCard";
 import SummaryCard from "./SummaryCard";
 import SplitBar from "./SplitBar";
@@ -21,6 +21,7 @@ export default function DashboardOverviewTab({
   avgDealSize, avgDealSizeUSD, prevAvgDealSize,
   winRate, winRateDecidedCount, prevWinRate,
 }) {
+  const numLocale = `${t.locale}-u-nu-latn`;
   return (
     <>
       {/* Offers open for a while with no update — same list/threshold the
@@ -43,21 +44,21 @@ export default function DashboardOverviewTab({
           icon={Calendar}
           label={t.dashCardVisits}
           value={stats.visitsCount}
-          delta={compare ? (prevStats ? pctChange(stats.visitsCount, prevStats.visitsCount) : null) : undefined}
+          delta={compareDelta(compare, prevStats, () => pctChange(stats.visitsCount, prevStats.visitsCount))}
           t={t}
         />
         <SummaryCard
           icon={Users}
           label={customersAddedLabel}
           value={stats.customersAddedCount}
-          delta={compare ? (prevStats ? pctChange(stats.customersAddedCount, prevStats.customersAddedCount) : null) : undefined}
+          delta={compareDelta(compare, prevStats, () => pctChange(stats.customersAddedCount, prevStats.customersAddedCount))}
           t={t}
         />
         <SummaryCard
           icon={FileText}
           label={t.dashCardOffersCount}
           value={stats.offersCount}
-          delta={compare ? (prevStats ? pctChange(stats.offersCount, prevStats.offersCount) : null) : undefined}
+          delta={compareDelta(compare, prevStats, () => pctChange(stats.offersCount, prevStats.offersCount))}
           extra={<SplitBar segments={offersCountSegments} />}
           t={t}
         />
@@ -65,7 +66,7 @@ export default function DashboardOverviewTab({
           icon={Wallet}
           label={t.dashCardOffersValue}
           value={fmtUnifiedOrSplit(stats.offersValueTotals, t, exchangeRate, unifyCurrency, { showAllIfEmpty: true })}
-          delta={compare ? (prevStats ? pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP) : null) : undefined}
+          delta={compareDelta(compare, prevStats, () => pctChange(stats.offersValueTotals.EGP, prevStats.offersValueTotals.EGP))}
           extra={<SplitBar segments={offersValueSegments} />}
           t={t}
         />
@@ -75,14 +76,14 @@ export default function DashboardOverviewTab({
           value={
             avgDealSize === null
               ? t.dashNoOffersYet
-              : `${fmtMoney(avgDealSize, `${t.locale}-u-nu-latn`)} ${t.dashCurrency}`
+              : `${fmtMoney(avgDealSize, numLocale)} ${t.dashCurrency}`
           }
           subValue={
             avgDealSizeUSD !== null
-              ? `${fmtMoney(avgDealSizeUSD, `${t.locale}-u-nu-latn`)} ${t.currencies.USD}`
+              ? `${fmtMoney(avgDealSizeUSD, numLocale)} ${t.currencies.USD}`
               : undefined
           }
-          delta={compare ? (prevStats ? pctChange(avgDealSize, prevAvgDealSize) : null) : undefined}
+          delta={compareDelta(compare, prevStats, () => pctChange(avgDealSize, prevAvgDealSize))}
           t={t}
         />
         <SummaryCard
@@ -90,13 +91,11 @@ export default function DashboardOverviewTab({
           label={t.dashWinRate}
           value={winRate === null ? t.dashNoOffersYet : `${winRate.toFixed(0)}%`}
           subValue={winRate !== null ? t.dashWinRateSample(winRateDecidedCount) : undefined}
-          delta={
-            compare
-              ? (prevStats && winRate !== null && prevWinRate !== null
-                  ? { points: winRate - prevWinRate }
-                  : null)
-              : undefined
-          }
+          delta={compareDelta(
+            compare,
+            prevStats && winRate !== null && prevWinRate !== null,
+            () => ({ points: winRate - prevWinRate }),
+          )}
           t={t}
         />
       </div>

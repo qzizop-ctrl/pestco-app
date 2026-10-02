@@ -217,7 +217,7 @@ export default function FilterSheet({
                     // Keeps this screen working even if the two files ever
                     // drift out of sync between updates.
                     .map((item) => (typeof item === "string" ? { key: item, count: null } : item))
-                    .filter((item) => item && item.key)
+                    .filter((item) => item?.key)
                     .map(({ key, count }) => (
                       <option key={key} value={key}>
                         {monthLabel(key)}{count != null ? ` (${count})` : ""}

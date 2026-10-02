@@ -31,11 +31,9 @@ export default function AlertsCenter({
 
   if (totalCount === 0) return null;
 
-  const headerColor = dueReminders.length > 0
-    ? STATUS_COLORS.overdue
-    : (staleCustomers.length > 0 || !isOnline)
-      ? STATUS_COLORS.today
-      : MUTED;
+  let headerColor = MUTED;
+  if (dueReminders.length > 0) headerColor = STATUS_COLORS.overdue;
+  else if (staleCustomers.length > 0 || !isOnline) headerColor = STATUS_COLORS.today;
 
   return (
     <div

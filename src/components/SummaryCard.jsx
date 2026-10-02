@@ -13,7 +13,9 @@ export default function SummaryCard({ icon: Icon, label, value, delta, subValue,
   // scaling the font down by length keeps the card from overflowing or
   // looking cramped either way.
   const valueText = typeof value === "string" ? value : String(value);
-  const valueFontSize = valueText.length > 18 ? 15 : valueText.length > 12 ? 18 : 22;
+  let valueFontSize = 22;
+  if (valueText.length > 18) valueFontSize = 15;
+  else if (valueText.length > 12) valueFontSize = 18;
 
   return (
     <div

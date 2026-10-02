@@ -73,11 +73,11 @@ export default function PendingChangeBanner({
     );
   }
 
-  const ignoreKeys = ["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details", "last_change", "addedVisitEntryIds"];
+  const ignoreKeys = new Set(["changed_by", "updatedBy", "updatedById", "updated_at", "updatedAt", "changes", "details", "last_change", "addedVisitEntryIds"]);
   const rawChanges = lastChange.changes || lastChange.details || lastChange;
   const entries =
     rawChanges && typeof rawChanges === "object"
-      ? Object.entries(rawChanges).filter(([k]) => !ignoreKeys.includes(k))
+      ? Object.entries(rawChanges).filter(([k]) => !ignoreKeys.has(k))
       : null;
 
   return (

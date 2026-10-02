@@ -131,7 +131,7 @@ export default function PeriodSheet({ t, period, availableYears, onApply, onClos
                   value={single.month}
                   onChange={(e) => setSingle((s) => ({ ...s, month: Number(e.target.value) }))}
                 >
-                  {t.months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                  {t.months.map((m, i) => <option key={m} value={i}>{m}</option>)}
                 </select>
                 <select
                   value={single.year}
@@ -147,7 +147,7 @@ export default function PeriodSheet({ t, period, availableYears, onApply, onClos
                     value={from.month}
                     onChange={(e) => setFrom((f) => ({ ...f, month: Number(e.target.value) }))}
                   >
-                    {t.months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                    {t.months.map((m, i) => <option key={m} value={i}>{m}</option>)}
                   </select>
                   <select
                     value={from.year}
@@ -162,7 +162,7 @@ export default function PeriodSheet({ t, period, availableYears, onApply, onClos
                     value={to.month}
                     onChange={(e) => setTo((tt) => ({ ...tt, month: Number(e.target.value) }))}
                   >
-                    {t.months.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                    {t.months.map((m, i) => <option key={m} value={i}>{m}</option>)}
                   </select>
                   <select
                     value={to.year}

@@ -72,7 +72,7 @@ export default function CustomerDetailScreen({
     t,
     deleteSuccessMsg: t.deleteApprovedMsg,
     restoreSuccessMsg: t.deleteRestoredMsg,
-    onDeleteSuccess: () => setScreen && setScreen("list"),
+    onDeleteSuccess: () => setScreen?.("list"),
     showAlert,
     onAudit: (action) => logAudit(ownerUid, {
       entityType: "customer", entityId: active?.id, entityName: active?.companyName,
