@@ -66,7 +66,7 @@ export default function AuditLogScreen({
   const users = useMemo(() => {
     const set = new Set();
     entries.forEach((e) => e.changedBy && set.add(e.changedBy));
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [entries]);
 
   const filtered = useMemo(() => {

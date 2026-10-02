@@ -16,10 +16,14 @@ export default function PendingEditsSheet({ t, open, onClose, pendingEdits, onOp
     <div
       className="flex items-end justify-center"
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 90 }}
-      onClick={onClose}
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
         style={{
           background: SURFACE,
           borderRadius: "18px 18px 0 0",

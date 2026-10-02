@@ -268,7 +268,7 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  openWhatsApp(visit.phone);
+                  void openWhatsApp(visit.phone);
                 }}
                 className="btn-press flex items-center justify-center"
                 style={{ width: 32, height: 32, borderRadius: 10, background: "#E4F5EA", color: "#25A245" }}

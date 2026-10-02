@@ -29,10 +29,14 @@ export default function ConfirmModal({
     <div
       className="flex items-center justify-center"
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 100, padding: 20 }}
-      onClick={onCancel}
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
         className="animate-screen-in"
         style={{ background: SURFACE, borderRadius: 16, padding: 18, width: "100%", maxWidth: 380 }}
       >

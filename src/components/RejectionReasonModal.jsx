@@ -14,7 +14,7 @@
 // the fixed ids instead of arbitrary free text.
 // ============================================================================
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { PRIMARY_MID, TEXT, MUTED, LINE, SURFACE } from "../theme";
 import { REJECTION_REASON_IDS } from "../domain";
@@ -24,6 +24,12 @@ export default function RejectionReasonModal({ t, initialReasonId, initialReason
   const [otherText, setOtherText] = useState(initialReasonText || "");
 
   const isOther = reasonId === "other";
+  const otherRef = useRef(null);
+  // Move to the free-text box when the person picks "other" (their own
+  // action), instead of using the autoFocus attribute.
+  useEffect(() => {
+    if (isOther) otherRef.current?.focus();
+  }, [isOther]);
 
   const handleConfirm = () => {
     // reasonId left blank counts as "other" with whatever free text (if
@@ -44,10 +50,14 @@ export default function RejectionReasonModal({ t, initialReasonId, initialReason
         zIndex: 100,
         padding: 20,
       }}
-      onClick={onCancel}
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
         style={{
           background: SURFACE,
           borderRadius: 16,
@@ -89,7 +99,7 @@ export default function RejectionReasonModal({ t, initialReasonId, initialReason
               {t.rejectionModalOtherLabel}
             </label>
             <textarea
-              autoFocus
+              ref={otherRef}
               rows={3}
               value={otherText}
               onChange={(e) => setOtherText(e.target.value)}
