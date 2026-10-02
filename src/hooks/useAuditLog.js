@@ -98,11 +98,13 @@ function auditQueries(ownerUid) {
 // sort first, so they are never the ones removed.
 async function deleteBeyondKeep(ownerUid, sortedEntries) {
   const stale = sortedEntries.slice(AUDIT_LOG_KEEP);
+  const commits = [];
   for (let i = 0; i < stale.length; i += 400) {
     const batch = writeBatch(db);
     stale.slice(i, i + 400).forEach((e) => batch.delete(doc(db, "users", ownerUid, "auditLog", e.id)));
-    await batch.commit();
+    commits.push(batch.commit());
   }
+  await Promise.all(commits);
 }
 
 // One-shot cleanup (owner only — firestore.rules only lets the owner
