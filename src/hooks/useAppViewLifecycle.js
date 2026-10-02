@@ -41,7 +41,7 @@ import { useResetViewOnOpen } from "./useResetViewOnOpen";
 // resuming reset the screen to "list" like any other unlisted screen.
 // "supplier-form" was already covered, so the equivalent new/edit-supplier
 // case wasn't affected.
-const PRESERVED_SCREENS_ON_RESUME = ["form", "detail", "supplier-form", "settings", "suppliers", "dashboard"];
+const PRESERVED_SCREENS_ON_RESUME = new Set(["form", "detail", "supplier-form", "settings", "suppliers", "dashboard"]);
 
 export function useAppViewLifecycle({
   user,
@@ -58,7 +58,7 @@ export function useAppViewLifecycle({
   reportVisitsError,
 }) {
   const resetToDefaultView = (force = false) => {
-    setScreen((current) => (!force && PRESERVED_SCREENS_ON_RESUME.includes(current) ? current : "list"));
+    setScreen((current) => (!force && PRESERVED_SCREENS_ON_RESUME.has(current) ? current : "list"));
     setQuery("");
     setSectorFilter("all");
     setStageFilter("all");

@@ -5,14 +5,17 @@ import { emptySupplierForm } from "../domain";
 import { diffVisitFields } from "../formHelpers";
 import { mergeLastChange, tagsChanged } from "../lastChange";
 import { parseTagsCell } from "../tagsAndLinks";
+import { omitKeys } from "../omitKeys";
 import { queueAudit } from "./useAuditLog";
 import { useFlushOnHide } from "./useFlushOnHide";
 
 // Supplier form state -> the plain data object saveSupplierForm writes, so the
 // form as OPENED and as SAVED can be diffed field by field.
+const SUPPLIER_FORM_ONLY_KEYS = ["id", "tagsInput", "last_change"];
+
 function toSupplierData(f) {
-  const { id: _id, tagsInput, last_change: _last_change, ...rest } = f;
-  return { ...rest, tags: parseTagsCell(tagsInput) };
+  const rest = omitKeys(f, SUPPLIER_FORM_ONLY_KEYS);
+  return { ...rest, tags: parseTagsCell(f.tagsInput) };
 }
 
 // Suppliers CRUD (simple contact records — no visits/pipeline/offers).
@@ -78,7 +81,8 @@ export function useSupplierRecords({
     if (!requireOnline()) return;
     if (!validateSupplier() || !user || !ownerUid) return;
 
-    const { id: _id, tagsInput, last_change: _last_change, ...rest } = supplierForm;
+    const { tagsInput } = supplierForm;
+    const rest = omitKeys(supplierForm, SUPPLIER_FORM_ONLY_KEYS);
     const data = { ...rest, tags: parseTagsCell(tagsInput) };
     const original = activeSupplierId ? suppliers.find((s) => s.id === activeSupplierId) : null;
     const baselineData =
@@ -94,11 +98,11 @@ export function useSupplierRecords({
     // last_change.changes carries real old/new values, and flag the record
     // with last_change so it surfaces in the owner's pending-edits bell
     // (shared with customer edits) for review.
-    const auditIgnoreKeys = ["createdAt", "updatedAt", "isPinned", "deleted"];
+    const auditIgnoreKeys = new Set(["createdAt", "updatedAt", "isPinned", "deleted"]);
     const changes = {};
     if (original) {
       Object.keys(editFields).forEach((key) => {
-        if (auditIgnoreKeys.includes(key)) return;
+        if (auditIgnoreKeys.has(key)) return;
         // Tag edits are reviewable / reversible like any other field (they
         // used to be skipped). Compared as lists, ignoring order.
         if (key === "tags") {

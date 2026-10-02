@@ -16,7 +16,7 @@ export function useMembersAccess(user) {
   // grantAccess, and revokeAccess in useAccessManagement.js). Off by
   // default for everyone except the owner: an email with no entry here (or
   // `false`) does not see the Dashboard tab at all.
-  const [dashboardAccess, setDashboardAccessState] = useState({});
+  const [dashboardAccess, setDashboardAccess] = useState({});
 
   useEffect(() => {
     if (!user) return;
@@ -25,14 +25,14 @@ export function useMembersAccess(user) {
       ref,
       (snap) => {
         setMembers(snap.exists() ? snap.data().members || {} : {});
-        setDashboardAccessState(snap.exists() ? snap.data().dashboardAccess || {} : {});
+        setDashboardAccess(snap.exists() ? snap.data().dashboardAccess || {} : {});
       },
       () => {
         // Only admins may read access/{uid} (firestore.rules) — for a
         // member (editor/viewer) this is expected to be denied and there is
         // simply no members list to show. Not an error worth reporting.
         setMembers({});
-        setDashboardAccessState({});
+        setDashboardAccess({});
       }
     );
     return () => unsub();

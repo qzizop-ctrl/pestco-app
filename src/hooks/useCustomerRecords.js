@@ -11,6 +11,7 @@ import { corePhoneDigits } from "../customerDuplicates";
 import { fmtReminder, toISODate, todayLocalISO } from "../dateUtils";
 import { buildVisitEditFields } from "../formHelpers";
 import { parseTagsCell } from "../tagsAndLinks";
+import { omitKeys } from "../omitKeys";
 import { queueAudit } from "./useAuditLog";
 import { useFlushOnHide } from "./useFlushOnHide";
 
@@ -22,15 +23,15 @@ import { useFlushOnHide } from "./useFlushOnHide";
 // `appendActivity` is passed in (from useActivityLog) rather than owned
 // here, since it's shared with the offers hook too — keeping one single
 // implementation instead of two copies that could drift apart.
+// Form-state keys that are never part of the saved customer data.
+const FORM_ONLY_KEYS = ["id", "tagsInput", "activityLog", "offers", "visitHistory", "last_change", "originalCustomer"];
+
 // Form state -> the plain data object saveForm writes (same field stripping
 // and tags parsing it applies), so the form as OPENED and the form as SAVED
 // can be diffed field by field.
 function toFormData(f) {
-  const {
-    id: _id, tagsInput, activityLog: _activityLog, offers: _offers, visitHistory: _visitHistory,
-    last_change: _last_change, originalCustomer: _originalCustomer, ...rest
-  } = f;
-  return { ...rest, tags: parseTagsCell(tagsInput) };
+  const rest = omitKeys(f, FORM_ONLY_KEYS);
+  return { ...rest, tags: parseTagsCell(f.tagsInput) };
 }
 
 export function useCustomerRecords({
@@ -78,7 +79,7 @@ export function useCustomerRecords({
   // the search box.
   const openDetail = useCallback((visit) => {
     setActiveId(visit.id);
-    resetDetailPanels && resetDetailPanels();
+    resetDetailPanels?.();
     setScreen("detail");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -122,7 +123,8 @@ export function useCustomerRecords({
     if (!validate() || !user || !ownerUid) return;
 
     const runSave = async () => {
-      const { id, tagsInput, activityLog: _activityLog, offers: _offers, visitHistory: _visitHistory, last_change: _last_change, originalCustomer: _originalCustomer, ...rest } = form;
+      const { id, tagsInput } = form;
+      const rest = omitKeys(form, FORM_ONLY_KEYS);
       const data = { ...rest, tags: parseTagsCell(tagsInput) };
       const original = id ? visits.find((v) => v.id === id) : null;
       const baselineForm = id && editBaselineRef.current && editBaselineRef.current.id === id
@@ -138,11 +140,11 @@ export function useCustomerRecords({
       // تجهيز كائن التتبع (Audit Log) — بيقارن كل حقل في البيانات الجديدة
       // بالسجل الأصلي الموجود فعليًا في Firestore (visits state)، عشان
       // القيم القديمة في last_change.changes تبقى حقيقية، مش "فارغ" لكل حقل.
-      const auditIgnoreKeys = ["createdAt", "updatedAt", "notified"];
+      const auditIgnoreKeys = new Set(["createdAt", "updatedAt", "notified"]);
       const changes = {};
       if (original) {
         Object.keys(editFields).forEach((key) => {
-          if (auditIgnoreKeys.includes(key)) return;
+          if (auditIgnoreKeys.has(key)) return;
           // Tags are arrays: they used to be skipped here, so a tag edit never
           // reached the owner's review (or the audit trail) and could not be
           // rolled back. Compared as lists, ignoring order.

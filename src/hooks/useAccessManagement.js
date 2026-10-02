@@ -39,7 +39,7 @@ export function useAccessManagement({
         const accessSnap = await tx.get(accessRef);
 
         const members = accessSnap.exists()
-          ? { ...(accessSnap.data().members || {}) }
+          ? { ...accessSnap.data().members }
           : {};
 
         members[cleanEmail] = role;
@@ -71,7 +71,7 @@ export function useAccessManagement({
       // the Firestore security rules deployed on the live project don't
       // match firestore.rules in the repo (the file has to be deployed
       // separately — having it in the project doesn't apply it).
-      reportError && reportError(e);
+      reportError?.(e);
     }
   };
 
@@ -95,7 +95,7 @@ export function useAccessManagement({
         const accessSnap = await tx.get(accessRef);
 
         const members = accessSnap.exists()
-          ? { ...(accessSnap.data().members || {}) }
+          ? { ...accessSnap.data().members }
           : {};
 
         delete members[cleanEmail];
@@ -106,7 +106,7 @@ export function useAccessManagement({
         // member's Dashboard-access setting too, since it'd just vanish
         // from the document along with `members`.
         const dashboardAccessMap = accessSnap.exists()
-          ? { ...(accessSnap.data().dashboardAccess || {}) }
+          ? { ...accessSnap.data().dashboardAccess }
           : {};
         delete dashboardAccessMap[cleanEmail];
 
@@ -118,7 +118,7 @@ export function useAccessManagement({
     } catch (e) {
       console.error("revokeAccess failed:", e);
       reportException(e, { context: "revokeAccess failed" });
-      reportError && reportError(e);
+      reportError?.(e);
     }
   };
 
@@ -144,7 +144,7 @@ export function useAccessManagement({
         if (!role) return;
 
         const dashboardAccessMap = accessSnap.exists()
-          ? { ...(accessSnap.data().dashboardAccess || {}) }
+          ? { ...accessSnap.data().dashboardAccess }
           : {};
         dashboardAccessMap[cleanEmail] = Boolean(allowed);
 
@@ -154,7 +154,7 @@ export function useAccessManagement({
     } catch (e) {
       console.error("setMemberDashboardAccess failed:", e);
       reportException(e, { context: "setMemberDashboardAccess failed" });
-      reportError && reportError(e);
+      reportError?.(e);
     }
   };
 
@@ -171,7 +171,7 @@ export function useAccessManagement({
     } catch (e) {
       console.error("Failed to clear reviewed signup:", e);
       reportException(e, { context: "Failed to clear reviewed signup" });
-      reportError && reportError(e);
+      reportError?.(e);
     }
   };
 
@@ -182,7 +182,7 @@ export function useAccessManagement({
     } catch (e) {
       console.error("Failed to dismiss signup:", e);
       reportException(e, { context: "Failed to dismiss signup" });
-      reportError && reportError(e);
+      reportError?.(e);
     }
   };
 
@@ -200,7 +200,7 @@ export function useAccessManagement({
     } catch (e) {
       console.error("addAdminEmail failed:", e);
       reportException(e, { context: "addAdminEmail failed" });
-      reportError && reportError(e);
+      reportError?.(e);
     }
   };
 
@@ -222,7 +222,7 @@ export function useAccessManagement({
     } catch (e) {
       console.error("removeAdminEmail failed:", e);
       reportException(e, { context: "removeAdminEmail failed" });
-      reportError && reportError(e);
+      reportError?.(e);
     }
   };
 

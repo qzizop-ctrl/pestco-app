@@ -17,7 +17,7 @@ export function useErrorReporting({ lang, showAlert }) {
   // the repo doesn't apply it).
   const reportWorkspaceError = useCallback((e) => {
     reportException(e, { source: "workspace" });
-    const code = e && e.code ? ` (${e.code})` : "";
+    const code = e?.code ? ` (${e.code})` : "";
     showAlert(
       lang === "ar"
         ? `حصل خطأ أثناء حفظ التغيير${code}. لو بيتكرر، تأكد إن قواعد الأمان (Firestore Rules) متنشورة فعليًا على مشروع Firebase — وجودها في الكود مش كفاية.`
@@ -33,13 +33,16 @@ export function useErrorReporting({ lang, showAlert }) {
   const reportSaveError = useCallback((e) => {
     console.error("Save failed:", e);
     const isPermissionError = e && (e.code === "permission-denied" || String(e.code || "").includes("permission-denied"));
-    showAlert(
-      isPermissionError
-        ? (lang === "ar"
-            ? "معنديش صلاحية أكتب في البيانات دي. تأكد إن الدور بتاعك مضبوط 'يشوف ويعدل' فعليًا."
-            : "You don't have permission to write this data. Confirm your role is actually set to 'editor'.")
-        : (lang === "ar" ? `حصل خطأ أثناء الحفظ: ${e && e.message ? e.message : e}` : `Save failed: ${e && e.message ? e.message : e}`)
-    );
+    const detail = e?.message ? e.message : e;
+    let text;
+    if (isPermissionError) {
+      text = lang === "ar"
+        ? "معنديش صلاحية أكتب في البيانات دي. تأكد إن الدور بتاعك مضبوط 'يشوف ويعدل' فعليًا."
+        : "You don't have permission to write this data. Confirm your role is actually set to 'editor'.";
+    } else {
+      text = lang === "ar" ? `حصل خطأ أثناء الحفظ: ${detail}` : `Save failed: ${detail}`;
+    }
+    showAlert(text);
   }, [lang, showAlert]);
 
   // Surfaces a *read* failure on the customer list itself — previously
@@ -48,13 +51,15 @@ export function useErrorReporting({ lang, showAlert }) {
   // indication why.
   const reportVisitsError = useCallback((visitsError) => {
     const isPermissionError = visitsError.code === "permission-denied";
-    showAlert(
-      isPermissionError
-        ? (lang === "ar"
-            ? "معنديش صلاحية أشوف البيانات دي. تأكد إن الإيميل بتاعك مضاف صح في Settings عند صاحب الحساب."
-            : "You don't have permission to read this data. Confirm your email is correctly added in the owner's Settings.")
-        : (lang === "ar" ? `حصل خطأ أثناء تحميل العملاء: ${visitsError.message}` : `Failed to load customers: ${visitsError.message}`)
-    );
+    let text;
+    if (isPermissionError) {
+      text = lang === "ar"
+        ? "معنديش صلاحية أشوف البيانات دي. تأكد إن الإيميل بتاعك مضاف صح في Settings عند صاحب الحساب."
+        : "You don't have permission to read this data. Confirm your email is correctly added in the owner's Settings.";
+    } else {
+      text = lang === "ar" ? `حصل خطأ أثناء تحميل العملاء: ${visitsError.message}` : `Failed to load customers: ${visitsError.message}`;
+    }
+    showAlert(text);
   }, [lang, showAlert]);
 
   return { reportWorkspaceError, reportSaveError, reportVisitsError };

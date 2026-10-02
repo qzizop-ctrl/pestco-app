@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
+import { resolveBackTarget } from "../backTarget";
 
 // ---------------------------------------------------------------------------
 // Makes the Android hardware/gesture back button behave the way people
@@ -23,12 +24,7 @@ export function useAndroidBackButton({ screen, setScreen, detailBackTarget, form
         return;
       }
       if (!isRootScreen) {
-        setScreen(
-          screen === "form" && form.id ? "detail" :
-          screen === "detail" ? detailBackTarget :
-          screen === "supplier-form" ? "suppliers" :
-          "list"
-        );
+        setScreen(resolveBackTarget(screen, { hasFormId: Boolean(form.id), detailBackTarget }));
         return;
       }
       CapacitorApp.exitApp();

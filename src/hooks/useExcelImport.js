@@ -42,7 +42,7 @@ export function useExcelImport({ ownerUid, user, visits, suppliers, canEdit, req
   };
 
   const handleImportFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
+    const file = e.target.files?.[0];
     e.target.value = "";
     if (!canEdit) return;
     if (!requireOnline()) return;
@@ -183,7 +183,7 @@ export function useExcelImport({ ownerUid, user, visits, suppliers, canEdit, req
   };
 
   const handleImportSupplierFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
+    const file = e.target.files?.[0];
     e.target.value = "";
     if (!canEdit) return;
     if (!requireOnline()) return;

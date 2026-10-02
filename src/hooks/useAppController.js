@@ -25,7 +25,7 @@ import { useErrorReporting } from "./useErrorReporting";
 import { THEME_VARS } from "../theme";
 import { STRINGS } from "../i18n";
 
-const ROOT_SCREENS = ["dashboard", "list", "suppliers", "settings"];
+const ROOT_SCREENS = new Set(["dashboard", "list", "suppliers", "settings"]);
 
 // Everything App.jsx used to wire up directly — every hook call, all derived
 // state, and the big alphabetized prop bag for AppScreens — now lives here.
@@ -96,7 +96,7 @@ export function useAppController() {
   } = useSupplierFilters();
 
   const t = STRINGS[lang];
-  const isRootScreen = ROOT_SCREENS.includes(screen);
+  const isRootScreen = ROOT_SCREENS.has(screen);
 
   // Blocks any write attempt while offline instead of queueing it for later sync.
   const requireOnline = useCallback(() => {

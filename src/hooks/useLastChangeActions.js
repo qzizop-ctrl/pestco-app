@@ -99,7 +99,7 @@ export function useLastChangeActions({
       setLoadingAction(false);
       // After a conflict the owner must stay on the record: the live snapshot
       // is about to show the newer pending change they still have to review.
-      if (!skipFinally) onFinally && onFinally();
+      if (!skipFinally) onFinally?.();
     }
   };
 
@@ -124,7 +124,7 @@ export function useLastChangeActions({
           tx.update(docRef, { last_change: deleteField() });
         });
         showAlert(t.approveSuccessMsg);
-        onAudit && onAudit("approve");
+        onAudit?.("approve");
       } catch (err) {
         return handleStepError(err, "last_change approve failed", t.approveErrorMsg);
       }
@@ -147,7 +147,7 @@ export function useLastChangeActions({
           tx.update(docRef, rollbackPayload);
         });
         showAlert(t.rollbackSuccessMsg);
-        onAudit && onAudit("rollback");
+        onAudit?.("rollback");
       } catch (err) {
         return handleStepError(err, "last_change rollback failed", t.rollbackErrorMsg);
       }
@@ -165,8 +165,8 @@ export function useLastChangeActions({
         // logged in the audit trail as an "approve", indistinguishable from
         // handleApprove()'s own entry above. "delete" is one of the actions
         // buildAuditEntry() (auditLog.js) documents and expects.
-        onAudit && onAudit("delete");
-        onDeleteSuccess && onDeleteSuccess();
+        onAudit?.("delete");
+        onDeleteSuccess?.();
       } catch (err) {
         return handleStepError(err, "last_change confirm-delete failed", t.deleteFinalErrorMsg);
       }
@@ -180,7 +180,7 @@ export function useLastChangeActions({
           tx.update(docRef, { deleted: deleteField(), last_change: deleteField() });
         });
         if (restoreSuccessMsg) showAlert(restoreSuccessMsg);
-        onAudit && onAudit("restore");
+        onAudit?.("restore");
       } catch (err) {
         return handleStepError(err, "last_change restore failed", t.restoreErrorMsg);
       }

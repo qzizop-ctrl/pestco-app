@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 const NAV_RESTORE_KEY = "pestco_nav_state";
-const RESTORABLE_SCREENS = ["dashboard", "list", "suppliers", "settings", "detail", "supplier-form"];
+const RESTORABLE_SCREENS = new Set(["dashboard", "list", "suppliers", "settings", "detail", "supplier-form"]);
 
 // Resume where you left off after the app is killed in the background.
 //
@@ -23,7 +23,7 @@ export function useNavRestore({
   openDetail, openEditSupplier,
 }) {
   useEffect(() => {
-    if (!RESTORABLE_SCREENS.includes(screen)) return;
+    if (!RESTORABLE_SCREENS.has(screen)) return;
     // Only persist "supplier-form" when it's actually viewing/editing an
     // existing supplier (has an id to restore with) — a blank new-supplier
     // form isn't worth resuming into.
@@ -47,7 +47,7 @@ export function useNavRestore({
     } catch {
       saved = null;
     }
-    if (!saved || !RESTORABLE_SCREENS.includes(saved.screen)) {
+    if (!saved || !RESTORABLE_SCREENS.has(saved.screen)) {
       setNavRestored(true);
       return;
     }
