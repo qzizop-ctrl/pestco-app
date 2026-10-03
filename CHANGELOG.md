@@ -1,3 +1,15 @@
+# CSP + توقيع ويندوز + اختبارات end-to-end
+
+- **Content-Security-Policy:** بيتحقن في `dist/index.html` وقت البناء بس (`vite.config.js` ← plugin `pestco-csp`) من `scripts/buildCsp.mjs`، وكل بند فيه موضّح بسببه. `script-src 'self'` من غير inline ولا eval (ده البند اللي بيوقّف أي سكريبت محقون)، و`style-src` بيسمح بـ inline لأن React بيكتب `style=` في كل مكان، والاتصالات محصورة في Firebase (`*.googleapis.com`) وفحص الاتصال (`www.gstatic.com`) وSentry (بيتستخرج من `VITE_SENTRY_DSN` تلقائيًا). `npm run dev` من غير قيود. **لازم تجرّب بعد الاستلام يدويًا:** نسخة ويندوز، ونسخة أندرويد، وتصدير PDF من الداشبورد (بيستخدم html2canvas) — ما اتجرّبوش هنا.
+- **توقيع ويندوز:** `build-windows.yml` بيدعم Azure Trusted Signing (7 أسرار) أو `.pfx` القديم، وبيحذّر لو الـ installer مش موقّع، وبيتحقق من صحة التوقيع بعد البناء. لازم تفتح الحساب بنفسك — الخطوات في `docs/code-signing.md`.
+- **اختبارات end-to-end (Playwright):** مجلد `e2e/` + `playwright.config.mjs` + `.github/workflows/e2e.yml`. بتشغّل النسخة المبنية فعلًا في Chromium مقابل Firebase emulators (Auth + Firestore بقواعد `src/firestore.rules` الحقيقية): الدخول والتسجيل والموافقة، إضافة عميل (أدمن ومحرر)، وCSP. أي مخالفة CSP أثناء أي اختبار بتفشّله. التفاصيل في `e2e/README.md`.
+  - `src/firebase.js` فيه سطرين بيوصّلوا الـ emulators، وبيشتغلوا بس لو `VITE_USE_FIREBASE_EMULATOR=true` (بناء الاختبارات فقط).
+  - اتضاف `data-testid` على 5 أزرار (دخول/تسجيل تابين، إضافة عميل، حفظ، تسجيل خروج).
+  - `firebase.json` فيه Auth emulator على 9099. أدوات الاختبار بتتثبت بـ `--no-save` في الـ workflow (زي `tests/rules`)، فـ `package.json` و`package-lock.json` ما اتغيّروش في الاعتماديات.
+- اختبار وحدة جديد: `src/csp.test.js`.
+
+---
+
 # تحديث المكتبات الأمنية (Electron / electron-builder / jsPDF) + سياسة Dependabot
 
 - `electron` من 31 إلى 44 (31 خرجت من الدعم الأمني؛ الدعم بيغطي آخر 3 إصدارات بس). `electron.js` ما احتاجش تعديل.

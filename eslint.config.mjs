@@ -113,6 +113,18 @@ export default [
     },
   },
 
+  // --- Build helper modules + Playwright end-to-end tests ------------------
+  // e2e specs run in Node, but the callbacks passed to page.evaluate() run in
+  // the browser, so both sets of globals are declared.
+  {
+    files: ["scripts/**/*.mjs", "e2e/**/*.mjs", "playwright.config.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+
   // --- Test files: same as app source, Vitest APIs are imported explicitly
   {
     files: ["src/**/*.test.js"],
