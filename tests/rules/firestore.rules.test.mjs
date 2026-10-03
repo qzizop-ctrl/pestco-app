@@ -40,6 +40,13 @@ async function seed() {
     // v1 has a pending change from the editor, v2 is clean.
     await setDoc(doc(fs, `users/${ADMIN.uid}/visits/v1`), { companyName: "Acme", notes: "", last_change: PENDING });
     await setDoc(doc(fs, `users/${ADMIN.uid}/visits/v2`), { companyName: "Beta", notes: "" });
+    // v3: a record with offers / visit history / activity already on it.
+    await setDoc(doc(fs, `users/${ADMIN.uid}/visits/v3`), {
+      companyName: "Gamma", notes: "", stage: "quote",
+      offers: [{ id: "o1", amount: 100 }, { id: "o2", amount: 200 }, { id: "o3", amount: 300 }],
+      visitHistory: [{ id: "h1", date: "2026-01-01" }],
+      activityLog: [{ id: "a1", text: "hi" }],
+    });
     await setDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { name: "Supplier" });
     await setDoc(doc(fs, `users/${ADMIN.uid}/auditLog/a1`), {
       entityType: "customer", entityId: "v1", action: "update",
@@ -244,9 +251,94 @@ describe("review workflow can't be bypassed through the SDK (regression)", () =>
     await expect(assertFails(
       setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/junk`), {
         entityType: "customer", entityId: "v2", entityName: "Beta", action: "update",
-        changedBy: "x", changedById: EDITOR.uid, at: serverTimestamp(), payload: "x".repeat(50),
+        changedBy: EDITOR.email, changedById: EDITOR.uid, at: serverTimestamp(), payload: "x".repeat(50),
       })
     )).resolves.toBeDefined();
+  });
+});
+
+describe("quick actions are validated (regression: any value could be written without review)", () => {
+  const v3 = (fs) => doc(fs, `users/${ADMIN.uid}/visits/v3`);
+
+  it("stage must be a real stage id (or empty to clear it)", async () => {
+    const fs = as(EDITOR);
+    await expect(assertFails(updateDoc(v3(fs), { stage: "hacked" }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(v3(fs), { stage: 7 }))).resolves.toBeDefined();
+    await expect(assertSucceeds(updateDoc(v3(fs), { stage: "install" }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(updateDoc(v3(fs), { stage: "" }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("flags and dates must have the right type", async () => {
+    const fs = as(EDITOR);
+    await expect(assertFails(updateDoc(v3(fs), { isPinned: "yes" }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(v3(fs), { notified: 1 }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(v3(fs), { callDateTime: { x: 1 } }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(v3(fs), { visitDate: "x".repeat(500) }))).resolves.toBeDefined();
+    await expect(assertSucceeds(updateDoc(v3(fs), { callDateTime: "", notified: false }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(updateDoc(v3(fs), { visitDate: "2026-10-04", updatedAt: new Date().toISOString() }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("visitHistory can only grow: no deleting or rewriting history, no flooding", async () => {
+    const fs = as(EDITOR);
+    await expect(assertFails(updateDoc(v3(fs), { visitHistory: [] }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(v3(fs), { visitHistory: [{ id: "h1", date: "1999-01-01" }] }))).resolves.toBeDefined();
+    await expect(assertFails(updateDoc(v3(fs), { visitHistory: "gone" }))).resolves.toBeDefined();
+    const flood = Array.from({ length: 10 }, (_, i) => ({ id: `n${i}`, date: "2026-10-04" }));
+    await expect(assertFails(updateDoc(v3(fs), { visitHistory: [{ id: "h1", date: "2026-01-01" }, ...flood] }))).resolves.toBeDefined();
+    await expect(assertSucceeds(updateDoc(v3(fs), { visitHistory: arrayUnion({ id: "h2", date: "2026-10-04" }) }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("activityLog must stay a list under the ceiling; removing an entry is fine", async () => {
+    const fs = as(EDITOR);
+    await expect(assertFails(updateDoc(v3(fs), { activityLog: "x" }))).resolves.toBeDefined();
+    const many = Array.from({ length: 150 }, (_, i) => ({ id: `a${i}`, text: "t" }));
+    await expect(assertFails(updateDoc(v3(fs), { activityLog: many }))).resolves.toBeDefined();
+    await expect(assertSucceeds(updateDoc(v3(fs), { activityLog: [] }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("offers: one offer may change per write (add / edit / remove), never all of them", async () => {
+    const fs = as(EDITOR);
+    const base = [{ id: "o1", amount: 100 }, { id: "o2", amount: 200 }, { id: "o3", amount: 300 }];
+    // zeroing every amount in one write
+    await expect(assertFails(updateDoc(v3(fs), { offers: base.map((o) => ({ ...o, amount: 0 })) }))).resolves.toBeDefined();
+    // wiping the list
+    await expect(assertFails(updateDoc(v3(fs), { offers: [] }))).resolves.toBeDefined();
+    // not a list
+    await expect(assertFails(updateDoc(v3(fs), { offers: "free money" }))).resolves.toBeDefined();
+    // edit exactly one (one removed + one added)
+    await expect(assertSucceeds(updateDoc(v3(fs), { offers: [base[0], { id: "o2", amount: 250 }, base[2]] }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("offers: adding one and removing one still work", async () => {
+    const fs = as(EDITOR);
+    await expect(assertSucceeds(updateDoc(v3(fs), { offers: arrayUnion({ id: "o4", amount: 5 }) }))).resolves.not.toBeInstanceOf(Error);
+    await expect(assertSucceeds(updateDoc(v3(fs), { offers: [{ id: "o2", amount: 200 }, { id: "o3", amount: 300 }] }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("the same value checks apply to a reviewed edit, not just to quick actions", async () => {
+    const fs = as(EDITOR);
+    await expect(assertFails(updateDoc(v3(fs), { notes: "n", stage: "hacked", last_change: PENDING }))).resolves.toBeDefined();
+    await expect(assertSucceeds(updateDoc(v3(fs), { notes: "n", stage: "survey", last_change: PENDING }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("an editor's new customer must carry valid values", async () => {
+    const fs = as(EDITOR);
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/visits/c1`), { companyName: "C", stage: "hacked", last_change: PENDING }))).resolves.toBeDefined();
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/visits/c2`), { companyName: "C", offers: "x", last_change: PENDING }))).resolves.toBeDefined();
+    await expect(assertSucceeds(setDoc(doc(fs, `users/${ADMIN.uid}/visits/c3`), {
+      companyName: "C", stage: "survey", offers: [], activityLog: [], visitHistory: [], isPinned: false, last_change: PENDING,
+    }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("suppliers: isPinned must be a boolean", async () => {
+    const fs = as(EDITOR);
+    await expect(assertFails(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { isPinned: "yes" }))).resolves.toBeDefined();
+    await expect(assertSucceeds(updateDoc(doc(fs, `users/${ADMIN.uid}/suppliers/s1`), { isPinned: true }))).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("the owner is not restricted (rollback may shrink history, restore may rewrite offers)", async () => {
+    const fs = as(ADMIN);
+    await expect(assertSucceeds(updateDoc(v3(fs), { visitHistory: [], offers: [] }))).resolves.not.toBeInstanceOf(Error);
   });
 });
 
@@ -281,7 +373,7 @@ describe("access_by_email", () => {
 describe("audit log", () => {
   const entry = (user, extra = {}) => ({
     entityType: "customer", entityId: "v2", entityName: "Beta", action: "update",
-    changedBy: "x", changedById: user.uid, at: serverTimestamp(), ...extra,
+    changedBy: user.email, changedById: user.uid, at: serverTimestamp(), ...extra,
   });
 
   it("an editor can append an entry about themselves", async () => {
@@ -291,6 +383,29 @@ describe("audit log", () => {
   it("can't write as someone else, or with a made-up action", async () => {
     await expect(assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n2`), entry(ADMIN)))).resolves.toBeDefined();
     await expect(assertFails(setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n3`), entry(EDITOR, { action: "purge" })))).resolves.toBeDefined();
+  });
+
+  it("changedBy must be the caller's own email (regression: any name could be written next to a right uid)", async () => {
+    const fs = as(EDITOR);
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/auditLog/n5`), entry(EDITOR, { changedBy: ADMIN.email })))).resolves.toBeDefined();
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/auditLog/n6`), entry(EDITOR, { changedBy: "The Owner" })))).resolves.toBeDefined();
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/auditLog/n7`), entry(EDITOR, { changedBy: "" })))).resolves.toBeDefined();
+    await expect(assertFails(setDoc(doc(fs, `users/${ADMIN.uid}/auditLog/n8`), entry(EDITOR, { changedBy: 42 })))).resolves.toBeDefined();
+  });
+
+  it("changedBy may differ from the token email only in letter case", async () => {
+    await expect(assertSucceeds(
+      setDoc(doc(as(EDITOR), `users/${ADMIN.uid}/auditLog/n9`), entry(EDITOR, { changedBy: EDITOR.email.toUpperCase() }))
+    )).resolves.not.toBeInstanceOf(Error);
+  });
+
+  it("the token's name claim is accepted as changedBy when it exists", async () => {
+    const fs = testEnv
+      .authenticatedContext(EDITOR.uid, { email: EDITOR.email, email_verified: true, name: "Sara Editor" })
+      .firestore();
+    await expect(assertSucceeds(
+      setDoc(doc(fs, `users/${ADMIN.uid}/auditLog/n10`), entry(EDITOR, { changedBy: "Sara Editor" }))
+    )).resolves.not.toBeInstanceOf(Error);
   });
 
   it("can't backdate an entry (at must be the server time)", async () => {
