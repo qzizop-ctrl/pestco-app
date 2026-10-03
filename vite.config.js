@@ -43,6 +43,25 @@ export default defineConfig(({ mode }) => {
     define: {
       __APP_VERSION__: JSON.stringify(version),
     },
+    build: {
+      // Vite 8 bundles with Rolldown. xlsx, jsPDF/html2canvas, recharts (the
+      // Dashboard) and the Capacitor plugins are already loaded on demand via
+      // import(); what is left in the startup path is React, Firebase and
+      // Sentry. Giving each its own chunk stops them from piling into one big
+      // file and lets the browser cache them separately, so an app update
+      // only re-downloads the chunks that actually changed.
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              { name: "firebase", test: /node_modules[\\/](?:@firebase|firebase)[\\/]/, priority: 30 },
+              { name: "sentry", test: /node_modules[\\/]@sentry/, priority: 20 },
+              { name: "react-vendor", test: /node_modules[\\/](?:react|react-dom|scheduler)[\\/]/, priority: 10 },
+            ],
+          },
+        },
+      },
+    },
     // "test" is Vitest's config, read from this same file (its docs
     // recommend this over a separate vitest.config.js so there's only one
     // place resolving aliases/plugins for both dev and test).
