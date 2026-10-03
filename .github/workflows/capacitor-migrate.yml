@@ -1,0 +1,88 @@
+name: Migrate Capacitor to 8 (manual)
+
+# One-tap migration of the Android shell from Capacitor 6 to 8 using the
+# OFFICIAL tool (`npx cap migrate`), instead of hand-editing Gradle files.
+#
+# Why a workflow: the migration rewrites android/ (Gradle wrapper, AGP, SDK
+# levels, variables.gradle ...) and needs the real Capacitor CLI, Node and a JDK.
+# `cap migrate` only moves ONE major version at a time (6 -> 7, then 7 -> 8),
+# so it is run twice.
+#
+# What it does NOT do: it never touches main. It pushes the result to the branch
+# `capacitor-8-migration`; nothing ships until you review it, run
+# "Build Android APK" on that branch, and merge it.
+#
+# Run it only after Tests & Lint is green on main and package-lock.json is in sync
+# (it starts with `npm ci`).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      # Capacitor 7 and 8 both require JDK 21.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify xlsx integrity
+        run: npm run xlsx:verify
+
+      # `cap migrate` finishes with `cap sync`, which needs the built web app.
+      - name: Build web app
+        run: npm run build
+
+      - name: Migrate 6 to 7
+        run: |
+          set -o pipefail
+          npm install --save-dev --ignore-scripts @capacitor/cli@7
+          npx --no-install cap migrate --noprompt 2>&1 | tee migrate-7.log
+
+      - name: Migrate 7 to 8
+        run: |
+          set -o pipefail
+          npm install --save-dev --ignore-scripts @capacitor/cli@8
+          npx --no-install cap migrate --noprompt 2>&1 | tee migrate-8.log
+
+      # The tool prints the steps it could not do for you ("manual
+      # intervention"); they are in these logs.
+      - name: What changed
+        run: |
+          git status --short
+          git diff --stat
+          grep -inE "manual|warn|incomplete|skipped" migrate-7.log migrate-8.log || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capacitor-migration-logs
+          path: migrate-*.log
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Push to branch capacitor-8-migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b capacitor-8-migration
+          rm -f migrate-*.log
+          git add -A
+          git commit -m "chore: migrate Capacitor 6 to 8 (npx cap migrate)"
+          git push --force origin capacitor-8-migration
+          echo "Pushed. Next: run 'Build Android APK' on branch capacitor-8-migration." >> "$GITHUB_STEP_SUMMARY"
