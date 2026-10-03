@@ -1,10 +1,8 @@
 name: Sync package-lock.json
 
 # One-off manual fix for when package.json and package-lock.json drift out
-# of sync (e.g. a dependency was added to package.json without running
-# `npm install` locally afterwards). Trigger it from the Actions tab (or the
-# GitHub mobile app: repo -> Actions -> "Sync package-lock.json" -> Run
-# workflow) whenever that happens again — no local terminal needed.
+# of sync. Trigger it from the Actions tab (or the GitHub mobile app:
+# repo -> Actions -> "Sync package-lock.json" -> Run workflow).
 #
 # It runs `npm install` (which updates package-lock.json to match
 # package.json) and commits the result straight to the branch you pick.
@@ -38,26 +36,22 @@ jobs:
           node-version: 22
           cache: "npm"
 
-      # For big upgrades (several majors at once, e.g. Vite 5 -> 8 together with
-      # Vitest 2 -> 4). Updating an existing lock one package at a time can fail
-      # with ERESOLVE: while the new Vite is being placed, the OLD Vitest that is
-      # still in the lock demands Vite 5, so npm refuses instead of replacing both.
-      # Resolving from nothing has no stale constraints. Trade-off: every
-      # transitive dependency moves to the newest version its range allows, so
-      # let Tests & Lint and End-to-end tests run afterwards.
+      # For big upgrades (several majors at once, e.g. Vite 5 -> 8 together
+      # with Vitest 2 -> 4). Resolving from nothing has no stale constraints.
       - name: Start from scratch (only when "fresh" is ticked)
         if: ${{ inputs.fresh }}
         run: rm -f package-lock.json
 
+      # Newer npm fixes an arborist crash ("Cannot read properties of null
+      # (reading 'edgesOut')") that --package-lock-only can hit.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
       - name: Install (updates package-lock.json)
-        # --package-lock-only: only rewrites package-lock.json, nothing is
-        # unpacked into node_modules; --ignore-scripts: no lifecycle scripts.
-        run: npm install --package-lock-only --ignore-scripts
+        run: npm install --ignore-scripts
 
       - name: Commit updated lock file
         env:
-          # Passed via env (not interpolated into the script) so a crafted
-          # branch name can't inject shell commands.
           BRANCH: ${{ inputs.branch }}
         run: |
           if git diff --quiet -- package-lock.json; then
