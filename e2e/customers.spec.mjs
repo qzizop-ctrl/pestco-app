@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures.mjs";
 import { resetEmulators, createUser, seedAdmin, grantAccess } from "./emulator.mjs";
-import { signIn, signOut, clickOrExplain } from "./helpers.mjs";
+import { signIn, signOut, clickOrExplain, expectSavedOnServer } from "./helpers.mjs";
 
 const ADMIN = { email: "admin@example.test", password: "correct-horse-1" };
 const EDITOR = { email: "editor@example.test", password: "editor-pass-42" };
@@ -34,7 +34,10 @@ test("admin adds a customer, it survives a reload, and sign-out returns to the s
   await addCustomer(page, company);
   await expect(page.getByText(company).first()).toBeVisible();
 
-  // Stored in Firestore (not just on screen), and the session outlives a reload.
+  // Really stored in Firestore (not just painted from the local cache), and only
+  // then reload: the session must outlive it and the customer come back from the
+  // server.
+  await expectSavedOnServer(page, adminUid, company);
   await page.reload();
   await expect(page.getByText(company).first()).toBeVisible();
 

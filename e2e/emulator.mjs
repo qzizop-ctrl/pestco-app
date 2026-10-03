@@ -89,3 +89,13 @@ export async function grantAccess({ ownerUid, memberEmail, role }) {
     "seed access_by_email",
   );
 }
+
+// Company names of every customer stored in `ownerUid`'s workspace, read straight
+// from Firestore (not through the app). This is what separates "the screen shows
+// it" from "it was really saved": the app paints a new customer from its local
+// cache instantly, even before the server has accepted — or rejected — the write.
+export async function listVisitCompanyNames(ownerUid) {
+  const res = await call(`${DOCS}/users/${ownerUid}/visits`, { headers: OWNER }, "list visits");
+  const json = await res.json();
+  return (json.documents ?? []).map((d) => d.fields?.companyName?.stringValue);
+}

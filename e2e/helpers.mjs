@@ -1,3 +1,6 @@
+import { expect } from "@playwright/test";
+import { listVisitCompanyNames } from "./emulator.mjs";
+
 // UI helpers. Selectors avoid on-screen text on purpose — the app is bilingual
 // (Arabic/English), so tests rely on input types, form structure and the
 // data-testid hooks added to the few buttons that have no stable alternative.
@@ -51,5 +54,19 @@ export async function clickOrExplain(page, locator) {
       throw new Error(`Click blocked by an in-app dialog: ${JSON.stringify(dialogs)}`, { cause: error });
     }
     throw error;
+  }
+}
+
+// Waits until the customer is really in Firestore, and if it never gets there,
+// says what the app told the user (a rejected write pops an in-app dialog).
+export async function expectSavedOnServer(page, ownerUid, company) {
+  try {
+    await expect
+      .poll(() => listVisitCompanyNames(ownerUid), { timeout: 20_000, message: `"${company}" in Firestore` })
+      .toContain(company);
+  } catch (error) {
+    const dialogs = await page.locator("dialog[open]").allInnerTexts();
+    const shown = dialogs.length > 0 ? ` The app was showing: ${JSON.stringify(dialogs)}` : " The app showed no error dialog.";
+    throw new Error(`The customer never reached Firestore.${shown}`, { cause: error });
   }
 }
