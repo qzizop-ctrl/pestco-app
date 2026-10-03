@@ -15,7 +15,7 @@ import { parseTagsCell } from "../../tagsAndLinks";
 import { db } from "../../firebase";
 import { doc } from "firebase/firestore";
 import { useLastChangeActions } from "../../hooks/useLastChangeActions";
-import { logAudit } from "../../hooks/useAuditLog";
+import { queueAudit } from "../../hooks/useAuditLog";
 
 export function SupplierFormScreen({
   t,
@@ -50,7 +50,7 @@ export function SupplierFormScreen({
     restoreSuccessMsg: t.deleteRestoredMsgSupplier,
     onFinally: () => setScreen?.("suppliers"),
     showAlert,
-    onAudit: (action) => logAudit(ownerUid, {
+    onAudit: (action, tx) => queueAudit(tx, ownerUid, {
       entityType: "supplier", entityId: activeSupplierId, entityName: supplierForm?.name,
       action, user, t,
     }),
