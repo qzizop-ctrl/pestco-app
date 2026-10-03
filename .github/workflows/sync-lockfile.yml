@@ -16,6 +16,11 @@ on:
         required: false
         default: "main"
         type: string
+      fresh:
+        description: "Regenerate the lock file from scratch (delete it first)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -32,6 +37,17 @@ jobs:
         with:
           node-version: 22
           cache: "npm"
+
+      # For big upgrades (several majors at once, e.g. Vite 5 -> 8 together with
+      # Vitest 2 -> 4). Updating an existing lock one package at a time can fail
+      # with ERESOLVE: while the new Vite is being placed, the OLD Vitest that is
+      # still in the lock demands Vite 5, so npm refuses instead of replacing both.
+      # Resolving from nothing has no stale constraints. Trade-off: every
+      # transitive dependency moves to the newest version its range allows, so
+      # let Tests & Lint and End-to-end tests run afterwards.
+      - name: Start from scratch (only when "fresh" is ticked)
+        if: ${{ inputs.fresh }}
+        run: rm -f package-lock.json
 
       - name: Install (updates package-lock.json)
         # --package-lock-only: only rewrites package-lock.json, nothing is
