@@ -67,7 +67,7 @@ export async function listSignupEmails() {
 export async function verifyEmail(email) {
   const res = await call(`${AUTH}/emulator/v1/projects/${PROJECT_ID}/oobCodes`, {}, "list emails sent");
   const { oobCodes = [] } = await res.json();
-  const match = oobCodes.filter((c) => c.email === email && c.requestType === "VERIFY_EMAIL").pop();
+  const match = oobCodes.findLast((c) => c.email === email && c.requestType === "VERIFY_EMAIL");
   if (!match) throw new Error(`No verification email was recorded for ${email}`);
   // The link answers with a redirect to the app's continue URL; only the
   // side effect (marking the address verified) matters here.

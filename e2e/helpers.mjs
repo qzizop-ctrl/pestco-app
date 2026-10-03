@@ -81,7 +81,7 @@ export async function expectVisibleOrExplain(page, text) {
   } catch (error) {
     const signedOut = (await page.locator('input[type="email"]').count()) > 0;
     const dialogs = await page.locator("dialog[open]").allInnerTexts();
-    const visibleText = (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 600);
+    const visibleText = (await page.locator("body").innerText()).replaceAll(/\s+/g, " ").slice(0, 600);
     const recentLog = (consoleLogs.get(page) ?? []).slice(-8);
     throw new Error(
       [
