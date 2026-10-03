@@ -60,3 +60,23 @@ test("an editor granted access can add a customer, and the owner then sees it", 
   await signIn(page, ADMIN);
   await expect(page.getByText(company).first()).toBeVisible();
 });
+
+test.describe("weekly backup reminder", () => {
+  // Opt back in to the prompt the other tests deliberately skip (see fixtures.mjs).
+  test.use({ seedBackupTimestamp: false });
+
+  test("the owner is offered a backup after a week, and can dismiss it and carry on", async ({ page }) => {
+    await signIn(page, ADMIN);
+
+    const prompt = page.locator("dialog[open]");
+    await expect(prompt).toBeVisible();
+
+    // A confirm dialog lists Cancel first, then Confirm. Cancel is chosen on
+    // purpose: Confirm would build and download a backup file.
+    await prompt.locator("button").first().click();
+    await expect(prompt).toHaveCount(0);
+
+    // Dismissing it leaves the app fully usable.
+    await expect(page.getByTestId("new-visit")).toBeVisible();
+  });
+});
