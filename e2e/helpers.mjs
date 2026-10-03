@@ -26,3 +26,30 @@ export async function register(page, { email, password }) {
 export function authMessage(page) {
   return page.locator("form p");
 }
+
+// Signing out makes the app call window.location.reload() (see
+// signOutAndClearLocalData in src/firebase.js). A page.goto() fired while that
+// reload is still in flight is aborted (net::ERR_ABORTED), so wait for the
+// reload to finish before the test does anything else.
+export async function signOut(page) {
+  const reloaded = page.waitForEvent("domcontentloaded");
+  await page.getByTestId("sign-out").click();
+  await reloaded;
+  await page.locator('input[type="email"]').waitFor();
+}
+
+// Click that explains itself. The app shows its own errors/alerts in a modal
+// <dialog> that covers the whole screen; when one pops up, a plain click just
+// times out with "<button> intercepts pointer events", which hides WHY. This
+// fails fast instead and puts the dialog's text in the error message.
+export async function clickOrExplain(page, locator) {
+  try {
+    await locator.click({ timeout: 10_000 });
+  } catch (error) {
+    const dialogs = await page.locator("dialog[open]").allInnerTexts();
+    if (dialogs.length > 0) {
+      throw new Error(`Click blocked by an in-app dialog: ${JSON.stringify(dialogs)}`, { cause: error });
+    }
+    throw error;
+  }
+}

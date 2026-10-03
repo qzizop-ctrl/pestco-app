@@ -14,10 +14,13 @@
 import { test as base, expect } from "@playwright/test";
 
 export const test = base.extend({
-  page: async ({ page }, use) => {
+  page: async ({ page }, use, testInfo) => {
     const violations = [];
+    const consoleLog = [];
+    page.on("pageerror", (error) => consoleLog.push(`[pageerror] ${error.message}`));
     page.on("console", (msg) => {
       const text = msg.text();
+      if (msg.type() === "error" || msg.type() === "warning") consoleLog.push(`[${msg.type()}] ${text}`);
       if (/content security policy|refused to (load|connect|execute|apply|frame)/i.test(text)) {
         violations.push(text);
       }
@@ -31,6 +34,12 @@ export const test = base.extend({
     );
 
     await use(page);
+
+    // Attached to the report even when the test passes; open it first when a
+    // test fails and the cause is not obvious.
+    if (consoleLog.length > 0) {
+      await testInfo.attach("browser-console.txt", { body: consoleLog.join("\n"), contentType: "text/plain" });
+    }
 
     expect(violations, "Content-Security-Policy violations seen by the browser").toEqual([]);
   },

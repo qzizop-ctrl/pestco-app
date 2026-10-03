@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures.mjs";
 import { resetEmulators, createUser, seedAdmin, grantAccess } from "./emulator.mjs";
-import { signIn } from "./helpers.mjs";
+import { signIn, signOut, clickOrExplain } from "./helpers.mjs";
 
 const ADMIN = { email: "admin@example.test", password: "correct-horse-1" };
 const EDITOR = { email: "editor@example.test", password: "editor-pass-42" };
@@ -17,12 +17,12 @@ test.beforeEach(async () => {
 // contact, sector) plus a phone number — without one the app asks "save without
 // a phone?" first, which is a different flow.
 async function addCustomer(page, company) {
-  await page.getByTestId("new-visit").click();
+  await clickOrExplain(page, page.getByTestId("new-visit"));
   await page.locator("#cf-companyName").fill(company);
   await page.locator("#cf-contactName").fill("Test Contact");
   await page.locator("#cf-sector").selectOption({ index: 1 });
   await page.locator("#cf-phone").fill("01012345678");
-  await page.getByTestId("save-customer").click();
+  await clickOrExplain(page, page.getByTestId("save-customer"));
 }
 
 test("admin adds a customer, it survives a reload, and sign-out returns to the sign-in form", async ({ page }) => {
@@ -38,7 +38,7 @@ test("admin adds a customer, it survives a reload, and sign-out returns to the s
   await page.reload();
   await expect(page.getByText(company).first()).toBeVisible();
 
-  await page.getByTestId("sign-out").click();
+  await signOut(page);
   await expect(page.locator('input[type="email"]')).toBeVisible();
 });
 
@@ -54,7 +54,7 @@ test("an editor granted access can add a customer, and the owner then sees it", 
   await addCustomer(page, company);
   await expect(page.getByText(company).first()).toBeVisible();
 
-  await page.getByTestId("sign-out").click();
+  await signOut(page);
   await expect(page.locator('input[type="email"]')).toBeVisible();
 
   await signIn(page, ADMIN);
