@@ -8,7 +8,12 @@ test("the built page ships a strict Content-Security-Policy", async ({ request }
 
   const tag = html.match(/<meta[^>]*http-equiv="Content-Security-Policy"[^>]*>/i)?.[0];
   expect(tag, "CSP <meta> tag in dist/index.html").toBeTruthy();
-  const csp = tag.match(/content="([^"]+)"/i)?.[1] ?? "";
+  // Vite 8 HTML-escapes quotes inside attribute values (' -> &#39;). The
+  // browser decodes them before applying the policy, so decode them here too.
+  const csp = (tag.match(/content="([^"]+)"/i)?.[1] ?? "")
+    .replaceAll("&#39;", "'")
+    .replaceAll("&apos;", "'")
+    .replaceAll("&amp;", "&");
 
   expect(csp).toContain("script-src 'self'");
   expect(csp).not.toMatch(/script-src[^;]*'unsafe-(inline|eval)'/);
