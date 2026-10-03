@@ -48,7 +48,9 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Install (updates package-lock.json)
-        run: npm install --ignore-scripts
+        # --allow-remote=root: npm 12 blocks URL dependencies by default; this
+        # allows only the project's own direct ones (xlsx from cdn.sheetjs.com).
+        run: npm install --ignore-scripts --allow-remote=root
 
       - name: Commit updated lock file
         env:
