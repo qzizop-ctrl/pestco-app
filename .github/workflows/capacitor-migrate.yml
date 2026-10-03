@@ -68,7 +68,7 @@ jobs:
           git diff --stat
           grep -inE "manual|warn|incomplete|skipped" migrate-7.log migrate-8.log || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: capacitor-migration-logs
