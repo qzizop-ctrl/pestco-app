@@ -228,6 +228,7 @@ export default function CustomerListScreen({
             zIndex: 20,
           }}
           aria-label={t.newVisit}
+          data-testid="new-visit"
         >
           <Plus size={26} />
         </button>

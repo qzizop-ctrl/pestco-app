@@ -265,6 +265,7 @@ export default function CustomerFormScreen({
       <button
         onClick={saveForm}
         disabled={saving}
+        data-testid="save-customer"
         className="btn-press font-bold"
         style={{ background: PRIMARY, color: "#fff", borderRadius: 14, padding: "12px 0", opacity: saving ? 0.7 : 1 }}
       >

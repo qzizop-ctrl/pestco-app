@@ -114,6 +114,7 @@ export default function AppHeader({
         className="btn-press flex items-center"
         style={{ color: "#fff" }}
         aria-label={t.signOut}
+        data-testid="sign-out"
       >
         <LogOut size={16} />
       </button>
