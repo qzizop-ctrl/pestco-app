@@ -40,7 +40,7 @@ function ExportImportPanel({
 }) {
   return (
     <>
-      <button onClick={onExportAll} className={BTN_CLASS} style={FILLED_BTN}>
+      <button onClick={onExportAll} className={BTN_CLASS} style={FILLED_BTN} data-testid="export-all">
         <Download size={16} /> {exportAllLabel}
       </button>
 
