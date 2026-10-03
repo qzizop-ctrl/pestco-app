@@ -52,7 +52,9 @@ jobs:
         run: npm install --no-save --ignore-scripts @playwright/test@1.60.0 firebase-tools@13.35.1
 
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        # --no-install: run only the Playwright installed (at an exact version)
+        # in the previous step; never let npx fetch something on demand.
+        run: npx --no-install playwright install --with-deps chromium
 
       - name: Run end-to-end tests
         run: npm run test:e2e
