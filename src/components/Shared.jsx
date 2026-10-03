@@ -329,6 +329,7 @@ export function BottomNav({ screen, setScreen, t, isOwnerAccount, isReviewer, ca
           <button
             key={id}
             onClick={() => setScreen(id)}
+            data-testid={`nav-${id}`}
             className="btn-press flex-1 flex flex-col items-center gap-1"
             style={{ padding: "10px 0 8px", color: isActive ? activeColor : MUTED }}
           >

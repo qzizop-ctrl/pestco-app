@@ -123,6 +123,7 @@ export default function DashboardFilterBar({
         <button
           onClick={handleExportPdf}
           disabled={pdfBusy}
+          data-testid="export-pdf"
           className="btn-press flex items-center justify-center gap-2 font-bold text-xs"
           style={{
             flex: 1,
