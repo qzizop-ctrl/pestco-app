@@ -17,7 +17,7 @@ import { PRIMARY_MID, MUTED, DANGER, LINE, SURFACE } from "../theme";
 import { db } from "../firebase";
 import { doc } from "firebase/firestore";
 import { useLastChangeActions } from "../hooks/useLastChangeActions";
-import { logAudit } from "../hooks/useAuditLog";
+import { queueAudit } from "../hooks/useAuditLog";
 
 export default function CustomerDetailScreen({
   t,
@@ -74,7 +74,7 @@ export default function CustomerDetailScreen({
     restoreSuccessMsg: t.deleteRestoredMsg,
     onDeleteSuccess: () => setScreen?.("list"),
     showAlert,
-    onAudit: (action) => logAudit(ownerUid, {
+    onAudit: (action, tx) => queueAudit(tx, ownerUid, {
       entityType: "customer", entityId: active?.id, entityName: active?.companyName,
       action, user, t,
     }),
