@@ -1,3 +1,5 @@
+import { appendFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { expect } from "@playwright/test";
 import { listVisitCompanyNames } from "./emulator.mjs";
 import { consoleLogs } from "./fixtures.mjs";
@@ -75,9 +77,9 @@ export async function expectSavedOnServer(page, ownerUid, company) {
 // expect(text).toBeVisible(), but when it is not, say what IS on screen instead
 // of a bare "element(s) not found": is the sign-in form showing (session lost)?
 // is a dialog open? what does the page say? what did the browser log?
-export async function expectVisibleOrExplain(page, text) {
+export async function expectVisibleOrExplain(page, text, timeout = 20_000) {
   try {
-    await expect(page.getByText(text).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(text).first()).toBeVisible({ timeout });
   } catch (error) {
     const signedOut = (await page.locator('input[type="email"]').count()) > 0;
     const dialogs = await page.locator("dialog[open]").allInnerTexts();
@@ -95,4 +97,52 @@ export async function expectVisibleOrExplain(page, text) {
       { cause: error },
     );
   }
+}
+
+// Fills the new-customer form with the minimum the app requires (company,
+// contact, sector) plus a phone number — without one the app asks "save without
+// a phone?" first, which is a different flow.
+export async function addCustomer(page, company) {
+  await clickOrExplain(page, page.getByTestId("new-visit"));
+  await page.locator("#cf-companyName").fill(company);
+  await page.locator("#cf-contactName").fill("Test Contact");
+  await page.locator("#cf-sector").selectOption({ index: 1 });
+  await page.locator("#cf-phone").fill("01012345678");
+  await clickOrExplain(page, page.getByTestId("save-customer"));
+}
+
+// Surfaces a measurement where it is easy to find without downloading anything:
+// the test log, a GitHub "notice" annotation at the top of the run page, and the
+// run's Summary tab. Outside CI it is just a log line.
+export function reportMetric(name, value) {
+  const line = `${name}: ${value}`;
+  console.log(`[metric] ${line}`);
+  if (process.env.GITHUB_ACTIONS) {
+    console.log(`::notice title=e2e metric::${line}`);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, `- ${line}\n`);
+    }
+  }
+}
+
+// Clicks something that should produce a file download and returns the file's
+// bytes. If no download arrives, the failure says what the app showed instead
+// (an export error pops an in-app dialog) rather than a bare timeout.
+export async function expectDownload(page, locator, filenamePattern, timeout = 60_000) {
+  const pending = page.waitForEvent("download", { timeout });
+  pending.catch(() => {}); // a click that throws first must not leave this unhandled
+  await clickOrExplain(page, locator);
+  let download;
+  try {
+    download = await pending;
+  } catch (error) {
+    const dialogs = await page.locator("dialog[open]").allInnerTexts();
+    const recentLog = (consoleLogs.get(page) ?? []).slice(-8);
+    throw new Error(
+      `No file was downloaded within ${timeout / 1000}s.\nIn-app dialogs: ${JSON.stringify(dialogs)}\nRecent browser errors/warnings: ${JSON.stringify(recentLog)}`,
+      { cause: error },
+    );
+  }
+  expect(download.suggestedFilename()).toMatch(filenamePattern);
+  return readFile(await download.path());
 }

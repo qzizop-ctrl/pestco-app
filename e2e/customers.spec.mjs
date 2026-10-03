@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures.mjs";
 import { resetEmulators, createUser, seedAdmin, grantAccess } from "./emulator.mjs";
-import { signIn, signOut, clickOrExplain, expectSavedOnServer, expectVisibleOrExplain } from "./helpers.mjs";
+import { signIn, signOut, addCustomer, expectSavedOnServer, expectVisibleOrExplain, reportMetric } from "./helpers.mjs";
 
 const ADMIN = { email: "admin@example.test", password: "correct-horse-1" };
 const EDITOR = { email: "editor@example.test", password: "editor-pass-42" };
@@ -12,18 +12,6 @@ test.beforeEach(async () => {
   adminUid = await createUser(ADMIN);
   await seedAdmin(ADMIN.email);
 });
-
-// Fills the new-customer form with the minimum the app requires (company,
-// contact, sector) plus a phone number — without one the app asks "save without
-// a phone?" first, which is a different flow.
-async function addCustomer(page, company) {
-  await clickOrExplain(page, page.getByTestId("new-visit"));
-  await page.locator("#cf-companyName").fill(company);
-  await page.locator("#cf-contactName").fill("Test Contact");
-  await page.locator("#cf-sector").selectOption({ index: 1 });
-  await page.locator("#cf-phone").fill("01012345678");
-  await clickOrExplain(page, page.getByTestId("save-customer"));
-}
 
 test("admin adds a customer, it survives a reload, and sign-out returns to the sign-in form", async ({ page }) => {
   const company = `Acme-${Date.now()}`;
@@ -38,8 +26,12 @@ test("admin adds a customer, it survives a reload, and sign-out returns to the s
   // then reload: the session must outlive it and the customer come back from the
   // server.
   await expectSavedOnServer(page, adminUid, company);
+  const reloadedAt = Date.now();
   await page.reload();
   await expectVisibleOrExplain(page, company);
+  // The app itself calls a customer list "slow" after 12 s (LOAD_TIMEOUT_MS in
+  // src/hooks/useLiveData.js). This number shows how close a reload gets to that.
+  reportMetric("reload-to-customer-visible-ms", Date.now() - reloadedAt);
 
   await signOut(page);
   await expect(page.locator('input[type="email"]')).toBeVisible();
