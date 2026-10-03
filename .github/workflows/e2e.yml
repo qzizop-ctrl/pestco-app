@@ -1,0 +1,71 @@
+name: End-to-end tests
+
+# Runs the Playwright browser tests (e2e/) against the production build of the
+# app and the LOCAL Firebase emulators (Auth + Firestore with the real
+# src/firestore.rules). Nothing here touches the live Firebase project.
+#
+# Same tooling convention as test-rules.yml: Firebase CLI + Playwright are
+# installed with exact versions and --no-save, not added to package.json, so the
+# app/release workflows (and package-lock.json) stay free of them. Bump the
+# versions deliberately here and in e2e/README.md.
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      # The Firestore emulator is a Java program.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # `--ignore-scripts` blocks dependency lifecycle scripts (supply-chain
+      # hardening). This repo's own postinstall (xlsx integrity check) is
+      # therefore run explicitly in the next step.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify xlsx integrity
+        run: npm run xlsx:verify
+
+      - name: Install e2e tooling
+        run: npm install --no-save --ignore-scripts @playwright/test@1.60.0 firebase-tools@13.35.1
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run end-to-end tests
+        run: npm run test:e2e
+
+      # Report + traces (screenshots, network, console) of any failed test:
+      # download this artifact, then `npx playwright show-trace <trace.zip>`.
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

@@ -141,7 +141,7 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
       # =========================
-      # Code signing (only if the secrets exist)
+      # Code signing (Azure Trusted Signing, or a .pfx, only if the secrets exist)
       # =========================
       # Passing `CSC_LINK: ${{ secrets.WIN_CSC_LINK }}` straight into the
       # packaging step defines CSC_LINK as an EMPTY string when the secret is
@@ -149,17 +149,52 @@ jobs:
       # correct, cannot resolve ... not a file". So the variables are only
       # exported when the secret has a value; otherwise the build simply
       # isn't signed (as before).
-      - name: Enable code signing (if configured)
+      - name: Configure code signing
         shell: bash
         run: |
-          if [[ -n "$CERT_B64" ]]; then
+          # 1) Azure Trusted Signing — preferred. Certificates for new
+          #    OV/EV code-signing since 2023 live on hardware tokens/HSMs, so a
+          #    downloadable .pfx (option 2) is no longer something most
+          #    publishers can get; Azure signs remotely and needs no file.
+          #    All seven values must be present or this path is skipped.
+          if [[ -n "$AZURE_TENANT_ID" && -n "$AZURE_CLIENT_ID" && -n "$AZURE_CLIENT_SECRET" \
+                && -n "$AZURE_SIGN_ENDPOINT" && -n "$AZURE_SIGN_ACCOUNT" \
+                && -n "$AZURE_SIGN_PROFILE" && -n "$AZURE_SIGN_PUBLISHER" ]]; then
+            {
+              echo "AZURE_TENANT_ID=$AZURE_TENANT_ID"
+              echo "AZURE_CLIENT_ID=$AZURE_CLIENT_ID"
+              echo "AZURE_CLIENT_SECRET=$AZURE_CLIENT_SECRET"
+              echo "SIGNING=azure"
+            } >> "$GITHUB_ENV"
+            # electron-builder reads win.azureSignOptions from package.json
+            # (only on this runner, same trick as "Set package version").
+            npm pkg set \
+              "build.win.azureSignOptions.publisherName=$AZURE_SIGN_PUBLISHER" \
+              "build.win.azureSignOptions.endpoint=$AZURE_SIGN_ENDPOINT" \
+              "build.win.azureSignOptions.codeSigningAccountName=$AZURE_SIGN_ACCOUNT" \
+              "build.win.azureSignOptions.certificateProfileName=$AZURE_SIGN_PROFILE"
+            echo "Code signing enabled: Azure Trusted Signing."
+
+          # 2) A .pfx certificate (base64 in WIN_CSC_LINK), as before.
+          elif [[ -n "$CERT_B64" ]]; then
             echo "CSC_LINK=$(printf %s "$CERT_B64" | tr -d '\r\n')" >> "$GITHUB_ENV"
             echo "CSC_KEY_PASSWORD=$CERT_PASSWORD" >> "$GITHUB_ENV"
-            echo "Code signing enabled."
+            echo "SIGNING=pfx" >> "$GITHUB_ENV"
+            echo "Code signing enabled: .pfx certificate."
+
+          # 3) Nothing configured: build unsigned, but say so loudly.
           else
-            echo "No WIN_CSC_LINK secret - building unsigned."
+            echo "SIGNING=none" >> "$GITHUB_ENV"
+            echo "::warning title=Unsigned installer::No code-signing secrets are set, so this installer is UNSIGNED and Windows SmartScreen will warn on install. See docs/code-signing.md."
           fi
         env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGN_ENDPOINT: ${{ secrets.AZURE_SIGN_ENDPOINT }}
+          AZURE_SIGN_ACCOUNT: ${{ secrets.AZURE_SIGN_ACCOUNT }}
+          AZURE_SIGN_PROFILE: ${{ secrets.AZURE_SIGN_PROFILE }}
+          AZURE_SIGN_PUBLISHER: ${{ secrets.AZURE_SIGN_PUBLISHER }}
           CERT_B64: ${{ secrets.WIN_CSC_LINK }}
           CERT_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
@@ -174,10 +209,11 @@ jobs:
       # installer; that file is what autoUpdater reads to learn a newer
       # version exists.
       #
-      # Code signing is optional: add repository secrets WIN_CSC_LINK (base64
-      # .pfx) and WIN_CSC_KEY_PASSWORD and electron-builder signs the
-      # installer automatically. Unsigned builds work but Windows SmartScreen
-      # warns on install, and updates can't be tied to a publisher.
+      # Code signing is optional (see "Configure code signing" above and
+      # docs/code-signing.md): with Azure Trusted Signing or .pfx secrets set,
+      # electron-builder signs the installer automatically. Unsigned builds
+      # work but Windows SmartScreen warns on install, and updates can't be
+      # tied to a publisher.
       - name: Package Windows App (build only)
         if: ${{ steps.meta.outputs.version == '' }}
         run: npx electron-builder --win --publish never
@@ -187,6 +223,25 @@ jobs:
         run: npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # =========================
+      # Verify the signature (only when signing was configured)
+      # =========================
+      # If signing was configured but the installer came out unsigned or
+      # invalid, fail the job instead of letting it pass quietly. NOTE: with a
+      # version set, electron-builder has already published by this point, so
+      # for a release this is an alarm, not a gate — check it before announcing.
+      - name: Verify installer signature
+        if: ${{ env.SIGNING != 'none' }}
+        shell: pwsh
+        run: |
+          $bad = $false
+          Get-ChildItem release/*.exe | ForEach-Object {
+            $sig = Get-AuthenticodeSignature $_.FullName
+            "$($_.Name): $($sig.Status) - $($sig.SignerCertificate.Subject)"
+            if ($sig.Status -ne 'Valid') { $bad = $true }
+          }
+          if ($bad) { throw "Installer is not validly signed." }
 
       # =========================
       # Keep the installer (private, 14 days)
