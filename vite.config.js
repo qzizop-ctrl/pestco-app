@@ -64,6 +64,11 @@ export default defineConfig(({ mode }) => {
       coverage: {
         provider: "v8",
         reporter: ["text", "html"],
+        // Vitest 4 dropped `coverage.all`: without an explicit include, only
+        // files a test happens to import show up in the report, so untested
+        // files would silently vanish from the number. This keeps the old
+        // "every file under src/" behaviour.
+        include: ["src/**/*.{js,jsx}"],
         // Config/build/entry files and native-shell glue (electron.js,
         // capacitor.config.json) aren't meaningfully "tested" the way app
         // logic is — excluded so the coverage number reflects src/ code a

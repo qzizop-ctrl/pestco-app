@@ -1,3 +1,14 @@
+# Vite 5 ← 8 + Vitest 2 ← 4، وأداة ترحيل Capacitor، وقياس زمن الـ reload
+
+- **Vite 5 ← 8:** `vite` ^8.0.14 (بيستخدم Rolldown بدل esbuild/Rollup، ويطلب Node 20.19+ أو 22.12+ — مطابق لـ Node 22 اللي في الـ workflows)، و`@vitejs/plugin-react` ^6.0.2 (مطلوب عشان Vite 8). `vite.config.js` فضل كما هو، واتضاف بس `coverage.include` لأن Vitest 4 شال `coverage.all`.
+- **Vitest 2 ← 4:** `vitest` و`@vitest/coverage-v8` ^4.1.7. فحصت الاختبارات الـ 31 على التغييرات اللي بتكسر في Vitest 4 (mocks بـ `new` وarrow functions، `restoreAllMocks`، الـ snapshots): ما لقيتش نمط متأثر، بس ده فحص بالقراءة، والتأكيد الحقيقي هو تشغيل Tests & Lint.
+- **Capacitor 6 ← 8:** ما اتعدّلش يدويًا. اتضاف `.github/workflows/capacitor-migrate.yml` (تشغيل يدوي) بيشغّل الأداة الرسمية `cap migrate` مرتين (6←7 ثم 7←8، لأنها بتتحرك إصدار رئيسي واحد في المرة) ويدفع النتيجة على branch اسمه `capacitor-8-migration` من غير ما يلمس `main`.
+- **اختبارات تصدير:** `e2e/exports.spec.mjs` بيجرّب تصدير PDF (html2canvas + jsPDF) وExcel (SheetJS)، لأنهم أول حاجة ممكن Rolldown أو الـ CSP يكسروها من غير ما حد يلاحظ. اتضاف `data-testid` على أزرار التنقل السفلي وزرار تصدير PDF وزرار «تصدير الكل».
+- **قياس زمن الـ reload:** اختبار الأدمن بيسجّل دلوقتي الوقت بين `reload` وظهور العميل (`reload-to-customer-visible-ms`) كـ notice في صفحة الـ run وفي تبويب Summary. التطبيق نفسه بيعتبر القايمة «بطيئة» بعد 12 ثانية.
+- **لازم بعد الاستلام:** شغّل **Sync package-lock.json** (الإصدارات اتغيّرت)، وبعدها Tests & Lint وEnd-to-end tests.
+
+---
+
 # CSP + توقيع ويندوز + اختبارات end-to-end
 
 - **Content-Security-Policy:** بيتحقن في `dist/index.html` وقت البناء بس (`vite.config.js` ← plugin `pestco-csp`) من `scripts/buildCsp.mjs`، وكل بند فيه موضّح بسببه. `script-src 'self'` من غير inline ولا eval (ده البند اللي بيوقّف أي سكريبت محقون)، و`style-src` بيسمح بـ inline لأن React بيكتب `style=` في كل مكان، والاتصالات محصورة في Firebase (`*.googleapis.com`) وفحص الاتصال (`www.gstatic.com`) وSentry (بيتستخرج من `VITE_SENTRY_DSN` تلقائيًا). `npm run dev` من غير قيود. **لازم تجرّب بعد الاستلام يدويًا:** نسخة ويندوز، ونسخة أندرويد، وتصدير PDF من الداشبورد (بيستخدم html2canvas) — ما اتجرّبوش هنا.
