@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures.mjs";
 import { resetEmulators, createUser, seedAdmin, grantAccess } from "./emulator.mjs";
-import { signIn, signOut, clickOrExplain, expectSavedOnServer } from "./helpers.mjs";
+import { signIn, signOut, clickOrExplain, expectSavedOnServer, expectVisibleOrExplain } from "./helpers.mjs";
 
 const ADMIN = { email: "admin@example.test", password: "correct-horse-1" };
 const EDITOR = { email: "editor@example.test", password: "editor-pass-42" };
@@ -39,7 +39,7 @@ test("admin adds a customer, it survives a reload, and sign-out returns to the s
   // server.
   await expectSavedOnServer(page, adminUid, company);
   await page.reload();
-  await expect(page.getByText(company).first()).toBeVisible();
+  await expectVisibleOrExplain(page, company);
 
   await signOut(page);
   await expect(page.locator('input[type="email"]')).toBeVisible();

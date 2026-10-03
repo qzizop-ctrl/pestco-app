@@ -21,12 +21,17 @@
 //     scripts/buildCsp.mjs does not break a real sign-in / save flow.
 import { test as base, expect } from "@playwright/test";
 
+// page -> recent browser errors/warnings, so a helper can quote them in a failure
+// message (the log CI prints is the first thing read; attachments need a download).
+export const consoleLogs = new WeakMap();
+
 export const test = base.extend({
   seedBackupTimestamp: [true, { option: true }],
 
   page: async ({ page, seedBackupTimestamp }, use, testInfo) => {
     const violations = [];
     const consoleLog = [];
+    consoleLogs.set(page, consoleLog);
     page.on("pageerror", (error) => consoleLog.push(`[pageerror] ${error.message}`));
     page.on("console", (msg) => {
       const text = msg.text();

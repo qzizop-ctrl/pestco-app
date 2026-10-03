@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import { listVisitCompanyNames } from "./emulator.mjs";
+import { consoleLogs } from "./fixtures.mjs";
 
 // UI helpers. Selectors avoid on-screen text on purpose — the app is bilingual
 // (Arabic/English), so tests rely on input types, form structure and the
@@ -68,5 +69,30 @@ export async function expectSavedOnServer(page, ownerUid, company) {
     const dialogs = await page.locator("dialog[open]").allInnerTexts();
     const shown = dialogs.length > 0 ? ` The app was showing: ${JSON.stringify(dialogs)}` : " The app showed no error dialog.";
     throw new Error(`The customer never reached Firestore.${shown}`, { cause: error });
+  }
+}
+
+// expect(text).toBeVisible(), but when it is not, say what IS on screen instead
+// of a bare "element(s) not found": is the sign-in form showing (session lost)?
+// is a dialog open? what does the page say? what did the browser log?
+export async function expectVisibleOrExplain(page, text) {
+  try {
+    await expect(page.getByText(text).first()).toBeVisible({ timeout: 20_000 });
+  } catch (error) {
+    const signedOut = (await page.locator('input[type="email"]').count()) > 0;
+    const dialogs = await page.locator("dialog[open]").allInnerTexts();
+    const visibleText = (await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 600);
+    const recentLog = (consoleLogs.get(page) ?? []).slice(-8);
+    throw new Error(
+      [
+        `"${text}" is not on screen.`,
+        `URL: ${page.url()}`,
+        `Sign-in form showing (session lost?): ${signedOut}`,
+        `In-app dialogs: ${JSON.stringify(dialogs)}`,
+        `Visible text: ${visibleText}`,
+        `Recent browser errors/warnings: ${JSON.stringify(recentLog)}`,
+      ].join("\n"),
+      { cause: error },
+    );
   }
 }
