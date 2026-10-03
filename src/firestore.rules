@@ -140,6 +140,71 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
 
+    function changed(key) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([key]);
+    }
+
+    function oldList(key) {
+      return resource.data.get(key, []);
+    }
+
+    function validStage(v) {
+      return v in ['', 'survey', 'quote', 'install', 'maintenance'];
+    }
+
+    // The "quick" keys are written without review, so their VALUES are
+    // checked here — otherwise an editor could put any junk (or a flood) in
+    // them straight through the SDK. What can and can't be checked:
+    //   - stage / isPinned / notified / dates: exact type (stage: the real ids).
+    //   - visitHistory: a list that can only GROW (every old entry must still
+    //     be there, at most 3 new ones per write) — editors never delete
+    //     history; the owner's rollback is exempt (owners aren't restricted).
+    //   - activityLog: a list of at most 100 (the app trims to 50; deleting
+    //     one entry is allowed, so it only needs a ceiling).
+    //   - offers: a list where at most ONE offer differs per write (add one,
+    //     remove one, or edit one = one removed + one added). That is how the
+    //     app writes (useOfferActions.js), and it stops a single write from
+    //     rewriting every amount/status. Rules have no loops, so the CONTENT
+    //     of the one changed offer (its amount/status) can't be inspected;
+    //     the audit entry written in the same batch is what records it.
+    function quickFieldsValid() {
+      let d = request.resource.data;
+      return (!changed('stage') || validStage(d.stage))
+        && (!changed('isPinned') || d.isPinned is bool)
+        && (!changed('notified') || d.notified is bool)
+        && (!changed('visitDate') || (d.visitDate is string && d.visitDate.size() <= 40))
+        && (!changed('callDateTime') || (d.callDateTime is string && d.callDateTime.size() <= 40))
+        && (!changed('updatedAt') || d.updatedAt is string || d.updatedAt is timestamp)
+        && (!changed('activityLog') || (d.activityLog is list && d.activityLog.size() <= 100))
+        && (!changed('visitHistory')
+            || (d.visitHistory is list
+                && d.visitHistory.size() <= oldList('visitHistory').size() + 3
+                && d.visitHistory.hasAll(oldList('visitHistory'))))
+        && (!changed('offers')
+            || (d.offers is list
+                && d.offers.size() <= 300
+                && d.offers.toSet().difference(oldList('offers').toSet()).size() <= 1
+                && oldList('offers').toSet().difference(d.offers.toSet()).size() <= 1));
+    }
+
+    // Same value checks for a brand-new record an editor creates (nothing to
+    // compare against, so only types and ceilings).
+    function visitCreateFieldsValid() {
+      let d = request.resource.data;
+      return (!d.keys().hasAny(['stage']) || validStage(d.stage))
+        && (!d.keys().hasAny(['isPinned']) || d.isPinned is bool)
+        && (!d.keys().hasAny(['notified']) || d.notified is bool)
+        && (!d.keys().hasAny(['visitDate']) || (d.visitDate is string && d.visitDate.size() <= 40))
+        && (!d.keys().hasAny(['callDateTime']) || (d.callDateTime is string && d.callDateTime.size() <= 40))
+        && (!d.keys().hasAny(['activityLog']) || (d.activityLog is list && d.activityLog.size() <= 100))
+        && (!d.keys().hasAny(['visitHistory']) || (d.visitHistory is list && d.visitHistory.size() <= 200))
+        && (!d.keys().hasAny(['offers']) || (d.offers is list && d.offers.size() <= 100));
+    }
+
+    function supplierQuickFieldsValid() {
+      return !changed('isPinned') || request.resource.data.isPinned is bool;
+    }
+
     function visitQuickKeys() {
       return ['stage', 'isPinned', 'visitDate', 'visitHistory', 'callDateTime',
               'notified', 'activityLog', 'offers', 'updatedAt'];
@@ -187,14 +252,16 @@ service cloud.firestore {
         && (!hasLastChange() || lastChangeIsMine())
         && (canClearLastChange(ownerUid)
             || (hasLastChange()
-                && request.resource.data.keys().hasOnly(visitCreateKeys())));
+                && request.resource.data.keys().hasOnly(visitCreateKeys())
+                && visitCreateFieldsValid()));
 
       allow update: if canWrite(ownerUid)
         && (!isClearingLastChange() || canClearLastChange(ownerUid))
         && (!isSettingLastChange() || lastChangeIsMine())
         && (canClearLastChange(ownerUid)
-            || (isSettingLastChange() && changedKeysWithin(visitAllowedKeys()))
-            || changedKeysWithin(visitQuickKeys()));
+            || (quickFieldsValid()
+                && ((isSettingLastChange() && changedKeysWithin(visitAllowedKeys()))
+                    || changedKeysWithin(visitQuickKeys()))));
 
       // Editors "delete" by flagging the record (soft delete + last_change,
       // see useCustomerRecords.js). Removing the document for good is the
@@ -223,8 +290,9 @@ service cloud.firestore {
         && (!isClearingLastChange() || canClearLastChange(ownerUid))
         && (!isSettingLastChange() || lastChangeIsMine())
         && (canClearLastChange(ownerUid)
-            || (isSettingLastChange() && changedKeysWithin(supplierAllowedKeys()))
-            || changedKeysWithin(supplierQuickKeys()));
+            || (supplierQuickFieldsValid()
+                && ((isSettingLastChange() && changedKeysWithin(supplierAllowedKeys()))
+                    || changedKeysWithin(supplierQuickKeys()))));
 
       // Same as visits: permanent removal is the owner's approval step.
       allow delete: if canClearLastChange(ownerUid);
@@ -236,8 +304,8 @@ service cloud.firestore {
     // ============================================================
     // Immutable history of customer/supplier create/update/delete/restore/
     // approve/rollback operations — written by useAuditLog.js (queueAudit,
-    // in the same batch as the record write, or logAudit right after it
-    // for approve/rollback/restore). Read is owner/reviewer only
+    // in the same batch — or, for approve/rollback/confirm-delete/restore,
+    // the same transaction — as the record write). Read is owner/reviewer only
     // (same as the Settings screen this is reached from), matching the
     // "مركزي للأدمن" (admin-only, central) shape it was asked for as.
     // Any editor who can write the underlying customer/supplier record can
@@ -246,8 +314,12 @@ service cloud.firestore {
     // and only the owner can delete (to trim old ones), so the trail can't be quietly tampered with.
     //
     // Beyond the identity check (changedById must be the caller — already
-    // in place), this also now constrains the shape of what can be
-    // written, closing two gaps a compromised/malicious editor account
+    // in place), the displayed name `changedBy` must also be the caller's:
+    // their verified email (what the app writes, since accounts have no
+    // display name) or the token's `name` claim. Without that an editor
+    // could sign an entry with someone else's name even though the uid was
+    // right. This also constrains the shape of what can be
+    // written, closing gaps a compromised/malicious editor account
     // could otherwise use to pollute a supposedly-trustworthy admin trail:
     //   - `action` must be one of the actual known actions (matches
     //     AUDIT_ACTION_IDS in src/domain.js) rather than an arbitrary
@@ -263,6 +335,10 @@ service cloud.firestore {
 
       allow create: if canWrite(ownerUid)
         && request.resource.data.changedById == request.auth.uid
+        && request.resource.data.changedBy is string
+        && request.resource.data.changedBy.size() > 0
+        && (request.resource.data.changedBy.lower() == myEmail()
+            || request.resource.data.changedBy == request.auth.token.get('name', ''))
         && request.resource.data.action in
              ['create', 'update', 'delete', 'restore', 'approve', 'rollback']
         && request.resource.data.entityType in ['customer', 'supplier']

@@ -2,6 +2,7 @@
 // Tag parsing/collection for suppliers, and the plain WhatsApp link builder.
 // Split out of the old helpers.js.
 // ============================================================================
+import { toWhatsAppDigits } from "./phone";
 
 // Splits a comma separated Excel cell into a clean tag array.
 // Shared by both customer tags and supplier product tags.
@@ -38,6 +39,5 @@ export function collectSupplierCategories(suppliers) {
 // URL looks like it should work, but Capacitor's WebView doesn't parse that
 // special Chrome-only syntax, so it silently does nothing).
 export function buildWhatsAppLink(phone) {
-  const digits = (phone || "").replace(/\D/g, "");
-  return `https://wa.me/${digits}`;
+  return `https://wa.me/${toWhatsAppDigits(phone)}`;
 }

@@ -15,11 +15,12 @@
 // ============================================================================
 
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { toWhatsAppDigits } from "./phone";
 
 const WhatsApp = registerPlugin("WhatsApp");
 
 export async function openWhatsApp(phone) {
-  const digits = (phone || "").replace(/\D/g, "");
+  const digits = toWhatsAppDigits(phone);
   if (!digits) return;
 
   if (Capacitor.getPlatform() === "android") {

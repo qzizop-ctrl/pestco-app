@@ -3,16 +3,11 @@
 // staleness (no recent activity) detection. Split out of the old helpers.js.
 // ============================================================================
 import { parseVisitDate, toJsDate } from "./dateUtils";
+import { corePhoneDigits } from "./phone";
 
-// Normalizes a phone number to its core digits, ignoring +2 / 0020 / leading 0 variations
-export function corePhoneDigits(phone) {
-  let d = (phone || "").replace(/\D/g, "");
-  if (!d) return "";
-  if (d.startsWith("00")) d = d.slice(2);
-  if (d.startsWith("20") && d.length > 10) d = d.slice(2);
-  if (d.startsWith("0")) d = d.slice(1);
-  return d;
-}
+// corePhoneDigits lives in phone.js (it also understands Arabic-Indic digits);
+// re-exported here so existing imports keep working.
+export { corePhoneDigits };
 
 // Generic Arabic business-entity words that don't help identify *which*
 // company a name refers to (e.g. "شركة الاسكندرية" and "الاسكندرية" are
