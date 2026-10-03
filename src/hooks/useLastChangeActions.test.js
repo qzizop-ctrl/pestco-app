@@ -82,7 +82,15 @@ describe("approve", () => {
     expect(mocks.runTransaction).toHaveBeenCalledWith(docRef.firestore, expect.any(Function));
     expect(tx.update).toHaveBeenCalledWith(docRef, { last_change: "DELETE_FIELD" });
     expect(props.showAlert).toHaveBeenCalledWith("approved");
-    expect(props.onAudit).toHaveBeenCalledWith("approve");
+    expect(props.onAudit).toHaveBeenCalledWith("approve", tx);
+  });
+
+  it("queues the audit entry on the SAME transaction, after the record write", async () => {
+    const order = [];
+    tx.update.mockImplementation(() => order.push("update"));
+    const { result } = setup({ onAudit: vi.fn((action, t2) => { order.push(`audit:${action}`); expect(t2).toBe(tx); }) });
+    await run(result, "handleApprove");
+    expect(order).toEqual(["update", "audit:approve"]);
   });
 
   it("writes NOTHING when an editor saved another change after the owner opened the record", async () => {
@@ -156,7 +164,7 @@ describe("rollback", () => {
     expect(tx.update).toHaveBeenCalledTimes(1);
     expect(tx.update).toHaveBeenCalledWith(docRef, { notes: "old", last_change: "DELETE_FIELD" });
     expect(props.showAlert).toHaveBeenCalledWith("rolled back");
-    expect(props.onAudit).toHaveBeenCalledWith("rollback");
+    expect(props.onAudit).toHaveBeenCalledWith("rollback", tx);
   });
 
   it("does NOT overwrite a newer edit with stale values", async () => {
@@ -226,7 +234,7 @@ describe("confirm delete / restore", () => {
     await run(result, "handleConfirmDelete");
     expect(tx.delete).toHaveBeenCalledWith(docRef);
     expect(props.showAlert).toHaveBeenCalledWith("deleted");
-    expect(props.onAudit).toHaveBeenCalledWith("delete");
+    expect(props.onAudit).toHaveBeenCalledWith("delete", tx);
     expect(props.onDeleteSuccess).toHaveBeenCalledTimes(1);
   });
 
@@ -245,6 +253,6 @@ describe("confirm delete / restore", () => {
     await run(result, "handleRestoreDeleted");
     expect(tx.update).toHaveBeenCalledWith(docRef, { deleted: "DELETE_FIELD", last_change: "DELETE_FIELD" });
     expect(props.showAlert).toHaveBeenCalledWith("restored");
-    expect(props.onAudit).toHaveBeenCalledWith("restore");
+    expect(props.onAudit).toHaveBeenCalledWith("restore", tx);
   });
 });

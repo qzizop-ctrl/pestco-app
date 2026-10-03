@@ -45,17 +45,18 @@ export function logAudit(ownerUid, params) {
 // workspace — only subscribed while `enabled` (the Audit Log screen is
 // actually open, and the viewer is owner/reviewer per firestore.rules), so
 // it doesn't cost every session a listener it'll almost never use.
-// Adds the audit entry to a Firestore WriteBatch so it commits (or fails)
-// together with the record write it describes. logAudit() above is
+// Adds the audit entry to a Firestore WriteBatch OR Transaction (both have
+// .set(ref, data)) so it commits (or fails) together with the record write
+// it describes. logAudit() above is
 // fire-and-forget: if the connection dropped between the record write and
 // the audit write, the change existed but its trail entry never did. Used
-// for create / update / delete of customers and suppliers, and for Excel
-// import. (approve / rollback / restore still use logAudit — they are owner
-// actions that run through useLastChangeActions.)
-export function queueAudit(batch, ownerUid, params) {
+// for create / update / delete of customers and suppliers, for Excel
+// import, and — passing the transaction — for the owner's approve / rollback /
+// confirm-delete / restore steps (useLastChangeActions.js).
+export function queueAudit(batchOrTx, ownerUid, params) {
   if (!ownerUid) return;
   const ref = doc(collection(db, "users", ownerUid, "auditLog"));
-  batch.set(ref, { ...buildAuditEntry(params), at: serverTimestamp() });
+  batchOrTx.set(ref, { ...buildAuditEntry(params), at: serverTimestamp() });
 }
 
 // Firestore orders mixed field types by TYPE first (null < number <

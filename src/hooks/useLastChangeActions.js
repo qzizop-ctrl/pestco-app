@@ -29,13 +29,19 @@ import { reportException } from "../sentry";
 //   ("Customer permanently deleted." vs "Supplier permanently deleted."),
 //   since that wording differs between customers and suppliers.
 // ============================================================================
-// onAudit (optional): (action) => void — called after a successful
-// approve/rollback/confirmDelete/restore so the caller can write a
-// matching entry to the unified Audit Log (see useAuditLog.js). Kept as a
-// single callback rather than importing logAudit here directly, since this
-// hook is deliberately entity-agnostic (customer vs supplier) and has no
+// onAudit (optional): (action, tx) => void — called INSIDE the review
+// transaction for approve/rollback/confirmDelete/restore, so the caller can
+// queue the matching entry of the unified Audit Log (see useAuditLog.js:
+// queueAudit(tx, ...)) in the very same atomic commit as the record change.
+// The audit entry therefore exists if and only if the change happened — a
+// dropped connection or a closed app can no longer leave a permanent delete
+// (or an approval) without a trail, which a separate fire-and-forget write
+// after the transaction could. Kept as a single callback rather than
+// importing the audit helpers here directly, since this hook is deliberately
+// entity-agnostic (customer vs supplier) and has no
 // entityType/entityName/ownerUid of its own — the caller (CustomerDetail.jsx
-// / SupplierFormScreen) already has all of that.
+// / SupplierFormScreen) already has all of that. The callback runs on every
+// transaction attempt (Firestore may retry), so it must only queue writes.
 //
 // showAlert: the app's in-app alert modal (see useDialogState.js /
 // ConfirmModal.jsx) — NOT window.alert(). window.alert()/confirm() hang the
@@ -122,9 +128,9 @@ export function useLastChangeActions({
       try {
         await runReviewStep(docRef, lastChange, (tx) => {
           tx.update(docRef, { last_change: deleteField() });
+          onAudit?.("approve", tx);
         });
         showAlert(t.approveSuccessMsg);
-        onAudit?.("approve");
       } catch (err) {
         return handleStepError(err, "last_change approve failed", t.approveErrorMsg);
       }
@@ -145,9 +151,9 @@ export function useLastChangeActions({
           }
           rollbackPayload.last_change = deleteField();
           tx.update(docRef, rollbackPayload);
+          onAudit?.("rollback", tx);
         });
         showAlert(t.rollbackSuccessMsg);
-        onAudit?.("rollback");
       } catch (err) {
         return handleStepError(err, "last_change rollback failed", t.rollbackErrorMsg);
       }
@@ -159,13 +165,11 @@ export function useLastChangeActions({
       try {
         await runReviewStep(docRef, lastChange, (tx) => {
           tx.delete(docRef);
+          // "delete" (not "approve"): a permanent delete confirmation must
+          // be distinguishable from handleApprove()'s own entry above.
+          onAudit?.("delete", tx);
         });
         if (deleteSuccessMsg) showAlert(deleteSuccessMsg);
-        // Was onAudit("approve") — a permanent delete confirmation was being
-        // logged in the audit trail as an "approve", indistinguishable from
-        // handleApprove()'s own entry above. "delete" is one of the actions
-        // buildAuditEntry() (auditLog.js) documents and expects.
-        onAudit?.("delete");
         onDeleteSuccess?.();
       } catch (err) {
         return handleStepError(err, "last_change confirm-delete failed", t.deleteFinalErrorMsg);
@@ -178,9 +182,9 @@ export function useLastChangeActions({
       try {
         await runReviewStep(docRef, lastChange, (tx) => {
           tx.update(docRef, { deleted: deleteField(), last_change: deleteField() });
+          onAudit?.("restore", tx);
         });
         if (restoreSuccessMsg) showAlert(restoreSuccessMsg);
-        onAudit?.("restore");
       } catch (err) {
         return handleStepError(err, "last_change restore failed", t.restoreErrorMsg);
       }
