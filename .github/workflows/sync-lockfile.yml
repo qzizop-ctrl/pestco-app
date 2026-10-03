@@ -43,10 +43,13 @@ jobs:
         run: rm -f package-lock.json
 
       # Newer npm fixes an arborist crash ("Cannot read properties of null
-      # (reading 'edgesOut')") that --package-lock-only can hit.
+      # (reading 'edgesOut')") that --package-lock-only can hit. Pinned to an
+      # exact version so the tool itself is reproducible.
       - name: Upgrade npm
-        run: npm install -g npm@latest
+        run: npm install -g --ignore-scripts npm@12.0.1
 
+      # Resolving dependencies is the whole purpose of this workflow, so this
+      # step cannot use a locked install (`npm ci`).
       - name: Install (updates package-lock.json)
         # --allow-remote=root: npm 12 blocks URL dependencies by default; this
         # allows only the project's own direct ones (xlsx from cdn.sheetjs.com).

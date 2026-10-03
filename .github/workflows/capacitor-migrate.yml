@@ -51,13 +51,13 @@ jobs:
       - name: Migrate 6 to 7
         run: |
           set -o pipefail
-          npm install --save-dev --ignore-scripts @capacitor/cli@7
+          npm install --save-dev --ignore-scripts @capacitor/cli@7.3.0
           npx --no-install cap migrate --noprompt 2>&1 | tee migrate-7.log
 
       - name: Migrate 7 to 8
         run: |
           set -o pipefail
-          npm install --save-dev --ignore-scripts @capacitor/cli@8
+          npm install --save-dev --ignore-scripts @capacitor/cli@8.0.0
           npx --no-install cap migrate --noprompt 2>&1 | tee migrate-8.log
 
       # The tool prints the steps it could not do for you ("manual
