@@ -1,9 +1,11 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, initializeAuth, inMemoryPersistence, signOut } from "firebase/auth";
+import {
+  getAuth, initializeAuth, inMemoryPersistence, signOut, connectAuthEmulator,
+} from "firebase/auth";
 import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
   memoryLocalCache, getFirestore,
-  terminate, clearIndexedDbPersistence,
+  terminate, clearIndexedDbPersistence, connectFirestoreEmulator,
 } from "firebase/firestore";
 import { rememberSignOutReason } from "./signOutReason";
 
@@ -119,6 +121,18 @@ function createFirestore() {
 }
 
 export const db = createFirestore();
+
+// End-to-end tests (e2e/, run with `npm run test:e2e`) drive the real built
+// app in a browser against the LOCAL Firebase emulators instead of the real
+// project. That build is made with VITE_USE_FIREBASE_EMULATOR=true (see
+// playwright.config.mjs); every normal build leaves it unset, so this block
+// is dead code there and the app talks to the real Firebase project exactly
+// as before. The ports match firebase.json, and the matching origins are
+// allowed in the CSP only for that build (scripts/buildCsp.mjs).
+if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true") {
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+}
 
 // Manual sign-out that also removes the customer data this device cached.
 // persistentLocalCache() (above) keeps every customer/supplier document in

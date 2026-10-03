@@ -256,6 +256,7 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
           >
             <button
               onClick={() => switchMode("login")}
+              data-testid="auth-tab-login"
               className="btn-press font-bold text-sm"
               style={{
                 flex: 1,
@@ -269,6 +270,7 @@ export default function AuthScreen({ lang, setLang, authError, onClearAuthError 
             </button>
             <button
               onClick={() => switchMode("register")}
+              data-testid="auth-tab-register"
               className="btn-press font-bold text-sm"
               style={{
                 flex: 1,
