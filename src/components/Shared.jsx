@@ -227,6 +227,29 @@ export const VisitCard = React.memo(function VisitCard({ visit, onOpen, onToggle
           <span className="text-sm">{visit.contactName || t.noContactName}</span>
         </div>
 
+        {(visit.phone || visit.email) && (
+          <div className="flex flex-col gap-1 mt-1" style={{ color: MUTED }}>
+            {visit.phone && (
+              <div className="flex items-center gap-1">
+                <Phone size={13} />
+                <span className="text-sm" dir="ltr" style={{ unicodeBidi: "isolate" }}>{visit.phone}</span>
+              </div>
+            )}
+            {visit.email && (
+              <div className="flex items-center gap-1" style={{ minWidth: 0 }}>
+                <Mail size={13} style={{ flexShrink: 0 }} />
+                <span
+                  className="text-sm"
+                  dir="ltr"
+                  style={{ unicodeBidi: "isolate", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}
+                >
+                  {visit.email}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div
           className="flex items-center justify-between"
           style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${LINE}` }}
